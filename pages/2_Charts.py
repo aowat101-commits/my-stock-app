@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับการจัดวาง
+# 1. ตั้งค่าหน้าจอและ CSS สไตล์พรีเมียม
 st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
@@ -11,18 +11,15 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
-    /* จัดการหัวตารางและเนื้อหาให้หนาและอยู่ตรงกลาง */
-    th, td {
+    /* จัดหัวตารางให้หนาและอยู่ตรงกลาง */
+    [data-testid="stDataFrame"] th {
         text-align: center !important;
-        font-weight: 600 !important; /* เพิ่มความเข้มของตัวหนังสือ */
-    }
-    th {
-        background-color: #161e2e !important;
+        font-weight: bold !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
+# 2. รายชื่อหุ้น SET100 ทั้งหมด
 tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -37,13 +34,13 @@ tickers = [
     'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. Sidebar
+# 3. Sidebar: รีเฟรชทุก 30 นาที
 st.sidebar.header("⚙️ Market Settings")
 st.sidebar.markdown("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
 if st.sidebar.button("🔄 Force Refresh Now"):
     st.rerun()
 
-# 4. ฟังก์ชันดึงข้อมูล
+# 4. ฟังก์ชันดึงข้อมูล (Cache 30 นาที)
 @st.cache_data(ttl=1800)
 def get_set100_data():
     data_list = []
@@ -78,44 +75,46 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # กำหนดสีตัวเลข (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) และความเข้ม
-        def style_numbers(val):
-            if val > 0:
-                return 'color: #10b981; font-weight: 700;'
-            elif val < 0:
-                return 'color: #ef4444; font-weight: 700;'
-            else:
-                return 'color: #000000; font-weight: 700;'
+        # สไตล์ตัวเลข (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) และจัดกลาง
+        def style_logic(val):
+            if val > 0: return 'color: #10b981; font-weight: 700; text-align: center;'
+            if val < 0: return 'color: #ef4444; font-weight: 700; text-align: center;'
+            return 'color: #000000; font-weight: 700; text-align: center;'
 
-        # กำหนดสี RSI (ต่ำกว่า 30 เป็นสีแดง)
-        def style_rsi_color(val):
-            if val < 30:
-                return 'color: #ef4444; font-weight: 700;'
-            return 'color: white; font-weight: 600;'
-
-        # กำหนดสีชื่อหุ้นตามราคา
-        def style_ticker_name(row):
+        # สไตล์ชื่อหุ้นและ RSI
+        def style_row(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
-            styles = [''] * len(row)
-            styles[0] = f'color: {color}; font-weight: 600;' 
-            return styles
+            rsi_color = '#ef4444' if row['RSI (14)'] < 30 else 'white'
+            return [
+                f'color: {color}; font-weight: 600; text-align: center;', # Ticker
+                'text-align: center; font-weight: 600;', # Price
+                '', # Change (Managed by map)
+                '', # % Chg (Managed by map)
+                f'color: {rsi_color}; font-weight: 700; text-align: center;' # RSI
+            ]
 
-        # เพิ่มสัญลักษณ์หน้าชื่อหุ้น
+        # เพิ่มเครื่องหมายเตือน RSI
         df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
 
-        # แสดงผลตาราง
+        # แสดงผลตารางพร้อมตั้งค่าความกว้างคอลัมน์
         st.dataframe(
-            df.style.apply(style_ticker_name, axis=1) \
-                    .map(style_numbers, subset=['Change', '% Chg']) \
-                    .map(style_rsi_color, subset=['RSI (14)']) \
+            df.style.apply(style_row, axis=1)
+                    .map(style_logic, subset=['Change', '% Chg'])
                     .format({
                         "% Chg": "{:+.2f}%", 
                         "Change": "{:+.2f}",
                         "Price": "{:,.2f}",
                         "RSI (14)": "{:.2f}"
                     }),
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", width="medium"),
+                "Price": st.column_config.NumberColumn("Price", width="small"),
+                "Change": st.column_config.NumberColumn("Change", width="small"),
+                "% Chg": st.column_config.NumberColumn("% Chg", width="small"),
+                "RSI (14)": st.column_config.NumberColumn("RSI (14)", width="small"),
+            },
             use_container_width=True,
-            height=750,
+            height=800,
             hide_index=True
         )
         
