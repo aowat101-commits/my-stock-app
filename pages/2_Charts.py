@@ -13,7 +13,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบทั้งหมด (100 ตัว)
+# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
 SET100_TICKERS = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -30,14 +30,14 @@ SET100_TICKERS = [
 
 st.title("📊 SET100 Full Live Board (RSI Monitor)")
 
-# --- Sidebar: ล็อกเวลา 30 นาที และปุ่มกด ---
+# --- Sidebar ---
 st.sidebar.header("⚙️ ระบบอัปเดต")
 st.sidebar.info("⏱️ รีเฟรชอัตโนมัติ: ทุก 30 นาที")
 if st.sidebar.button("🔄 อัปเดตข้อมูลทันที"):
     st.rerun()
 
-# 3. ฟังก์ชันดึงข้อมูลและคำนวณ (ใช้ @st.cache_data เพื่อความเร็ว)
-@st.cache_data(ttl=1800) # เก็บ Cache ไว้ 30 นาที
+# 3. ฟังก์ชันดึงข้อมูลและคำนวณ
+@st.cache_data(ttl=1800) # เก็บ Cache 30 นาที
 def get_set100_data():
     data_list = []
     for t in SET100_TICKERS:
@@ -50,7 +50,6 @@ def get_set100_data():
                 diff = curr - prev
                 pct = (diff / prev) * 100
                 
-                # คำนวณ RSI (14)
                 delta = hist['Close'].diff()
                 up = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
                 down = -delta.clip(upper=0).rolling(window=14).mean().iloc[-1]
@@ -70,8 +69,7 @@ def get_set100_data():
 # 4. ฟังก์ชันจัดการสี (RSI < 30 เป็นสีแดง)
 def style_rsi(val):
     color = 'red' if val < 30 else 'white'
-    weight = 'bold' if val < 30 else 'normal'
-    return f'color: {color}; font-weight: {weight}'
+    return f'color: {color}; font-weight: bold;' if val < 30 else f'color: {color};'
 
 # 5. การแสดงผล (ล็อคเวลา 30 นาทีด้วย Fragment)
 @st.fragment(run_every="30m")
@@ -82,12 +80,12 @@ def show_full_board():
         # ใส่สัญลักษณ์ ⚠️ หน้า Ticker ที่ RSI < 30
         df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
         
-        # แสดงผลด้วย st.dataframe (เพื่อให้กดเรียงลำดับแนวตั้งได้ทุกคอลัมน์)
+        # แสดงผลและจัดการ Style (เปลี่ยน applymap เป็น map เพื่อแก้ Error)
         st.dataframe(
-            df.style.applymap(style_rsi, subset=['RSI (14)'])
+            df.style.map(style_rsi, subset=['RSI (14)'])
                     .format({"% เปลี่ยนแปลง": "{:+.2f}%", "เปลี่ยนแปลง": "{:+.2f}"}),
             use_container_width=True,
-            height=800, # กำหนดความสูงเพื่อให้เห็นหุ้นเยอะๆ
+            height=800,
             hide_index=True
         )
         
