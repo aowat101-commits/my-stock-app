@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 
 # 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="Hull Suite Signal", layout="wide")
+st.set_page_config(page_title="Hull Suite Dashboard", layout="wide")
 
 st.markdown("""
     <style>
@@ -21,108 +21,90 @@ st.markdown("""
         border: 1px solid #334155;
     }
     [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
-    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; border-bottom: 1px solid #1e293b !important; }
+    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นที่ติดตาม (อิงตาม User Summary)
+# 2. รายชื่อหุ้นที่ติดตาม (อิงตามความสนใจของคุณ)
 watch_list = [
     'IONQ', 'IREN', 'ONDS', 'SMX', 'DELTA.BK', 'GULF.BK', 'ADVANC.BK', 
     'PTT.BK', 'KBANK.BK', 'SCB.BK', 'CPALL.BK', 'AOT.BK', 'PTTEP.BK', 'HANA.BK'
 ]
 
-# 3. ฟังก์ชันคำนวณ Hull Moving Average (HMA)
+# 3. ฟังก์ชันคำนวณ HMA (Length=30 ตามรูป 1777557236322.jpg)
 def get_hma(series, length):
-    # สูตร HMA: WMA(2*WMA(n/2) - WMA(n)), sqrt(n))
     def wma(data, period):
         weights = np.arange(1, period + 1)
         return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-
     half_length = int(length / 2)
     sqrt_length = int(np.sqrt(length))
-    
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
-    hma = wma(raw_hma, sqrt_length)
-    return hma
+    return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ (ซื้อเมื่อแดง->เขียว / ขายเมื่อเขียว->แดง)
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ (แดง->เขียว = ควรซื้อ / เขียว->แดง = ควรขาย)
 def identify_hull_signal(df):
-    if len(df) < 2: return None, None
-    
-    # คำนวณ HMA ตามค่าในรูปภาพ (Length=30)
+    if len(df) < 3: return None, None
     df['hma'] = get_hma(df['Close'], 30)
-    
-    curr_hma = df['hma'].iloc[-1]
-    prev_hma = df['hma'].iloc[-2]
-    prev2_hma = df['hma'].iloc[-3] if len(df) > 2 else prev_hma
+    curr_hma, prev_hma, prev2_hma = df['hma'].iloc[-1], df['hma'].iloc[-2], df['hma'].iloc[-3]
 
-    # เช็คแนวโน้ม (เขียวคือขึ้น, แดงคือลง)
-    curr_trend = "เขียว" if curr_hma > prev_hma else "แดง"
-    prev_trend = "เขียว" if prev_hma > prev2_hma else "แดง"
+    curr_trend = "UP" if curr_hma > prev_hma else "DOWN"
+    prev_trend = "UP" if prev_hma > prev2_hma else "DOWN"
 
-    # แจ้งเตือนเมื่อเปลี่ยนสี
-    if prev_trend == "แดง" and curr_trend == "เขียว":
-        return "🚀 ซื้อ (แดง ➡️ เขียว)", datetime.now().strftime("%H:%M:%S")
-    elif prev_trend == "เขียว" and curr_trend == "แดง":
-        return "🔻 ขาย (เขียว ➡️ แดง)", datetime.now().strftime("%H:%M:%S")
-    
+    # แจ้งเตือนเฉพาะตอนเปลี่ยนสีเส้น HMA
+    if prev_trend == "DOWN" and curr_trend == "UP":
+        return "ควรซื้อ", datetime.now().strftime("%H:%M:%S")
+    elif prev_trend == "UP" and curr_trend == "DOWN":
+        return "ควรขาย", datetime.now().strftime("%H:%M:%S")
     return None, None
 
-# 5. ฟังก์ชันดึงข้อมูลและกรอง
-@st.cache_data(ttl=600) # อัปเดตทุก 10 นาทีเพื่อความไวของสัญญาณ
+# 5. ดึงข้อมูลและกรองเฉพาะตัวที่มีสัญญาณ
+@st.cache_data(ttl=600)
 def get_actionable_data():
     action_list = []
     for t in watch_list:
         try:
             stock = yf.Ticker(t)
-            # ดึงข้อมูลย้อนหลัง 60 วันเพื่อให้เพียงพอต่อการคำนวณ HMA 30
-            hist = stock.history(period="60d") 
+            hist = stock.history(period="60d")
             if not hist.empty:
                 sig, sig_time = identify_hull_signal(hist)
-                
                 if sig:
-                    curr_price = hist['Close'].iloc[-1]
-                    prev_price = hist['Close'].iloc[-2]
-                    diff_pct = ((curr_price - prev_price) / prev_price) * 100
-                    
+                    curr_p, prev_p = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
                     action_list.append({
                         "หุ้น (Ticker)": t.replace('.BK', ''),
-                        "ราคาปัจจุบัน": f"{curr_price:,.2f}",
-                        "Chg%": diff_pct,
-                        "สัญญาณ (Signal)": sig,
-                        "เวลาแจ้งเตือน": sig_time
+                        "ราคาปัจจุบัน": f"{curr_p:,.2f}",
+                        "Chg%": ((curr_p - prev_p) / prev_p) * 100,
+                        "Signal": sig,
+                        "เวลา": sig_time
                     })
         except: continue
     return pd.DataFrame(action_list)
 
-# 6. การแสดงผล
-st.markdown(f'<div class="time-status">🕒 Hull Suite Monitor: {datetime.now().strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
-st.subheader("🛰️ Hull Suite Intelligence Dashboard")
+# 6. แสดงผล
+st.markdown(f'<div class="time-status">🕒 Last Scan: {datetime.now().strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
+st.subheader("🛰️ Hull Suite Dashboard")
 
 df_filtered = get_actionable_data()
 
 if not df_filtered.empty:
     def style_rows(row):
-        # สีเขียวสำหรับซื้อ สีแดงสำหรับขาย
-        s_color = '#10b981' if "ซื้อ" in row['สัญญาณ (Signal)'] else '#ef4444'
+        s_color = '#10b981' if row['Signal'] == "ควรซื้อ" else '#ef4444'
         return ['', '', '', f'color: {s_color}; font-weight: bold;', 'color: #888888;']
 
     st.dataframe(
-        df_filtered.style.apply(style_rows, axis=1)
-                   .format({"Chg%": "{:+.2f}%"}),
+        df_filtered.style.apply(style_rows, axis=1).format({"Chg%": "{:+.2f}%"}),
         column_config={
             "หุ้น (Ticker)": st.column_config.TextColumn("Ticker", width=70),
             "ราคาปัจจุบัน": st.column_config.TextColumn("ราคา", width=60),
             "Chg%": st.column_config.NumberColumn("%", width=50),
-            "สัญญาณ (Signal)": st.column_config.TextColumn("Signal", width=100),
-            "เวลาแจ้งเตือน": st.column_config.TextColumn("เวลา", width=65),
+            "Signal": st.column_config.TextColumn("Signal", width=80),
+            "เวลา": st.column_config.TextColumn("เวลา", width=65),
         },
         use_container_width=True,
         height=500,
         hide_index=True
     )
 else:
-    st.info("🔎 ยังไม่พบการเปลี่ยนสีของ Hull Suite (แดง ↔️ เขียว) ในขณะนี้")
+    st.info("🔎 ยังไม่พบสัญญาณเปลี่ยนสีในขณะนี้")
 
-if st.button("🔄 สแกนสัญญาณเดี๋ยวนี้", use_container_width=True):
+if st.button("🔄 สแกนใหม่", use_container_width=True):
     st.rerun()
