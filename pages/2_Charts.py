@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับตารางสไตล์ Dark Premium (อ้างอิงรูป 1777543125050.jpg)
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับตารางสไตล์ Dark Premium
 st.set_page_config(page_title="SET100 Premium", layout="wide")
 
 st.markdown("""
@@ -40,7 +40,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นที่ต้องการแสดง (SET100)
+# 2. รายชื่อหุ้นที่ต้องการแสดง (SET100 ตัวหลัก)
 SET100_LIST = [
     'ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'CPN.BK', 'DELTA.BK', 
     'GULF.BK', 'KBANK.BK', 'PTT.BK', 'PTTEP.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
@@ -48,12 +48,11 @@ SET100_LIST = [
 
 st.title("📊 TH SET100 Live Market Board")
 
-# ส่วนดึงข้อมูล
+# ส่วนดึงข้อมูลและเตรียมแถวตาราง
 all_rows = ""
 for ticker in SET100_LIST:
     try:
         stock = yf.Ticker(ticker)
-        # ดึงข้อมูล 20 วันเพื่อคำนวณ RSI
         hist = stock.history(period="20d")
         if len(hist) > 1:
             current = hist['Close'].iloc[-1]
@@ -70,7 +69,6 @@ for ticker in SET100_LIST:
             style = "pos" if diff > 0 else "neg" if diff < 0 else ""
             sign = "+" if diff > 0 else ""
 
-            # สร้าง Row HTML
             all_rows += f"""
             <tr>
                 <td><b>{ticker.replace('.BK','')}</b></td>
@@ -84,7 +82,7 @@ for ticker in SET100_LIST:
     except:
         continue
 
-# 3. รวมร่างเป็น HTML Table ตัวเดียว (จุดนี้ห้ามใช้ st.write ซ้ำซ้อน)
+# 3. รวมร่างเป็น HTML Table ตัวเดียว (ลบส่วนเกินที่ทำให้เกิดปัญหาออกแล้ว)
 full_html_table = f"""
 <table class="custom-table">
     <thead>
@@ -104,7 +102,7 @@ full_html_table = f"""
 """
 
 # แสดงผลเพียงครั้งเดียวด้วยคำสั่งที่ถูกต้อง
-st.markdown(full_html_table, unsafe_allow_html=True)[cite: 1]
+st.markdown(full_html_table, unsafe_allow_html=True)
 
 st.caption(f"อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')}")
 
