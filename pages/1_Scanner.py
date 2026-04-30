@@ -21,7 +21,7 @@ st.markdown("""
         margin-bottom: 15px;
         border: 1px solid #334155;
     }
-    /* หัวตารางตัวหนาปกติ */
+    /* หัวตาราง */
     [data-testid="stDataFrame"] th { 
         background-color: #1e293b !important; 
         color: #94a3b8 !important; 
@@ -37,13 +37,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นที่ติดตาม
+# 2. รายชื่อหุ้นที่ติดตาม (อ้างอิงจากความสนใจในเทคโนโลยีและพลังงาน)
 watch_list = [
     'IONQ', 'IREN', 'ONDS', 'SMX', 'DELTA.BK', 'GULF.BK', 'ADVANC.BK', 
     'PTT.BK', 'KBANK.BK', 'SCB.BK', 'CPALL.BK', 'AOT.BK', 'PTTEP.BK', 'HANA.BK'
 ]
 
-# 3. ฟังก์ชันคำนวณ HMA (Length=30 ตามรูป 1777557236322.jpg)
+# 3. ฟังก์ชันคำนวณ HMA (Length=30 ตามความต้องการใช้งาน)
 def get_hma(series, length):
     def wma(data, period):
         weights = np.arange(1, period + 1)
@@ -53,7 +53,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ (เปลี่ยนจากแดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ (แดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
 def identify_hull_signal(df):
     if len(df) < 3: return None, None
     df['hma'] = get_hma(df['Close'], 30)
@@ -67,14 +67,14 @@ def identify_hull_signal(df):
     tz = pytz.timezone('Asia/Bangkok')
     now_time = datetime.now(tz).strftime("%H:%M:%S")
 
-    # แจ้งเตือนเมื่อมีการเปลี่ยนสีของเส้น Hull
+    # บังคับใส่ลูกศรลงในข้อความ Signal โดยตรง
     if prev_trend == "DOWN" and curr_trend == "UP":
         return "🚀 ซื้อ", now_time
     elif prev_trend == "UP" and curr_trend == "DOWN":
         return "🔻 ขาย", now_time
     return None, None
 
-# 5. ฟังก์ชันดึงข้อมูลและกรอง
+# 5. ฟังก์ชันดึงข้อมูล
 @st.cache_data(ttl=600)
 def get_actionable_data():
     action_list = []
@@ -84,20 +84,20 @@ def get_actionable_data():
             hist = stock.history(period="60d")
             if not hist.empty:
                 sig, sig_time = identify_hull_signal(hist)
-                if sig:
+                if sig: # ตรวจสอบว่ามีสัญญาณ (ซื้อ/ขาย) หรือไม่
                     curr_p = hist['Close'].iloc[-1]
                     prev_p = hist['Close'].iloc[-2]
                     action_list.append({
                         "หุ้น (Ticker)": t.replace('.BK', ''),
                         "ราคาปัจจุบัน": f"{curr_p:,.2f}",
                         "Chg%": ((curr_p - prev_p) / prev_p) * 100,
-                        "Signal": sig,
+                        "Signal": sig, # จะมีลูกศรติดไปในข้อความนี้เสมอ
                         "เวลาแจ้งเตือน": sig_time
                     })
         except: continue
     return pd.DataFrame(action_list)
 
-# 6. ส่วนการแสดงผล
+# 6. การแสดงผล
 tz = pytz.timezone('Asia/Bangkok')
 st.markdown(f'<div class="time-status">🕒 เวลาปัจจุบัน (BKK): {datetime.now(tz).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
 st.subheader("🛰️ Hull Suite Dashboard")
@@ -105,9 +105,13 @@ st.subheader("🛰️ Hull Suite Dashboard")
 df_filtered = get_actionable_data()
 
 if not df_filtered.empty:
-    # ฟังก์ชันกำหนดสีตัวอักษรทั้งแถวตามสัญญาณ
+    # ฟังก์ชันกำหนดสีตัวอักษรทั้งแถวตามสัญลักษณ์ที่ปรากฏใน Signal
     def style_entire_row(row):
-        color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
+        # เช็คจากตัวอักษรลูกศรในคอลัมน์ Signal
+        if "🚀" in row['Signal']:
+            color = '#10b981' # สีเขียว
+        else:
+            color = '#ef4444' # สีแดง
         return [f'color: {color}; font-weight: normal;'] * len(row)
 
     st.dataframe(
@@ -124,7 +128,7 @@ if not df_filtered.empty:
         hide_index=True
     )
 else:
-    st.info("🔎 ยังไม่พบสัญญาณเปลี่ยนสีในขณะนี้")
+    st.info("🔎 ยังไม่พบสัญญาณการเปลี่ยนสีของเส้น Hull (ซื้อ/ขาย) ในขณะนี้")
 
 if st.button("🔄 สแกนตลาดใหม่", use_container_width=True):
     st.rerun()
