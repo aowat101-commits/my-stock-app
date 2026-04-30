@@ -3,17 +3,14 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้าเพื่อให้หน้าจอนิ่ง)
+# 1. ตั้งค่าหน้าจอและสไตล์ (ล็อกสีและซ่อนขีดวิ่งสีฟ้า)
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
     <style>
-    /* ซ่อน UI ที่รบกวนสายตา */
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
-    
     .main { background-color: #050a14; }
-    
     .custom-table {
         width: 100%; border-collapse: collapse; color: white;
         background-color: #0b111e; border-radius: 10px; overflow: hidden;
@@ -28,19 +25,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100
+# 2. รายชื่อหุ้น
 tickers = ['ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'DELTA.BK', 'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK']
 
-# 3. Sidebar: แจ้งสถานะและปุ่มกด
+# 3. Sidebar: ล็อกเวลา 30 นาที และปุ่มกด
 st.sidebar.header("⚙️ ระบบอัปเดต")
 st.sidebar.write("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
 
 if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
     st.rerun()
 
-# 4. ฟังก์ชันจัดการข้อมูลหุ้น (ดึงข้อมูลจริงจาก Yahoo Finance)
-def fetch_stock_data():
-    all_rows = ""
+# 4. ฟังก์ชันดึงข้อมูลและสร้างตาราง
+def fetch_and_build():
+    rows_html = ""
     for t in tickers:
         try:
             stock = yf.Ticker(t)
@@ -60,7 +57,7 @@ def fetch_stock_data():
                 style = "pos" if diff > 0 else "neg" if diff < 0 else ""
                 sign = "+" if diff > 0 else ""
 
-                all_rows += f"""
+                rows_html += f"""
                 <tr>
                     <td><b>{t.replace('.BK','')}</b></td>
                     <td>฿{prev:,.2f}</td>
@@ -71,29 +68,27 @@ def fetch_stock_data():
                 </tr>
                 """
         except: continue
-    return all_rows
-
-# 5. การแสดงผล (ล็อคเวลา 30 นาทีด้วย Fragment)
-@st.fragment(run_every="30m")
-def display_dashboard():
-    st.title("📊 TH SET100 Live Market Board")
-    rows_content = fetch_stock_data()
     
-    full_table_html = f"""
+    return f"""
     <table class="custom-table">
         <thead>
             <tr>
                 <th>Ticker</th><th>ราคาปิดก่อนหน้า</th><th>ราคาล่าสุด</th><th>เปลี่ยนแปลง</th><th>%</th><th>RSI</th>
             </tr>
         </thead>
-        <tbody>{rows_content}</tbody>
+        <tbody>{rows_html}</tbody>
     </table>
     <p style='color: gray; font-size: 12px; margin-top: 10px;'>
         อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชอัตโนมัติทุก 30 นาที
     </p>
     """
-    # แสดงผลเพียงจุดเดียวเพื่อป้องกันโค้ดหลุด
-    st.markdown(full_table_html, unsafe_allow_html=True)
 
-# รันฟังก์ชันแสดงผล
-display_dashboard()
+# 5. การแสดงผล (ล็อคเวลา 30 นาทีด้วย Fragment)
+@st.fragment(run_every="30m")
+def show_live_board():
+    st.title("📊 TH SET100 Live Market Board")
+    # แสดงผลในก้อนเดียวจบ ป้องกัน HTML หลุด
+    final_table = fetch_and_build()
+    st.markdown(final_table, unsafe_allow_html=True)
+
+show_live_board()
