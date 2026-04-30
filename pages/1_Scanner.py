@@ -42,7 +42,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ (เปลี่ยนจากแดงเป็นเขียว = ควรซื้อ / เขียวเป็นแดง = ควรขาย)
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ (เปลี่ยนจากแดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
 def identify_hull_signal(df):
     if len(df) < 3: return None, None
     df['hma'] = get_hma(df['Close'], 30)
