@@ -75,31 +75,35 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # สไตล์ตัวเลข (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) และจัดกลาง
-        def style_logic(val):
+        # สไตล์ตัวเลข Change และ % Chg (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ)
+        def style_numbers(val):
             if val > 0: return 'color: #10b981; font-weight: 700; text-align: center;'
             if val < 0: return 'color: #ef4444; font-weight: 700; text-align: center;'
             return 'color: #000000; font-weight: 700; text-align: center;'
 
-        # สไตล์ชื่อหุ้นและ RSI
-        def style_row(row):
+        # สไตล์ RSI (ต่ำกว่า 30 = แดง, เกิน 30 = ดำ)
+        def style_rsi_logic(val):
+            if val < 30:
+                return 'color: #ef4444; font-weight: 700; text-align: center;'
+            return 'color: #000000; font-weight: 700; text-align: center;'
+
+        # สไตล์ชื่อหุ้นและราคาล่าสุด
+        def style_ticker_row(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
-            rsi_color = '#ef4444' if row['RSI (14)'] < 30 else 'white'
             return [
                 f'color: {color}; font-weight: 600; text-align: center;', # Ticker
-                'text-align: center; font-weight: 600;', # Price
-                '', # Change (Managed by map)
-                '', # % Chg (Managed by map)
-                f'color: {rsi_color}; font-weight: 700; text-align: center;' # RSI
+                'text-align: center; font-weight: 600; color: #1e293b;'   # Price (สีเข้มปกติ)
             ]
 
-        # เพิ่มเครื่องหมายเตือน RSI
-        df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
+        # เพิ่มเครื่องหมายเตือน RSI หน้าชื่อหุ้น
+        df_display = df.copy()
+        df_display['Ticker'] = df_display.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
 
         # แสดงผลตารางพร้อมตั้งค่าความกว้างคอลัมน์
         st.dataframe(
-            df.style.apply(style_row, axis=1)
-                    .map(style_logic, subset=['Change', '% Chg'])
+            df_display.style.apply(style_ticker_row, axis=1, subset=['Ticker', 'Price'])
+                    .map(style_numbers, subset=['Change', '% Chg'])
+                    .map(style_rsi_logic, subset=['RSI (14)'])
                     .format({
                         "% Chg": "{:+.2f}%", 
                         "Change": "{:+.2f}",
