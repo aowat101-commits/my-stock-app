@@ -152,5 +152,3 @@ def show_board():
     </p>
     """
     st.markdown(table_html, unsafe_allow_html=True)
-
-show_board()
