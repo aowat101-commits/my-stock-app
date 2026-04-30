@@ -4,12 +4,12 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับตารางสไตล์ Dark Premium (ไม่มีขีดวิ่งสีฟ้า)
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับตารางสไตล์ Dark Premium
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
     <style>
-    /* ซ่อนขีดวิ่งสีฟ้าและ Spinner ด้านบน */
+    /* ซ่อนขีดวิ่งสีฟ้าและ Spinner */
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
@@ -41,7 +41,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 (ใช้ลิสต์เดิมของคุณ)
+# 2. รายชื่อหุ้น SET100
 SET100_LIST = [
     'ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'CPN.BK', 'DELTA.BK', 
     'GULF.BK', 'KBANK.BK', 'PTT.BK', 'PTTEP.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
@@ -49,18 +49,18 @@ SET100_LIST = [
 
 st.title("📊 TH SET100 Live Market Board")
 
-# --- Sidebar: ปรับหน่วยเป็นนาที และปุ่มกด ---
+# --- Sidebar: ปรับหน่วยเป็นนาที และเพิ่มปุ่มอัปเดต ---
 st.sidebar.header("⏱️ Live Settings")
-# ปรับเป็นหน่วยนาที (0.5 นาที ถึง 10 นาที)
+# ตัวเลือกหน่วยเป็นนาที
 refresh_minutes = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 0.5, 10.0, 1.0, step=0.5)[cite: 1]
 refresh_seconds = int(refresh_minutes * 60)[cite: 1]
 
-if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้ (Manual)"):[cite: 1]
+# ปุ่มกดอัปเดตแบบ Manual
+if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):[cite: 1]
     st.rerun()
 
-# ฟังก์ชันดึงข้อมูลและเตรียมแถวตาราง
-def fetch_data_as_html():
-    rows = ""
+def fetch_data_html():
+    html_content = ""
     for ticker in SET100_LIST:
         try:
             stock = yf.Ticker(ticker)
@@ -68,8 +68,8 @@ def fetch_data_as_html():
             if len(hist) > 1:
                 current = hist['Close'].iloc[-1]
                 prev = hist['Close'].iloc[-2]
-                diff = current - prev
-                pct = (diff / prev) * 100
+                change = current - prev
+                p_change = (change / prev) * 100
                 
                 # RSI (14)
                 delta = hist['Close'].diff()
@@ -77,31 +77,30 @@ def fetch_data_as_html():
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().iloc[-1]
                 rsi = 100 - (100 / (1 + (gain / loss))) if loss != 0 else 100
 
-                style = "pos" if diff > 0 else "neg" if diff < 0 else ""
-                sign = "+" if diff > 0 else ""
+                style = "pos" if change > 0 else "neg" if change < 0 else ""
+                sign = "+" if change > 0 else ""
 
-                rows += f"""
+                html_content += f"""
                 <tr>
                     <td><b>{ticker.replace('.BK','')}</b></td>
                     <td>฿{prev:,.2f}</td>
                     <td>฿{current:,.2f}</td>
-                    <td class="{style}">{sign}{diff:.2f}</td>
-                    <td class="{style}">{sign}{pct:.2f}%</td>
+                    <td class="{style}">{sign}{change:.2f}</td>
+                    <td class="{style}">{sign}{p_change:.2f}%</td>
                     <td style="color:#60a5fa">{rsi:.2f}</td>
                 </tr>
                 """
         except: continue
-    return rows
+    return html_content
 
 # --- ส่วนแสดงผล ---
 table_placeholder = st.empty()
 info_placeholder = st.empty()
 
-# ลูปทำงานอัตโนมัติ
 while True:
-    all_rows = fetch_data_as_html()
+    rows = fetch_data_html()
     
-    full_table_html = f"""
+    full_table = f"""
     <table class="custom-table">
         <thead>
             <tr>
@@ -114,15 +113,15 @@ while True:
             </tr>
         </thead>
         <tbody>
-            {all_rows}
+            {rows}
         </tbody>
     </table>
     """
     
-    # แสดงผลตาราง (จุดสำคัญ: ใช้คำสั่งเดียว ไม่ให้มีโค้ด HTML หลุด)
-    table_placeholder.markdown(full_table_html, unsafe_allow_html=True)[cite: 1]
+    # แสดงตารางด้วยคำสั่งที่ถูกต้อง
+    table_placeholder.markdown(full_table, unsafe_allow_html=True)[cite: 1]
     
-    info_placeholder.caption(f"อัปเดตล่าสุด: {datetime.now().strftime('%H:%M:%S')} | ทุกๆ {refresh_minutes} นาที")[cite: 1]
+    info_placeholder.caption(f"อัปเดตล่าสุด: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_minutes} นาที")[cite: 1]
     
     time.sleep(refresh_seconds)[cite: 1]
     st.rerun()
