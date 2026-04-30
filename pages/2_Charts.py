@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS (เน้นบีบระยะห่างให้เหลือน้อยที่สุด)
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized
 st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
@@ -21,7 +21,7 @@ st.markdown("""
     /* จัดหัวตารางให้หนาและอยู่ตรงกลาง */
     [data-testid="stDataFrame"] th {
         font-weight: bold !important;
-        white-space: nowrap !important; /* ห้ามตัดบรรทัดที่หัวข้อ */
+        white-space: nowrap !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -74,35 +74,39 @@ def get_set100_data():
         except: continue
     return pd.DataFrame(data_list)
 
-# 5. การแสดงผล (ล็อกเวลา 30 นาที)
+# 5. การแสดงผล
 @st.fragment(run_every="30m")
 def show_mobile_optimized_board():
     st.title("📊 SET100 Live")
     df = get_set100_data()
     
     if not df.empty:
-        # สไตล์สี (เขียว/แดง/เทา)
-        def style_color(val):
+        # ฟังก์ชันกำหนดสีสำหรับตัวเลขทั่วไป
+        def style_general(val):
             if val > 0: return 'color: #10b981; font-weight: normal;'
             if val < 0: return 'color: #ef4444; font-weight: normal;'
             return 'color: #888888; font-weight: normal;'
 
+        # ฟังก์ชันกำหนดสีสำหรับ RSI
         def style_rsi(val):
             if val < 30: return 'color: #ef4444; font-weight: normal;'
             return 'color: #888888; font-weight: normal;'
 
-        def style_ticker_price(row):
+        # ฟังก์ชันกำหนดสีสำหรับ Ticker และ Price โดยอิงจาก Change
+        def style_row_base(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#888888'
-            return [f'color: {color};', f'color: {color};', '', '', '']
+            style = f'color: {color}; font-weight: normal;'
+            # ส่งสไตล์กลับไปให้ทุกคอลัมน์ (Ticker, Price, Change, % Change, RSI (14))
+            return [style, style, '', '', '']
 
         # ใส่ ⚠️ หน้า Ticker
         df_display = df.copy()
         df_display['Ticker'] = df_display.apply(lambda x: f"⚠️{x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
 
-        # แสดงผลตาราง (ชื่อหัวข้อเต็ม)
+        # แสดงผลตาราง
         st.dataframe(
-            df_display.style.apply(style_ticker_price, axis=1, subset=['Ticker', 'Price']) \
-                    .map(style_color, subset=['Change', '% Change']) \
+            df_display.style.apply(style_row_base, axis=1) \
+                    .map(style_general, subset=['Change', '% Change']) \
                     .map(style_rsi, subset=['RSI (14)']) \
                     .format({
                         "% Change": "{:+.1f}%", 
