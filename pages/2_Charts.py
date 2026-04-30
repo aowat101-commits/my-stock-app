@@ -4,12 +4,12 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Dark Premium
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับตารางสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้า)
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
     <style>
-    /* ซ่อนขีดวิ่งสีฟ้าและ Spinner */
+    /* ซ่อน UI ที่รบกวนสายตา */
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
@@ -41,24 +41,22 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 (ใช้ลิสต์เดิมของคุณ)
+# 2. ส่วนควบคุมที่ Sidebar (ปรับช่วง 1-60 นาที)
+st.sidebar.header("⏱️ Live Settings")
+refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 1)[cite: 1]
+refresh_sec = refresh_min * 60[cite: 1]
+
+# ปุ่ม Manual Refresh
+if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):[cite: 1]
+    st.rerun()
+
+# 3. รายชื่อหุ้น SET100
 tickers = [
     'ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'DELTA.BK', 
     'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
 ]
 
-st.title("📊 TH SET100 Live Market Board")
-
-# --- Sidebar: ปรับช่วงเวลาเป็น 1-60 นาที และปุ่มกด ---
-st.sidebar.header("⏱️ Live Settings")
-# ปรับช่วงการรีเฟรชเป็น 1-60 นาที ตามคำขอ
-refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 1)[cite: 1]
-refresh_sec = refresh_min * 60[cite: 1]
-
-if st.sidebar.button("🔄 อัปเดตตอนนี้"):[cite: 1]
-    st.rerun()
-
-def get_table_content():
+def fetch_stock_html():
     html_rows = ""
     for t in tickers:
         try:
@@ -93,15 +91,16 @@ def get_table_content():
             continue
     return html_rows
 
-# --- ส่วนแสดงผลหลัก ---
-# ใช้ Placeholder เพื่อให้ข้อมูลอัปเดตทับที่เดิมและหน้านิ่งที่สุด
-table_placeholder = st.empty()
-info_placeholder = st.empty()
+# 4. การแสดงผล (ป้องกันโค้ดหลุด)
+st.title("📊 TH SET100 Live Market Board")
 
-while True:
-    rows = get_table_content()
-    
-    full_table_html = f"""
+# สร้างพื้นที่แสดงผลจุดเดียว
+main_container = st.empty()
+
+# ฟังก์ชันแสดงผลตาราง
+def show_ui():
+    rows = fetch_stock_html()
+    table_html = f"""
     <table class="custom-table">
         <thead>
             <tr>
@@ -117,12 +116,15 @@ while True:
             {rows}
         </tbody>
     </table>
+    <p style='color: gray; font-size: 12px; margin-top: 10px;'>
+        อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที
+    </p>
     """
-    
-    # แสดงตารางเพียงจุดเดียวเพื่อป้องกันโค้ดหลุด
-    table_placeholder.markdown(full_table_html, unsafe_allow_html=True)[cite: 1]
-    
-    info_placeholder.caption(f"อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที")[cite: 1]
-    
-    time.sleep(refresh_sec)[cite: 1]
-    st.rerun()
+    main_container.markdown(table_html, unsafe_allow_html=True)[cite: 1]
+
+# รันการแสดงผลครั้งแรก
+show_ui()
+
+# ระบบ Auto-Refresh แบบนิ่งๆ
+time.sleep(refresh_sec)[cite: 1]
+st.rerun()[cite: 1]
