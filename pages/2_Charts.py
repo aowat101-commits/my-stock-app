@@ -1,128 +1,131 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
 from datetime import datetime
-import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft (Japanese Vintage & Loft Style)
-st.set_page_config(page_title="Full Market Hull Scan", layout="wide")
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized
+st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
-    .time-status {
-        background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px;
-        text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
+    .stSpinner {display: none !important;}
+    
+    /* บีบขนาดตัวอักษรและระยะห่างเซลล์ให้เล็กที่สุดสำหรับมือถือ */
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+        text-align: center !important;
     }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
-    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; font-weight: normal !important; }
+    
+    /* จัดหัวตารางให้หนาและอยู่ตรงกลาง */
+    [data-testid="stDataFrame"] th {
+        font-weight: bold !important;
+        white-space: nowrap !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ฟังก์ชันรวมรายชื่อหุ้นไทยและหุ้นต่างประเทศที่สนใจ
-def get_extended_tickers():
-    # รายชื่อ SET100
-    set100 = [
-        'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
-        'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
-        'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
-        'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
-        'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
-        'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK',
-        'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK',
-        'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK',
-        'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK',
-        'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK',
-        'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
-    ]
-    # หุ้นเพิ่มเติมนอก SET100 และหุ้นเทคโนโลยีที่คุณวิเคราะห์ (IONQ, IREN, SMX, ONDS)
-    extra = [
-        'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
-        'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'TKN.BK', 'XO.BK',
-        'IONQ', 'IREN', 'SMX', 'ONDS'
-    ]
-    return list(set(set100 + extra))
+# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
+tickers = [
+    'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
+    'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
+    'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
+    'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
+    'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
+    'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK',
+    'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK',
+    'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK',
+    'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK',
+    'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK',
+    'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
+]
 
-# 3. ฟังก์ชันคำนวณ HMA 30
-def get_hma(series, length):
-    def wma(data, period):
-        weights = np.arange(1, period + 1)
-        return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
-    raw_hma = 2 * wma(series, half_length) - wma(series, length)
-    return wma(raw_hma, sqrt_length)
-
-# 4. ฟังก์ชันค้นหาสัญญาณล่าสุด
-def find_signal(df, ticker):
-    if len(df) < 35: return None
-    tz = pytz.timezone('Asia/Bangkok')
-    df['hma'] = get_hma(df['Close'], 30)
-    df['trend'] = np.where(df['hma'] > df['hma'].shift(1), "UP", "DOWN")
-    df['is_switch'] = df['trend'] != df['trend'].shift(1)
-    
-    switches = df[df['is_switch']].copy()
-    if not switches.empty:
-        last_sig = switches.iloc[-1]
-        actual_time = last_sig.name.astimezone(tz)
-        return {
-            "Ticker": ticker.replace('.BK', ''),
-            "ราคา": f"{last_sig['Close']:,.2f}",
-            "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
-            "เวลาจริง": actual_time.strftime("%H:%M:%S"),
-            "วันที่": actual_time.strftime("%d/%m/%y"),
-            "raw_time": actual_time
-        }
-    return None
-
-# 5. ส่วนหัวและปุ่มรีเฟรช (ย้ายไว้ด้านบนตามสั่ง)
-st.subheader("🛰️ Full Market Tracker: Top 30 Latest Signals")
-
-if st.button("🔄 Force Refresh Scan", use_container_width=True):
+# 3. Sidebar
+st.sidebar.header("⚙️ Settings")
+if st.sidebar.button("🔄 Force Refresh"):
     st.rerun()
 
-# 6. Dashboard Runtime (Auto-scan ทุก 10 นาที)
-@st.fragment(run_every="10m")
-def full_market_dashboard():
-    tz = pytz.timezone('Asia/Bangkok')
-    tickers = get_extended_tickers()
-    st.markdown(f'<div class="time-status">🕒 Last Scan: {datetime.now(tz).strftime("%H:%M:%S")} | สแกนหุ้นทั้งหมด {len(tickers)} ตัว</div>', unsafe_allow_html=True)
-    
-    results = []
-    bar = st.progress(0, text="กำลังวิเคราะห์สัญญาณล่าสุดจากตลาด...")
-    
-    for i, t in enumerate(tickers):
+# 4. ฟังก์ชันดึงข้อมูล (Cache 30 นาที)
+@st.cache_data(ttl=1800)
+def get_set100_data():
+    data_list = []
+    for t in tickers:
         try:
             stock = yf.Ticker(t)
-            # ดึงข้อมูลย้อนหลัง 10 วันเพื่อให้ครอบคลุมจุดตัด
-            hist = stock.history(period="10d", interval="1h")
-            if not hist.empty:
-                res = find_signal(hist, t)
-                if res: results.append(res)
+            hist = stock.history(period="30d")
+            if not hist.empty and len(hist) >= 15:
+                curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
+                diff = curr - prev
+                pct = ((curr - prev) / prev) * 100 if prev != 0 else 0.0
+                
+                delta = hist['Close'].diff()
+                up = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
+                down = -delta.clip(upper=0).rolling(window=14).mean().iloc[-1]
+                rsi = 100 - (100 / (1 + (up / down))) if down != 0 else 100
+
+                data_list.append({
+                    "Ticker": t.replace('.BK', ''),
+                    "Price": round(curr, 2),
+                    "Change": round(diff, 2) if abs(diff) > 0.0001 else 0.0,
+                    "% Change": round(pct, 2) if abs(pct) > 0.0001 else 0.0,
+                    "RSI (14)": round(rsi, 2)
+                })
         except: continue
-        bar.progress((i + 1) / len(tickers))
+    return pd.DataFrame(data_list)
+
+# 5. การแสดงผล
+@st.fragment(run_every="30m")
+def show_mobile_optimized_board():
+    st.title("📊 SET100 Live")
+    df = get_set100_data()
     
-    bar.empty()
+    if not df.empty:
+        # ฟังก์ชันกำหนดสีสำหรับตัวเลขทั่วไป
+        def style_general(val):
+            if val > 0: return 'color: #10b981; font-weight: normal;'
+            if val < 0: return 'color: #ef4444; font-weight: normal;'
+            return 'color: #888888; font-weight: normal;'
 
-    if results:
-        # เรียงลำดับจากใหม่สุด และคัด 30 รายการ
-        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
-        
-        def style_row(row):
-            color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
-            return [f'color: {color}; font-weight: normal;'] * len(row)
+        # ฟังก์ชันกำหนดสีสำหรับ RSI
+        def style_rsi(val):
+            if val < 30: return 'color: #ef4444; font-weight: normal;'
+            return 'color: #888888; font-weight: normal;'
 
+        # ฟังก์ชันกำหนดสีสำหรับ Ticker และ Price โดยอิงจาก Change
+        def style_row_base(row):
+            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#888888'
+            style = f'color: {color}; font-weight: normal;'
+            # ส่งสไตล์กลับไปให้ทุกคอลัมน์ (Ticker, Price, Change, % Change, RSI (14))
+            return [style, style, '', '', '']
+
+        # ใส่ ⚠️ หน้า Ticker
+        df_display = df.copy()
+        df_display['Ticker'] = df_display.apply(lambda x: f"⚠️{x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
+
+        # แสดงผลตาราง
         st.dataframe(
-            df.drop(columns=['raw_time']).style.apply(style_row, axis=1),
+            df_display.style.apply(style_row_base, axis=1) \
+                    .map(style_general, subset=['Change', '% Change']) \
+                    .map(style_rsi, subset=['RSI (14)']) \
+                    .format({
+                        "% Change": "{:+.1f}%", 
+                        "Change": "{:+.1f}",
+                        "Price": "{:,.1f}",
+                        "RSI (14)": "{:.0f}"
+                    }),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.TextColumn("ราคาที่ตัด", width=65),
-                "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลาจริง": st.column_config.TextColumn("เวลา", width=75),
-                "วันที่": st.column_config.TextColumn("วันที่", width=65),
+                "Price": st.column_config.NumberColumn("Price", width=45),
+                "Change": st.column_config.NumberColumn("Change", width=45),
+                "% Change": st.column_config.NumberColumn("% Change", width=55),
+                "RSI (14)": st.column_config.NumberColumn("RSI (14)", width=45),
             },
-            use_container_width=True, height=700, hide_index=True
+            use_container_width=True,
+            height=800,
+            hide_index=True
         )
+        
+        st.caption(f"Refreshed: {datetime.now().strftime('%H:%M')} | Auto 30m")
 
-# รันระบบ
-full_market_dashboard()
+show_mobile_optimized_board()
