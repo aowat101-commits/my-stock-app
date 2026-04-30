@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized (ตามสไตล์ที่คุณส่งมา)
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized
 st.set_page_config(page_title="Market Monitor", layout="wide")
 
 st.markdown("""
@@ -18,7 +18,6 @@ st.markdown("""
         text-align: center !important;
     }
     
-    /* จัดหัวตารางให้หนาและอยู่ตรงกลาง */
     [data-testid="stDataFrame"] th {
         font-weight: bold !important;
         white-space: nowrap !important;
@@ -26,7 +25,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นแบบขยายเพิ่ม (SET100 + sSET/MAI + Tech Stocks)
+# 2. รายชื่อหุ้น (SET100 + sSET/MAI + Tech Stocks)
 base_tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -41,7 +40,6 @@ base_tickers = [
     'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# หุ้นเพิ่มเติมนอก SET100 และหุ้นต่างประเทศที่คุณติดตาม
 extra_tickers = [
     'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
     'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'TKN.BK', 'XO.BK',
@@ -55,11 +53,14 @@ st.sidebar.header("⚙️ Settings")
 if st.sidebar.button("🔄 Force Refresh"):
     st.rerun()
 
-# 4. ฟังก์ชันดึงข้อมูล (Cache 30 นาที)
+# 4. ฟังก์ชันดึงข้อมูล (ทศนิยม 2 ตำแหน่งในตัวแปร)
 @st.cache_data(ttl=1800)
 def get_market_data():
     data_list = []
-    for t in all_tickers:
+    progress_bar = st.progress(0, text="กำลังดึงข้อมูล...")
+    total = len(all_tickers)
+    
+    for i, t in enumerate(all_tickers):
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="30d")
@@ -75,68 +76,63 @@ def get_market_data():
 
                 data_list.append({
                     "Ticker": t.replace('.BK', ''),
-                    "Price": round(curr, 2),
-                    "Change": round(diff, 2) if abs(diff) > 0.0001 else 0.0,
-                    "% Change": round(pct, 2) if abs(pct) > 0.0001 else 0.0,
-                    "RSI (14)": round(rsi, 2)
+                    "Price": curr,
+                    "Change": diff,
+                    "% Change": pct,
+                    "RSI (14)": rsi
                 })
         except: continue
+        progress_bar.progress((i + 1) / total)
+    
+    progress_bar.empty()
     return pd.DataFrame(data_list)
 
-# 5. การแสดงผล
+# 5. การแสดงผล (จัดฟอร์แมต 0.00)
 @st.fragment(run_every="30m")
 def show_extended_board():
     st.title("📊 Market Monitor Live")
     df = get_market_data()
     
     if not df.empty:
-        # ฟังก์ชันกำหนดสีสำหรับตัวเลขทั่วไป
         def style_general(val):
-            if val > 0: return 'color: #10b981; font-weight: normal;'
-            if val < 0: return 'color: #ef4444; font-weight: normal;'
-            return 'color: #888888; font-weight: normal;'
+            if val > 0: return 'color: #10b981;'
+            if val < 0: return 'color: #ef4444;'
+            return 'color: #888888;'
 
-        # ฟังก์ชันกำหนดสีสำหรับ RSI
         def style_rsi(val):
-            if val < 30: return 'color: #ef4444; font-weight: normal;'
-            return 'color: #888888; font-weight: normal;'
+            if val < 30: return 'color: #ef4444; font-weight: bold;'
+            return 'color: #888888;'
 
-        # ฟังก์ชันกำหนดสีสำหรับ Ticker และ Price โดยอิงจาก Change
         def style_row_base(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#888888'
-            style = f'color: {color}; font-weight: normal;'
-            return [style, style, '', '', '']
+            return [f'color: {color};', f'color: {color};', '', '', '']
 
-        # ใส่ ⚠️ หน้า Ticker ถ้า RSI < 30
         df_display = df.copy()
         df_display['Ticker'] = df_display.apply(lambda x: f"⚠️{x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
-        
-        # เรียงลำดับตาม % Change ล่าสุด (ให้ตัวที่ขยับเยอะอยู่บน)
         df_display = df_display.sort_values(by="% Change", ascending=False)
 
-        # แสดงผลตาราง
+        # เน้นส่วน .format สำหรับทศนิยม 2 ตำแหน่ง (0.00)
         st.dataframe(
             df_display.style.apply(style_row_base, axis=1) \
                     .map(style_general, subset=['Change', '% Change']) \
                     .map(style_rsi, subset=['RSI (14)']) \
                     .format({
-                        "% Change": "{:+.1f}%", 
-                        "Change": "{:+.1f}",
-                        "Price": "{:,.1f}",
+                        "% Change": "{:+.2f}%", 
+                        "Change": "{:+.2f}",
+                        "Price": "{:,.2f}",
                         "RSI (14)": "{:.0f}"
                     }),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "Price": st.column_config.NumberColumn("Price", width=45),
-                "Change": st.column_config.NumberColumn("Change", width=45),
-                "% Change": st.column_config.NumberColumn("% Change", width=55),
+                "Price": st.column_config.NumberColumn("Price", width=55),
+                "Change": st.column_config.NumberColumn("Change", width=55),
+                "% Change": st.column_config.NumberColumn("% Change", width=65),
                 "RSI (14)": st.column_config.NumberColumn("RSI (14)", width=45),
             },
             use_container_width=True,
             height=800,
             hide_index=True
         )
-        
-        st.caption(f"Refreshed: {datetime.now().strftime('%H:%M')} | Auto 30m | Includes SET100, sSET, MAI & Tech")
+        st.caption(f"Refreshed: {datetime.now().strftime('%H:%M')} | Decimal: 0.00")
 
 show_extended_board()
