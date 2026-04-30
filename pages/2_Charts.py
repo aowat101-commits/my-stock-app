@@ -3,13 +3,14 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอ (ซ่อน UI ส่วนเกินเพื่อให้หน้านิ่งที่สุด)
+# 1. ตั้งค่าหน้าจอและซ่อน UI ส่วนเกิน
 st.set_page_config(page_title="SET100 Premium Monitor", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
+    .stDataFrame {border: 1px solid #1e293b; border-radius: 10px;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -28,13 +29,13 @@ tickers = [
     'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. Sidebar: ล็อกเวลา 30 นาที และปุ่มกด
-st.sidebar.header("⚙️ ระบบอัปเดต")
-st.sidebar.info("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
-if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
+# 3. Sidebar
+st.sidebar.header("⚙️ Market Settings")
+st.sidebar.markdown("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
+if st.sidebar.button("🔄 Force Refresh Now"):
     st.rerun()
 
-# 4. ฟังก์ชันดึงข้อมูล (ดึงข้อมูลจริงจาก Yahoo Finance)
+# 4. ฟังก์ชันดึงข้อมูล
 @st.cache_data(ttl=1800)
 def get_set100_data():
     data_list = []
@@ -53,39 +54,46 @@ def get_set100_data():
 
                 data_list.append({
                     "Ticker": t.replace('.BK', ''),
-                    "ปิดก่อนหน้า": round(prev, 2),
-                    "ล่าสุด": round(curr, 2),
-                    "เปลี่ยนแปลง": round(diff, 2),
-                    "%": round(pct, 2),
+                    "Price": round(curr, 2),
+                    "Change": round(diff, 2),
+                    "% Chg": round(pct, 2),
                     "RSI (14)": round(rsi, 2)
                 })
         except: continue
     return pd.DataFrame(data_list)
 
-# 5. การแสดงผล (ล็อกเวลา 30 นาที)
+# 5. การแสดงผล (Fragment ล็อกเวลา 30 นาที)
 @st.fragment(run_every="30m")
-def show_premium_board():
-    st.title("📊 SET100 Full Live Board")
+def show_enhanced_board():
+    st.title("📊 SET100 Premium Monitor")
     df = get_set100_data()
     
     if not df.empty:
-        # ใส่สัญลักษณ์ ⚠️ หน้า Ticker ที่ RSI < 30
+        # ตกแต่ง Ticker ที่ RSI ต่ำ
         df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
         
-        # ตั้งค่าสี RSI < 30 เป็นสีแดง
-        def color_rsi(val):
-            color = '#ff4b4b' if val < 30 else 'white'
-            return f'color: {color}; font-weight: bold' if val < 30 else f'color: {color}'
+        # ฟังก์ชันแต่งสี RSI
+        def style_rsi(val):
+            if val < 30:
+                return 'background-color: #4c0519; color: #ff4b4b; font-weight: bold'
+            return ''
 
-        # ใช้ st.dataframe เพื่อให้หัวแถว "กดเรียงลำดับได้"
+        # ฟังก์ชันแต่งสี % Chg (บวกเขียว ลบแดง)
+        def style_chg(val):
+            color = '#10b981' if val > 0 else '#ef4444' if val < 0 else 'white'
+            return f'color: {color}'
+
+        # แสดงผลตารางแบบ High-End
         st.dataframe(
-            df.style.map(color_rsi, subset=['RSI (14)'])
-                    .format({"%": "{:+.2f}%", "เปลี่ยนแปลง": "{:+.2f}"}),
+            df.style.map(style_rsi, subset=['RSI (14)']) \
+                    .map(style_chg, subset=['Change', '% Chg']) \
+                    .bar(subset=['% Chg'], color=['#440106', '#013220'], align='mid') \
+                    .format({"% Chg": "{:+.2f}%", "Change": "{:+.2f}"}),
             use_container_width=True,
-            height=800,
+            height=750,
             hide_index=True
         )
         
-        st.caption(f"อัปเดตล่าสุด: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก 30 นาที")
+        st.caption(f"Last Update: {datetime.now().strftime('%H:%M:%S')} | Auto-refresh every 30 mins")
 
-show_premium_board()
+show_enhanced_board()
