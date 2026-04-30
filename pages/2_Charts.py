@@ -3,28 +3,30 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized
-st.set_page_config(page_title="SET100 Mobile", layout="wide")
+# 1. ตั้งค่าหน้าจอและ CSS (เน้นบีบระยะห่างให้เหลือน้อยที่สุด)
+st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
-    /* ปรับขนาดตัวอักษรตารางให้เล็กลงเพื่อมือถือ */
+    /* บีบขนาดตัวอักษรและระยะห่างเซลล์ให้เล็กที่สุดสำหรับมือถือ */
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
-        font-size: 12px !important;
+        font-size: 11px !important;
+        padding: 2px 4px !important;
         text-align: center !important;
     }
     
     /* จัดหัวตารางให้หนาและอยู่ตรงกลาง */
     [data-testid="stDataFrame"] th {
         font-weight: bold !important;
+        white-space: nowrap !important; /* ห้ามตัดบรรทัดที่หัวข้อ */
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ทั้งหมด
+# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
 tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -40,9 +42,8 @@ tickers = [
 ]
 
 # 3. Sidebar
-st.sidebar.header("⚙️ Market Settings")
-st.sidebar.markdown("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
-if st.sidebar.button("🔄 Force Refresh Now"):
+st.sidebar.header("⚙️ Settings")
+if st.sidebar.button("🔄 Force Refresh"):
     st.rerun()
 
 # 4. ฟังก์ชันดึงข้อมูล (Cache 30 นาที)
@@ -66,63 +67,61 @@ def get_set100_data():
                 data_list.append({
                     "Ticker": t.replace('.BK', ''),
                     "Price": round(curr, 2),
-                    "Chg": round(diff, 2) if abs(diff) > 0.0001 else 0.00,
-                    "%": round(pct, 2) if abs(pct) > 0.0001 else 0.00,
-                    "RSI": round(rsi, 2)
+                    "Change": round(diff, 2) if abs(diff) > 0.0001 else 0.0,
+                    "% Change": round(pct, 2) if abs(pct) > 0.0001 else 0.0,
+                    "RSI (14)": round(rsi, 2)
                 })
         except: continue
     return pd.DataFrame(data_list)
 
-# 5. การแสดงผล (Fragment ล็อกเวลา 30 นาที)
+# 5. การแสดงผล (ล็อกเวลา 30 นาที)
 @st.fragment(run_every="30m")
-def show_mobile_board():
+def show_mobile_optimized_board():
     st.title("📊 SET100 Live")
     df = get_set100_data()
     
     if not df.empty:
-        # สไตล์ตัวเลข (บวก=เขียว, ลบ=แดง, ศูนย์=เทาอ่อน)
-        def style_logic(val):
-            if val > 0: return 'color: #10b981; font-weight: normal; text-align: center;'
-            if val < 0: return 'color: #ef4444; font-weight: normal; text-align: center;'
-            return 'color: #888888; font-weight: normal; text-align: center;'
+        # สไตล์สี (เขียว/แดง/เทา)
+        def style_color(val):
+            if val > 0: return 'color: #10b981; font-weight: normal;'
+            if val < 0: return 'color: #ef4444; font-weight: normal;'
+            return 'color: #888888; font-weight: normal;'
 
-        # สไตล์ RSI และ Ticker
-        def style_rsi_only(val):
-            if val < 30: return 'color: #ef4444; font-weight: normal; text-align: center;'
-            return 'color: #888888; font-weight: normal; text-align: center;'
+        def style_rsi(val):
+            if val < 30: return 'color: #ef4444; font-weight: normal;'
+            return 'color: #888888; font-weight: normal;'
 
-        def apply_row_styles(row):
-            color = '#10b981' if row['Chg'] > 0 else '#ef4444' if row['Chg'] < 0 else '#888888'
-            style = f'color: {color}; font-weight: normal; text-align: center;'
-            return [style, style, '', '', '']
+        def style_ticker_price(row):
+            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#888888'
+            return [f'color: {color};', f'color: {color};', '', '', '']
 
-        # จัดการเครื่องหมายเตือน RSI
+        # ใส่ ⚠️ หน้า Ticker
         df_display = df.copy()
-        df_display['Ticker'] = df_display.apply(lambda x: f"⚠️{x['Ticker']}" if x['RSI'] < 30 else x['Ticker'], axis=1)
+        df_display['Ticker'] = df_display.apply(lambda x: f"⚠️{x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
 
-        # แสดงผลตารางแบบบีบคอลัมน์ให้เล็กที่สุด
+        # แสดงผลตาราง (ชื่อหัวข้อเต็ม)
         st.dataframe(
-            df_display.style.apply(apply_row_styles, axis=1) \
-                    .map(style_logic, subset=['Chg', '%']) \
-                    .map(style_rsi_only, subset=['RSI']) \
+            df_display.style.apply(style_ticker_price, axis=1, subset=['Ticker', 'Price']) \
+                    .map(style_color, subset=['Change', '% Change']) \
+                    .map(style_rsi, subset=['RSI (14)']) \
                     .format({
-                        "%": "{:+.1f}%", 
-                        "Chg": "{:+.1f}",
+                        "% Change": "{:+.1f}%", 
+                        "Change": "{:+.1f}",
                         "Price": "{:,.1f}",
-                        "RSI": "{:.0f}"
+                        "RSI (14)": "{:.0f}"
                     }),
             column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", width=60),
-                "Price": st.column_config.NumberColumn("Px", width=40),
-                "Chg": st.column_config.NumberColumn("Chg", width=40),
-                "%": st.column_config.NumberColumn("%", width=40),
-                "RSI": st.column_config.NumberColumn("RSI", width=35),
+                "Ticker": st.column_config.TextColumn("Ticker", width=70),
+                "Price": st.column_config.NumberColumn("Price", width=45),
+                "Change": st.column_config.NumberColumn("Change", width=45),
+                "% Change": st.column_config.NumberColumn("% Change", width=55),
+                "RSI (14)": st.column_config.NumberColumn("RSI (14)", width=45),
             },
             use_container_width=True,
             height=800,
             hide_index=True
         )
         
-        st.caption(f"Update: {datetime.now().strftime('%H:%M')} | Auto 30m")
+        st.caption(f"Refreshed: {datetime.now().strftime('%H:%M')} | Auto 30m")
 
-show_mobile_board()
+show_mobile_optimized_board()
