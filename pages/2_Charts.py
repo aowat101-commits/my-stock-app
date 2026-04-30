@@ -5,8 +5,8 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="Top 30 Market Signals", layout="wide")
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft (Japanese Vintage & Loft Style)
+st.set_page_config(page_title="Full Market Hull Scan", layout="wide")
 
 st.markdown("""
     <style>
@@ -20,28 +20,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นแบบจัดเต็ม (SET100 + sSET + MAI + TFG)
-set100 = [
-    'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
-    'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
-    'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
-    'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
-    'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
-    'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK',
-    'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK',
-    'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK',
-    'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK',
-    'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK',
-    'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
-]
-
-extra_growth = [
-    'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
-    'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'MASTER.BK', 'KLINIQ.BK', 'WARRIX.BK', 
-    'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK'
-]
-
-full_scan_list = list(set(set100 + extra_growth))
+# 2. ฟังก์ชันรวมรายชื่อหุ้นไทยและหุ้นต่างประเทศที่สนใจ
+def get_extended_tickers():
+    # รายชื่อ SET100
+    set100 = [
+        'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
+        'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
+        'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
+        'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
+        'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
+        'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK',
+        'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK',
+        'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK',
+        'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK',
+        'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK',
+        'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
+    ]
+    # หุ้นเพิ่มเติมนอก SET100 และหุ้นเทคโนโลยีที่คุณวิเคราะห์ (IONQ, IREN, SMX, ONDS)
+    extra = [
+        'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
+        'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'TKN.BK', 'XO.BK',
+        'IONQ', 'IREN', 'SMX', 'ONDS'
+    ]
+    return list(set(set100 + extra))
 
 # 3. ฟังก์ชันคำนวณ HMA 30
 def get_hma(series, length):
@@ -53,20 +54,20 @@ def get_hma(series, length):
     return wma(raw_hma, sqrt_length)
 
 # 4. ฟังก์ชันค้นหาสัญญาณล่าสุด
-def get_last_signal(df, ticker):
+def find_signal(df, ticker):
     if len(df) < 35: return None
     tz = pytz.timezone('Asia/Bangkok')
     df['hma'] = get_hma(df['Close'], 30)
     df['trend'] = np.where(df['hma'] > df['hma'].shift(1), "UP", "DOWN")
     df['is_switch'] = df['trend'] != df['trend'].shift(1)
     
-    switches = df[df['is_switch'] == True].copy()
+    switches = df[df['is_switch']].copy()
     if not switches.empty:
         last_sig = switches.iloc[-1]
         actual_time = last_sig.name.astimezone(tz)
         return {
             "Ticker": ticker.replace('.BK', ''),
-            "ราคาที่ตัด": f"{last_sig['Close']:,.2f}",
+            "ราคา": f"{last_sig['Close']:,.2f}",
             "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
             "เวลาจริง": actual_time.strftime("%H:%M:%S"),
             "วันที่": actual_time.strftime("%d/%m/%y"),
@@ -74,36 +75,37 @@ def get_last_signal(df, ticker):
         }
     return None
 
-# 5. ส่วนหัวและปุ่มรีเฟรช (อยู่ด้านบน)
-st.subheader("🛰️ Market Signal History: Top 30")
+# 5. ส่วนหัวและปุ่มรีเฟรช (ย้ายไว้ด้านบนตามสั่ง)
+st.subheader("🛰️ Full Market Tracker: Top 30 Latest Signals")
 
 if st.button("🔄 Force Refresh Scan", use_container_width=True):
     st.rerun()
 
-# 6. Dashboard อัปเดตออโต้ทุก 10 นาที
+# 6. Dashboard Runtime (Auto-scan ทุก 10 นาที)
 @st.fragment(run_every="10m")
-def dashboard_tracker():
+def full_market_dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | แสดง 30 อันดับล่าสุดจากหุ้นทั้งหมด</div>', unsafe_allow_html=True)
+    tickers = get_extended_tickers()
+    st.markdown(f'<div class="time-status">🕒 Last Scan: {datetime.now(tz).strftime("%H:%M:%S")} | สแกนหุ้นทั้งหมด {len(tickers)} ตัว</div>', unsafe_allow_html=True)
     
     results = []
-    bar = st.progress(0, text="กำลังวิเคราะห์สัญญาณล่าสุด...")
+    bar = st.progress(0, text="กำลังวิเคราะห์สัญญาณล่าสุดจากตลาด...")
     
-    total = len(full_scan_list)
-    for i, t in enumerate(full_scan_list):
+    for i, t in enumerate(tickers):
         try:
             stock = yf.Ticker(t)
+            # ดึงข้อมูลย้อนหลัง 10 วันเพื่อให้ครอบคลุมจุดตัด
             hist = stock.history(period="10d", interval="1h")
             if not hist.empty:
-                res = get_last_signal(hist, t)
+                res = find_signal(hist, t)
                 if res: results.append(res)
         except: continue
-        bar.progress((i + 1) / total)
+        bar.progress((i + 1) / len(tickers))
     
     bar.empty()
 
     if results:
-        # เรียงลำดับจากใหม่ไปเก่า และเอาแค่ 30 ตัวแรก
+        # เรียงลำดับจากใหม่สุด และคัด 30 รายการ
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
         def style_row(row):
@@ -114,13 +116,13 @@ def dashboard_tracker():
             df.drop(columns=['raw_time']).style.apply(style_row, axis=1),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคาที่ตัด": st.column_config.TextColumn("ราคา", width=65),
+                "ราคา": st.column_config.TextColumn("ราคาที่ตัด", width=65),
                 "Signal": st.column_config.TextColumn("Signal", width=70),
                 "เวลาจริง": st.column_config.TextColumn("เวลา", width=75),
                 "วันที่": st.column_config.TextColumn("วันที่", width=65),
             },
-            use_container_width=True, height=650, hide_index=True
+            use_container_width=True, height=700, hide_index=True
         )
 
-# 7. รันระบบ
-dashboard_tracker()
+# รันระบบ
+full_market_dashboard()
