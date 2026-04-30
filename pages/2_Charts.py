@@ -9,12 +9,9 @@ st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
     <style>
-    /* ซ่อน UI ที่รบกวนสายตา */
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
-    
     .main { background-color: #050a14; }
-    
     .custom-table {
         width: 100%;
         border-collapse: collapse;
@@ -41,10 +38,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนควบคุมที่ Sidebar (ปรับช่วง 1-60 นาที)
+# 2. ส่วนควบคุมที่ Sidebar (ช่วง 1-60 นาที)
 st.sidebar.header("⏱️ Live Settings")
 refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 1)[cite: 1]
-refresh_sec = refresh_min * 60[cite: 1]
 
 # ปุ่ม Manual Refresh
 if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):[cite: 1]
@@ -56,7 +52,7 @@ tickers = [
     'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
 ]
 
-def fetch_stock_html():
+def fetch_data():
     html_rows = ""
     for t in tickers:
         try:
@@ -91,15 +87,11 @@ def fetch_stock_html():
             continue
     return html_rows
 
-# 4. การแสดงผล (ป้องกันโค้ดหลุด)
-st.title("📊 TH SET100 Live Market Board")
-
-# สร้างพื้นที่แสดงผลจุดเดียว
-main_container = st.empty()
-
-# ฟังก์ชันแสดงผลตาราง
-def show_ui():
-    rows = fetch_stock_html()
+# 4. ฟังก์ชันแสดงผลตาราง (ใช้ Fragment เพื่อให้รีเฟรชเฉพาะจุด)
+@st.fragment(run_every=f"{refresh_min}m")[cite: 1]
+def show_live_table():
+    st.title("📊 TH SET100 Live Market Board")[cite: 1]
+    rows = fetch_data()
     table_html = f"""
     <table class="custom-table">
         <thead>
@@ -120,11 +112,7 @@ def show_ui():
         อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที
     </p>
     """
-    main_container.markdown(table_html, unsafe_allow_html=True)[cite: 1]
+    st.markdown(table_html, unsafe_allow_html=True)[cite: 1]
 
-# รันการแสดงผลครั้งแรก
-show_ui()
-
-# ระบบ Auto-Refresh แบบนิ่งๆ
-time.sleep(refresh_sec)[cite: 1]
-st.rerun()[cite: 1]
+# เรียกใช้งานฟังก์ชัน
+show_live_table()
