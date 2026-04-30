@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับหัวตาราง
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับการจัดวาง
 st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
@@ -11,10 +11,12 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
-    /* จัดการหัวตารางให้หนาและอยู่ตรงกลาง (ส่วนนี้คงความหนาไว้ตามโจทย์เดิมเพื่อให้ดูเป็นหัวข้อ) */
-    th {
+    /* จัดการหัวตารางและเนื้อหาให้หนาและอยู่ตรงกลาง */
+    th, td {
         text-align: center !important;
-        font-weight: bold !important;
+        font-weight: 600 !important; /* เพิ่มความเข้มของตัวหนังสือ */
+    }
+    th {
         background-color: #161e2e !important;
     }
     </style>
@@ -76,29 +78,29 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # ฟังก์ชันกำหนดสีตัวเลข Change และ % Chg (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) - ไม่ใช้ตัวหนา
+        # กำหนดสีตัวเลข (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) และความเข้ม
         def style_numbers(val):
             if val > 0:
-                return 'color: #10b981; font-weight: normal;'
+                return 'color: #10b981; font-weight: 700;'
             elif val < 0:
-                return 'color: #ef4444; font-weight: normal;'
+                return 'color: #ef4444; font-weight: 700;'
             else:
-                return 'color: #000000; font-weight: normal;'
+                return 'color: #000000; font-weight: 700;'
 
-        # ฟังก์ชันกำหนดสี RSI (ต่ำกว่า 30 เป็นสีแดง) - ไม่ใช้ตัวหนา
+        # กำหนดสี RSI (ต่ำกว่า 30 เป็นสีแดง)
         def style_rsi_color(val):
             if val < 30:
-                return 'color: #ef4444; font-weight: normal;'
-            return 'color: white; font-weight: normal;'
+                return 'color: #ef4444; font-weight: 700;'
+            return 'color: white; font-weight: 600;'
 
-        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) เปลี่ยนสีตามราคา - ไม่ใช้ตัวหนา
+        # กำหนดสีชื่อหุ้นตามราคา
         def style_ticker_name(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
             styles = [''] * len(row)
-            styles[0] = f'color: {color}; font-weight: normal;' 
+            styles[0] = f'color: {color}; font-weight: 600;' 
             return styles
 
-        # เพิ่มสัญลักษณ์หน้าชื่อหุ้นก่อนแสดงผล
+        # เพิ่มสัญลักษณ์หน้าชื่อหุ้น
         df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
 
         # แสดงผลตาราง
