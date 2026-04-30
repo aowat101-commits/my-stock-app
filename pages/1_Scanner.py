@@ -48,7 +48,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ (ซื้อ/ขาย)
 def identify_hull_signal(df, ticker):
     if len(df) < 35: return None
     df['hma'] = get_hma(df['Close'], 30)
@@ -64,7 +64,6 @@ def identify_hull_signal(df, ticker):
     if new_sig:
         tz = pytz.timezone('Asia/Bangkok')
         now = datetime.now(tz)
-        # บันทึกเมื่อเป็นสัญญาณใหม่ หรือเปลี่ยนทิศทาง
         if ticker not in st.session_state.signal_history or st.session_state.signal_history[ticker]["Signal"] != new_sig:
             st.session_state.signal_history[ticker] = {
                 "Signal": new_sig,
@@ -91,13 +90,13 @@ def set100_intelligence():
             if not hist.empty:
                 sig_data = identify_hull_signal(hist, t)
                 if sig_data:
-                    curr_p, prev_p = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
+                    curr_p = hist['Close'].iloc[-1]
                     signals.append({
                         "Ticker": t.replace('.BK', ''),
-                        "ราคา": f"{curr_p:,.2f}",
+                        "ราคา": f"{curr_p:,.2f}", 
                         "Signal": sig_data["Signal"],
-                        "วันที่": sig_data["Date"],
-                        "เวลา": sig_data["Time"]
+                        "เวลา": sig_data["Time"], # สลับเอาเวลาขึ้นก่อน
+                        "วันที่": sig_data["Date"]
                     })
         except: continue
     
@@ -109,8 +108,8 @@ def set100_intelligence():
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
                 "ราคา": st.column_config.TextColumn("ราคา", width=60), 
                 "Signal": st.column_config.TextColumn("Signal", width=70),
-                "วันที่": st.column_config.TextColumn("วันที่", width=60),
-                "เวลา": st.column_config.TextColumn("เวลา", width=70)
+                "เวลา": st.column_config.TextColumn("เวลา", width=70),
+                "วันที่": st.column_config.TextColumn("วันที่", width=60)
             },
             use_container_width=True, height=700, hide_index=True
         )
