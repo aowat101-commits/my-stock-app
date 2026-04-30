@@ -5,8 +5,8 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft (อ้างอิงดีไซน์จากโปรเจกต์รีโนเวท)
-st.set_page_config(page_title="HMA Top 30 Signals", layout="wide")
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft
+st.set_page_config(page_title="Market Intelligence Dashboard", layout="wide")
 
 st.markdown("""
     <style>
@@ -15,14 +15,13 @@ st.markdown("""
         background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px;
         text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
     }
-    /* สไตล์ตารางแบบเรียบง่าย ไม่เน้นตัวหนาตามคำขอ */
     [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
     [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; font-weight: normal !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบถ้วน
-set100_tickers = [
+# 2. รายชื่อหุ้นแบบจัดเต็ม (SET100 + sSET/MAI ตัวเด่น)
+set100 = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
     'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
@@ -36,7 +35,17 @@ set100_tickers = [
     'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. ฟังก์ชันคำนวณ HMA 30 (อ้างอิงจากรูป 1777558595938.jpg)
+# หุ้น Growth/sSET/MAI เพิ่มเติม (รวม TFG และตัวทำกำไรเด่นๆ)
+extra_growth = [
+    'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
+    'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'MASTER.BK', 'KLINIQ.BK', 'WARRIX.BK', 
+    'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK'
+]
+
+# รวมรายชื่อทั้งหมดและลบตัวซ้ำ
+full_scan_list = list(set(set100 + extra_growth))
+
+# 3. ฟังก์ชันคำนวณ HMA 30 (ตามไฟล์ 1777558595938.jpg)
 def get_hma(series, length):
     def wma(data, period):
         weights = np.arange(1, period + 1)
@@ -45,7 +54,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันค้นหาสัญญาณล่าสุด
+# 4. ฟังก์ชันค้นหาจุดเปลี่ยนสีล่าสุด
 def get_last_signal(df, ticker):
     if len(df) < 35: return None
     tz = pytz.timezone('Asia/Bangkok')
@@ -59,62 +68,62 @@ def get_last_signal(df, ticker):
         actual_time = last_sig.name.astimezone(tz)
         return {
             "Ticker": ticker.replace('.BK', ''),
-            "ราคา": f"{last_sig['Close']:,.2f}",
+            "ราคาที่ตัด": f"{last_sig['Close']:,.2f}",
             "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
-            "เวลาจริง": actual_time.strftime("%H:%M:%S"),
+            "เวลา": actual_time.strftime("%H:%M:%S"),
             "วันที่": actual_time.strftime("%d/%m/%y"),
             "raw_time": actual_time
         }
     return None
 
-# 5. ส่วนหัวข้อและปุ่มรีเฟรช (ย้ายมาไว้ข้างบน)
-st.subheader("🛰️ Top 30 Hull Suite Signals")
+# 5. ส่วนหัวและปุ่มรีเฟรช
+st.subheader("🛰️ Market Intelligence: Top 30 Active Signals")
 
-if st.button("🔄 Force Refresh Now", use_container_width=True):
+if st.button("🔄 Force Refresh Scan", use_container_width=True):
     st.rerun()
 
-# 6. Dashboard อัปเดตทุก 10 นาที
+# 6. Dashboard อัปเดตออโต้ทุก 10 นาที
 @st.fragment(run_every="10m")
-def dashboard_top30():
+def dashboard_runtime():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Scan: {datetime.now(tz).strftime("%H:%M:%S")} | แสดง 30 สัญญาณล่าสุด</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | สแกนหุ้น SET100 + sSET + MAI</div>', unsafe_allow_html=True)
     
     results = []
-    # Progress bar แสดงสถานะการสแกนหุ้นใน SET100
-    bar = st.progress(0, text="กำลังสแกนหา 30 สัญญาณล่าสุด...")
+    # Progress bar แสดงการทำงาน
+    bar = st.progress(0, text="กำลังสแกนหาจังหวะเปลี่ยนสีล่าสุด...")
     
-    for i, t in enumerate(set100_tickers):
+    total = len(full_scan_list)
+    for i, t in enumerate(full_scan_list):
         try:
             stock = yf.Ticker(t)
+            # ดึงข้อมูลย้อนหลัง 10 วันเพื่อให้ครอบคลุมจุดตัดของหุ้นทุกตัว
             hist = stock.history(period="10d", interval="1h")
             if not hist.empty:
                 res = get_last_signal(hist, t)
                 if res: results.append(res)
         except: continue
-        bar.progress((i + 1) / len(set100_tickers))
+        bar.progress((i + 1) / total)
     
     bar.empty()
 
     if results:
-        # เรียงลำดับตามความสดใหม่และตัดเหลือ 30 รายการล่าสุด
+        # เรียงตามความสดใหม่และคัดเฉพาะ 30 ตัวล่าสุด
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
         def style_row(row):
-            # กำหนดสีเขียวสำหรับซื้อ และสีแดงสำหรับขาย ทั้งแถว
             color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
-            return [f'color: {color}; font-weight: normal;'] * len(row)
+            return [f'color: {color};'] * len(row)
 
         st.dataframe(
             df.drop(columns=['raw_time']).style.apply(style_row, axis=1),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.TextColumn("ราคา", width=65),
+                "ราคาที่ตัด": st.column_config.TextColumn("ราคา", width=65),
                 "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลาจริง": st.column_config.TextColumn("เวลาจริง", width=75),
+                "เวลา": st.column_config.TextColumn("เวลาจริง", width=75),
                 "วันที่": st.column_config.TextColumn("วันที่", width=65),
             },
             use_container_width=True, height=650, hide_index=True
         )
 
-# 7. รันการแสดงผล
-dashboard_top30()
+dashboard_runtime()
