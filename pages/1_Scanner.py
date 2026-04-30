@@ -28,7 +28,7 @@ st.markdown("""
         text-align: center !important; 
         font-size: 11px !important; 
     }
-    /* เนื้อหาตารางตัวธรรมดา */
+    /* เนื้อหาตารางตัวธรรมดาและจัดกลาง */
     [data-testid="stDataFrame"] td { 
         font-size: 11px !important; 
         text-align: center !important; 
@@ -53,7 +53,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ (แดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ (เปลี่ยนจากแดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
 def identify_hull_signal(df):
     if len(df) < 3: return None, None
     df['hma'] = get_hma(df['Close'], 30)
@@ -67,10 +67,11 @@ def identify_hull_signal(df):
     tz = pytz.timezone('Asia/Bangkok')
     now_time = datetime.now(tz).strftime("%H:%M:%S")
 
+    # แจ้งเตือนเมื่อมีการเปลี่ยนสีของเส้น Hull
     if prev_trend == "DOWN" and curr_trend == "UP":
-        return "ซื้อ", now_time
+        return "🚀 ซื้อ", now_time
     elif prev_trend == "UP" and curr_trend == "DOWN":
-        return "ขาย", now_time
+        return "🔻 ขาย", now_time
     return None, None
 
 # 5. ฟังก์ชันดึงข้อมูลและกรอง
@@ -104,11 +105,10 @@ st.subheader("🛰️ Hull Suite Dashboard")
 df_filtered = get_actionable_data()
 
 if not df_filtered.empty:
-    # ฟังก์ชันกำหนดสีตัวอักษรทั้งแถว
+    # ฟังก์ชันกำหนดสีตัวอักษรทั้งแถวตามสัญญาณ
     def style_entire_row(row):
-        # กำหนดสีตามข้อความในคอลัมน์ Signal (สีเดียวกันทั้งแถว)
-        color = '#10b981' if row['Signal'] == "ซื้อ" else '#ef4444'
-        return [f'color: {color};'] * len(row)
+        color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
+        return [f'color: {color}; font-weight: normal;'] * len(row)
 
     st.dataframe(
         df_filtered.style.apply(style_entire_row, axis=1).format({"Chg%": "{:+.2f}%"}),
@@ -116,7 +116,7 @@ if not df_filtered.empty:
             "หุ้น (Ticker)": st.column_config.TextColumn("Ticker", width=70),
             "ราคาปัจจุบัน": st.column_config.TextColumn("ราคา", width=60),
             "Chg%": st.column_config.NumberColumn("%", width=50),
-            "Signal": st.column_config.TextColumn("Signal", width=60),
+            "Signal": st.column_config.TextColumn("Signal", width=70),
             "เวลาแจ้งเตือน": st.column_config.TextColumn("เวลา", width=75),
         },
         use_container_width=True,
