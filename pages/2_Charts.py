@@ -3,18 +3,24 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและซ่อน UI ส่วนเกิน
-st.set_page_config(page_title="SET100 Premium Monitor", layout="wide")
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับหัวตาราง
+st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
-    .stDataFrame {border: 1px solid #1e293b; border-radius: 10px;}
+    
+    /* จัดการหัวตารางให้หนาและอยู่ตรงกลาง */
+    th {
+        text-align: center !important;
+        font-weight: bold !important;
+        background-color: #161e2e !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ทั้งหมด
+# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
 tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -46,7 +52,9 @@ def get_set100_data():
             if not hist.empty and len(hist) >= 15:
                 curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
                 diff = curr - prev
-                pct = (diff / prev) * 100
+                # หากไม่มีการเปลี่ยนแปลง ให้เป็น 0.00
+                pct = ((curr - prev) / prev) * 100 if prev != 0 else 0.0
+                
                 delta = hist['Close'].diff()
                 up = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
                 down = -delta.clip(upper=0).rolling(window=14).mean().iloc[-1]
@@ -55,8 +63,8 @@ def get_set100_data():
                 data_list.append({
                     "Ticker": t.replace('.BK', ''),
                     "Price": round(curr, 2),
-                    "Change": round(diff, 2),
-                    "% Chg": round(pct, 2),
+                    "Change": round(diff, 2) if diff != 0 else 0.00,
+                    "% Chg": round(pct, 2) if pct != 0 else 0.00,
                     "RSI (14)": round(rsi, 2)
                 })
         except: continue
@@ -64,31 +72,35 @@ def get_set100_data():
 
 # 5. การแสดงผล (Fragment ล็อกเวลา 30 นาที)
 @st.fragment(run_every="30m")
-def show_enhanced_board():
-    st.title("📊 SET100 Premium Monitor")
+def show_final_board():
+    st.title("📊 SET100 Live Monitor")
     df = get_set100_data()
     
     if not df.empty:
-        # ตกแต่ง Ticker ที่ RSI ต่ำ
-        df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
-        
-        # ฟังก์ชันแต่งสี RSI
-        def style_rsi(val):
-            if val < 30:
-                return 'background-color: #4c0519; color: #ff4b4b; font-weight: bold'
-            return ''
-
-        # ฟังก์ชันแต่งสี % Chg (บวกเขียว ลบแดง)
-        def style_chg(val):
+        # ฟังก์ชันกำหนดสีตัวหนังสือตามการเปลี่ยนแปลง
+        def style_positive_negative(val):
             color = '#10b981' if val > 0 else '#ef4444' if val < 0 else 'white'
-            return f'color: {color}'
+            return f'color: {color}; font-weight: bold;'
 
-        # แสดงผลตารางแบบ High-End
+        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) ให้เปลี่ยนสีตามค่า Change
+        def style_ticker(row):
+            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else 'white'
+            prefix = "⚠️ " if row['RSI (14)'] < 30 else ""
+            # คืนค่าสไตล์สำหรับ Ticker (index 0) ส่วนคอลัมน์อื่นปล่อยว่างเพื่อให้ฟังก์ชัน map จัดการ
+            styles = [''] * len(row)
+            styles[0] = f'color: {color}; font-weight: bold;'
+            return styles
+
+        # แสดงผลตาราง
         st.dataframe(
-            df.style.map(style_rsi, subset=['RSI (14)']) \
-                    .map(style_chg, subset=['Change', '% Chg']) \
-                    .bar(subset=['% Chg'], color=['#440106', '#013220'], align='mid') \
-                    .format({"% Chg": "{:+.2f}%", "Change": "{:+.2f}"}),
+            df.style.apply(style_ticker, axis=1) \
+                    .map(style_positive_negative, subset=['Change', '% Chg']) \
+                    .format({
+                        "% Chg": "{:+.2f}%", 
+                        "Change": "{:+.2f}",
+                        "Price": "{:,.2f}",
+                        "RSI (14)": "{:.2f}"
+                    }),
             use_container_width=True,
             height=750,
             hide_index=True
@@ -96,4 +108,4 @@ def show_enhanced_board():
         
         st.caption(f"Last Update: {datetime.now().strftime('%H:%M:%S')} | Auto-refresh every 30 mins")
 
-show_enhanced_board()
+show_final_board()
