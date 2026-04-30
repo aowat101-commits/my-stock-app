@@ -4,14 +4,17 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 1. การตั้งค่าหน้าจอและสไตล์ Dark Premium (ห้ามขยับตำแหน่ง unsafe_allow_html)
+# 1. ตั้งค่าหน้าจอและสไตล์ Dark Premium
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
     <style>
+    /* ซ่อนขีดวิ่งสีฟ้าและ Spinner */
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
+    
     .main { background-color: #050a14; }
+    
     .custom-table {
         width: 100%;
         border-collapse: collapse;
@@ -39,20 +42,24 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 2. รายชื่อหุ้น SET100 (ใช้ลิสต์เดิมของคุณ)
-tickers = ['ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'DELTA.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK']
+tickers = [
+    'ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'DELTA.BK', 
+    'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
+]
 
 st.title("📊 TH SET100 Live Market Board")
 
-# --- Sidebar: ปรับหน่วยเป็นนาที และเพิ่มปุ่มอัปเดต ---
+# --- Sidebar: ปรับช่วงเวลาเป็น 1-60 นาที และปุ่มกด ---
 st.sidebar.header("⏱️ Live Settings")
-refresh_min = st.sidebar.slider("รีเฟรชอัตโนมัติ (นาที)", 0.5, 10.0, 1.0, step=0.5)
-refresh_sec = int(refresh_min * 60)
+# ปรับช่วงการรีเฟรชเป็น 1-60 นาที ตามคำขอ
+refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 1)[cite: 1]
+refresh_sec = refresh_min * 60[cite: 1]
 
-if st.sidebar.button("🔄 อัปเดตตอนนี้"):
+if st.sidebar.button("🔄 อัปเดตตอนนี้"):[cite: 1]
     st.rerun()
 
-def get_html_data():
-    rows_html = ""
+def get_table_content():
+    html_rows = ""
     for t in tickers:
         try:
             stock = yf.Ticker(t)
@@ -72,7 +79,7 @@ def get_html_data():
                 style = "pos" if diff > 0 else "neg" if diff < 0 else ""
                 sign = "+" if diff > 0 else ""
 
-                rows_html += f"""
+                html_rows += f"""
                 <tr>
                     <td><b>{t.replace('.BK','')}</b></td>
                     <td>฿{prev:,.2f}</td>
@@ -84,37 +91,38 @@ def get_html_data():
                 """
         except:
             continue
-    return rows_html
+    return html_rows
 
-# --- ส่วนแสดงผล ---
-# ใช้ Placeholder เพื่อให้ข้อมูลอัปเดตทับที่เดิม (หน้าจะไม่เลื่อน)
-t_place = st.empty()
-i_place = st.empty()
+# --- ส่วนแสดงผลหลัก ---
+# ใช้ Placeholder เพื่อให้ข้อมูลอัปเดตทับที่เดิมและหน้านิ่งที่สุด
+table_placeholder = st.empty()
+info_placeholder = st.empty()
 
 while True:
-    data_rows = get_html_data()
+    rows = get_table_content()
     
-    full_table = f"""
+    full_table_html = f"""
     <table class="custom-table">
         <thead>
             <tr>
                 <th>Ticker</th>
-                <th>ปิดก่อนหน้า</th>
-                <th>ล่าสุด</th>
+                <th>ราคาปิดก่อนหน้า</th>
+                <th>ราคาล่าสุด</th>
                 <th>เปลี่ยนแปลง</th>
                 <th>%</th>
                 <th>RSI</th>
             </tr>
         </thead>
         <tbody>
-            {data_rows}
+            {rows}
         </tbody>
     </table>
     """
     
-    # แสดงผลเพียงจุดเดียวเท่านั้น
-    t_place.markdown(full_table, unsafe_allow_html=True)
-    i_place.caption(f"อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที")
+    # แสดงตารางเพียงจุดเดียวเพื่อป้องกันโค้ดหลุด
+    table_placeholder.markdown(full_table_html, unsafe_allow_html=True)[cite: 1]
     
-    time.sleep(refresh_sec)
+    info_placeholder.caption(f"อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที")[cite: 1]
+    
+    time.sleep(refresh_sec)[cite: 1]
     st.rerun()
