@@ -3,8 +3,8 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized
-st.set_page_config(page_title="SET100 Monitor", layout="wide")
+# 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Optimized (ตามสไตล์ที่คุณส่งมา)
+st.set_page_config(page_title="Market Monitor", layout="wide")
 
 st.markdown("""
     <style>
@@ -26,20 +26,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
-tickers = [
+# 2. รายชื่อหุ้นแบบขยายเพิ่ม (SET100 + sSET/MAI + Tech Stocks)
+base_tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
     'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
     'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
     'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
-    'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK',
-    'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK',
-    'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK',
-    'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK',
-    'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK',
-    'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
+    'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 
+    'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 
+    'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 
+    'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 
+    'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 
+    'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
+
+# หุ้นเพิ่มเติมนอก SET100 และหุ้นต่างประเทศที่คุณติดตาม
+extra_tickers = [
+    'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
+    'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'TKN.BK', 'XO.BK',
+    'IONQ', 'IREN', 'SMX', 'ONDS'
+]
+
+all_tickers = list(set(base_tickers + extra_tickers))
 
 # 3. Sidebar
 st.sidebar.header("⚙️ Settings")
@@ -48,9 +57,9 @@ if st.sidebar.button("🔄 Force Refresh"):
 
 # 4. ฟังก์ชันดึงข้อมูล (Cache 30 นาที)
 @st.cache_data(ttl=1800)
-def get_set100_data():
+def get_market_data():
     data_list = []
-    for t in tickers:
+    for t in all_tickers:
         try:
             stock = yf.Ticker(t)
             hist = stock.history(period="30d")
@@ -76,9 +85,9 @@ def get_set100_data():
 
 # 5. การแสดงผล
 @st.fragment(run_every="30m")
-def show_mobile_optimized_board():
-    st.title("📊 SET100 Live")
-    df = get_set100_data()
+def show_extended_board():
+    st.title("📊 Market Monitor Live")
+    df = get_market_data()
     
     if not df.empty:
         # ฟังก์ชันกำหนดสีสำหรับตัวเลขทั่วไป
@@ -96,12 +105,14 @@ def show_mobile_optimized_board():
         def style_row_base(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#888888'
             style = f'color: {color}; font-weight: normal;'
-            # ส่งสไตล์กลับไปให้ทุกคอลัมน์ (Ticker, Price, Change, % Change, RSI (14))
             return [style, style, '', '', '']
 
-        # ใส่ ⚠️ หน้า Ticker
+        # ใส่ ⚠️ หน้า Ticker ถ้า RSI < 30
         df_display = df.copy()
         df_display['Ticker'] = df_display.apply(lambda x: f"⚠️{x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
+        
+        # เรียงลำดับตาม % Change ล่าสุด (ให้ตัวที่ขยับเยอะอยู่บน)
+        df_display = df_display.sort_values(by="% Change", ascending=False)
 
         # แสดงผลตาราง
         st.dataframe(
@@ -126,6 +137,6 @@ def show_mobile_optimized_board():
             hide_index=True
         )
         
-        st.caption(f"Refreshed: {datetime.now().strftime('%H:%M')} | Auto 30m")
+        st.caption(f"Refreshed: {datetime.now().strftime('%H:%M')} | Auto 30m | Includes SET100, sSET, MAI & Tech")
 
-show_mobile_optimized_board()
+show_extended_board()
