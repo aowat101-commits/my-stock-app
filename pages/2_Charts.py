@@ -11,7 +11,7 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
-    /* จัดการหัวตารางให้หนาและอยู่ตรงกลาง */
+    /* จัดการหัวตารางให้หนาและอยู่ตรงกลาง (ส่วนนี้คงความหนาไว้ตามโจทย์เดิมเพื่อให้ดูเป็นหัวข้อ) */
     th {
         text-align: center !important;
         font-weight: bold !important;
@@ -76,28 +76,25 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # ฟังก์ชันกำหนดสีตัวเลข Change และ % Chg (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) และใช้ตัวหนา
+        # ฟังก์ชันกำหนดสีตัวเลข Change และ % Chg (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) - ไม่ใช้ตัวหนา
         def style_numbers(val):
             if val > 0:
-                return 'color: #10b981; font-weight: bold;'
+                return 'color: #10b981; font-weight: normal;'
             elif val < 0:
-                return 'color: #ef4444; font-weight: bold;'
+                return 'color: #ef4444; font-weight: normal;'
             else:
-                return 'color: #000000; font-weight: bold;'
+                return 'color: #000000; font-weight: normal;'
 
-        # ฟังก์ชันกำหนดสี RSI (ต่ำกว่า 30 เป็นสีแดง)
+        # ฟังก์ชันกำหนดสี RSI (ต่ำกว่า 30 เป็นสีแดง) - ไม่ใช้ตัวหนา
         def style_rsi_color(val):
             if val < 30:
-                return 'color: #ef4444; font-weight: bold;'
-            return 'color: white;'
+                return 'color: #ef4444; font-weight: normal;'
+            return 'color: white; font-weight: normal;'
 
-        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) เปลี่ยนสีตามราคา แต่ไม่เอาตัวหนา
+        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) เปลี่ยนสีตามราคา - ไม่ใช้ตัวหนา
         def style_ticker_name(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
-            prefix = "⚠️ " if row['RSI (14)'] < 30 else ""
-            
             styles = [''] * len(row)
-            # ชื่อหุ้น (index 0) เปลี่ยนสีตามราคา แต่ไม่หนา
             styles[0] = f'color: {color}; font-weight: normal;' 
             return styles
 
