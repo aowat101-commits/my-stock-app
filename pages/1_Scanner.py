@@ -2,11 +2,11 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="SET100 Hull Intelligence", layout="wide")
+st.set_page_config(page_title="SET100 24H Intelligence", layout="wide")
 
 st.markdown("""
     <style>
@@ -35,10 +35,6 @@ set100_tickers = [
     'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# เตรียม session_state สำหรับเก็บประวัติสัญญาณ
-if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = {} 
-
 # 3. ฟังก์ชันคำนวณ HMA (Length=30)
 def get_hma(series, length):
     def wma(data, period):
@@ -48,77 +44,84 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ (ซื้อ/ขาย)
-def identify_hull_signal(df, ticker):
+# 4. ฟังก์ชันวิเคราะห์หาจุดเปลี่ยนสีในช่วง 24 ชม.
+def scan_24h_signals(df, ticker):
     if len(df) < 35: return None
+    
     df['hma'] = get_hma(df['Close'], 30)
-    curr, prev, prev2 = df['hma'].iloc[-1], df['hma'].iloc[-2], df['hma'].iloc[-3]
+    # หาจุดเปลี่ยนเทรนด์: เช็คว่าแท่งปัจจุบันต่างจากแท่งก่อนหน้าหรือไม่
+    df['trend'] = np.where(df['hma'] > df['hma'].shift(1), "UP", "DOWN")
+    df['prev_trend'] = df['trend'].shift(1)
     
-    curr_trend = "UP" if curr > prev else "DOWN"
-    prev_trend = "UP" if prev > prev2 else "DOWN"
-    
-    new_sig = None
-    if prev_trend == "DOWN" and curr_trend == "UP": new_sig = "🚀 ซื้อ"
-    elif prev_trend == "UP" and curr_trend == "DOWN": new_sig = "🔻 ขาย"
-
-    if new_sig:
-        tz = pytz.timezone('Asia/Bangkok')
-        now = datetime.now(tz)
-        if ticker not in st.session_state.signal_history or st.session_state.signal_history[ticker]["Signal"] != new_sig:
-            st.session_state.signal_history[ticker] = {
-                "Signal": new_sig,
-                "Date": now.strftime("%d/%m/%y"),
-                "Time": now.strftime("%H:%M:%S")
-            }
-        return st.session_state.signal_history[ticker]
-    else:
-        if ticker in st.session_state.signal_history:
-            del st.session_state.signal_history[ticker]
-        return None
-
-# 5. ส่วนแสดงผลแบบ Auto-Scan ทุก 10 นาที
-@st.fragment(run_every="10m")
-def set100_intelligence():
+    # กำหนดเงื่อนไขเวลา 24 ชม. ล่าสุด
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%d/%m/%y %H:%M:%S")}</div>', unsafe_allow_html=True)
+    now = datetime.now(tz)
+    limit_24h = now - timedelta(hours=24)
     
-    signals = []
-    for t in set100_tickers:
+    # กรองเฉพาะจุดที่มีการสลับเทรนด์ (Signal Change)
+    signals = df[(df['trend'] != df['prev_trend']) & (df.index >= limit_24h)].copy()
+    
+    if not signals.empty:
+        # เลือกสัญญาณล่าสุดที่เกิดขึ้นใน 24 ชม.
+        last_sig = signals.iloc[-1]
+        sig_type = "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย"
+        sig_time = last_sig.name.astimezone(tz)
+        
+        return {
+            "Ticker": ticker.replace('.BK', ''),
+            "ราคา": f"{last_sig['Close']:,.2f}",
+            "Signal": sig_type,
+            "เวลา": sig_time.strftime("%H:%M:%S"),
+            "วันที่": sig_time.strftime("%d/%m/%y"),
+            "raw_time": sig_time # ใช้สำหรับเรียงลำดับ
+        }
+    return None
+
+# 5. ส่วนแสดงผลแบบ Auto-Scan
+@st.fragment(run_every="10m")
+def set100_24h_intelligence():
+    tz = pytz.timezone('Asia/Bangkok')
+    st.markdown(f'<div class="time-status">🕒 Scan Period: Last 24 Hours | Updated: {datetime.now(tz).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
+    
+    all_signals = []
+    # ใช้ progress bar เพราะสแกนย้อนหลังอาจใช้เวลาเล็กน้อย
+    progress_text = "Scanning SET100 signals in last 24h..."
+    my_bar = st.progress(0, text=progress_text)
+    
+    for i, t in enumerate(set100_tickers):
         try:
+            # ดึงข้อมูลรายชั่วโมง หรือ ราย 15 นาทีเพื่อให้ได้เวลาที่แม่นยำขึ้น
             stock = yf.Ticker(t)
-            hist = stock.history(period="60d")
+            hist = stock.history(period="5d", interval="1h") # ใช้ interval 1h เพื่อดูจุดเปลี่ยนใน 24 ชม.
             if not hist.empty:
-                sig_data = identify_hull_signal(hist, t)
-                if sig_data:
-                    curr_p = hist['Close'].iloc[-1]
-                    signals.append({
-                        "Ticker": t.replace('.BK', ''),
-                        "ราคา": f"{curr_p:,.2f}", 
-                        "Signal": sig_data["Signal"],
-                        "เวลา": sig_data["Time"], # สลับเอาเวลาขึ้นก่อน
-                        "วันที่": sig_data["Date"]
-                    })
+                res = scan_24h_signals(hist, t)
+                if res:
+                    all_signals.append(res)
         except: continue
+        my_bar.progress((i + 1) / len(set100_tickers), text=progress_text)
     
-    if signals:
-        df = pd.DataFrame(signals)
+    my_bar.empty()
+
+    if all_signals:
+        # เรียงลำดับตามเวลาที่เกิดจริง (ใหม่ล่าสุดอยู่บน)
+        df = pd.DataFrame(all_signals).sort_values(by="raw_time", ascending=False)
         st.dataframe(
-            df.style.apply(lambda row: [f'color: {"#10b981" if "ซื้อ" in row["Signal"] else "#ef4444"};'] * len(row), axis=1),
+            df.drop(columns=['raw_time']).style.apply(lambda row: [f'color: {"#10b981" if "ซื้อ" in row["Signal"] else "#ef4444"};'] * len(row), axis=1),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.TextColumn("ราคา", width=60), 
+                "ราคา": st.column_config.TextColumn("ราคาที่เกิด", width=65), 
                 "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลา": st.column_config.TextColumn("เวลา", width=70),
-                "วันที่": st.column_config.TextColumn("วันที่", width=60)
+                "เวลา": st.column_config.TextColumn("เวลาจริง", width=75),
+                "วันที่": st.column_config.TextColumn("วันที่", width=65)
             },
-            use_container_width=True, height=700, hide_index=True
+            use_container_width=True, height=750, hide_index=True
         )
     else:
-        st.info("🔎 ยังไม่พบสัญญาณเปลี่ยนสีในแท่งราคาล่าสุด")
+        st.info("🔎 ไม่พบสัญญาณเปลี่ยนสี (HMA 30) ในช่วง 24 ชั่วโมงที่ผ่านมา")
 
 # 6. รัน Dashboard
-st.subheader("🛰️ SET100 Hull Suite Intelligence")
-set100_intelligence()
+st.subheader("🛰️ SET100 Hull Suite: 24H Signal Tracker")
+set100_24h_intelligence()
 
-if st.button("🔄 Force Scan Now", use_container_width=True):
+if st.button("🔄 Force Refresh Scan", use_container_width=True):
     st.rerun()
