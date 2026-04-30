@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับหัวตาราง
+# 1. ตั้งค่าหน้าจอและ CSS สไตล์พรีเมียม
 st.set_page_config(page_title="SET100 Monitor", layout="wide")
 
 st.markdown("""
@@ -11,16 +11,15 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
     
-    /* จัดการหัวตารางให้หนาและอยู่ตรงกลาง */
-    th {
+    /* จัดหัวตารางให้หนาและอยู่ตรงกลาง */
+    [data-testid="stDataFrame"] th {
         text-align: center !important;
         font-weight: bold !important;
-        background-color: #161e2e !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบทั้งหมด
+# 2. รายชื่อหุ้น SET100 ทั้งหมด
 tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -35,13 +34,13 @@ tickers = [
     'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. Sidebar
+# 3. Sidebar: รีเฟรชทุก 30 นาที
 st.sidebar.header("⚙️ Market Settings")
 st.sidebar.markdown("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
 if st.sidebar.button("🔄 Force Refresh Now"):
     st.rerun()
 
-# 4. ฟังก์ชันดึงข้อมูล
+# 4. ฟังก์ชันดึงข้อมูล (Cache 30 นาที)
 @st.cache_data(ttl=1800)
 def get_set100_data():
     data_list = []
@@ -52,7 +51,6 @@ def get_set100_data():
             if not hist.empty and len(hist) >= 15:
                 curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
                 diff = curr - prev
-                # หากไม่มีการเปลี่ยนแปลง ให้เป็น 0.00
                 pct = ((curr - prev) / prev) * 100 if prev != 0 else 0.0
                 
                 delta = hist['Close'].diff()
@@ -63,8 +61,8 @@ def get_set100_data():
                 data_list.append({
                     "Ticker": t.replace('.BK', ''),
                     "Price": round(curr, 2),
-                    "Change": round(diff, 2) if diff != 0 else 0.00,
-                    "% Chg": round(pct, 2) if pct != 0 else 0.00,
+                    "Change": round(diff, 2) if abs(diff) > 0.0001 else 0.00,
+                    "% Chg": round(pct, 2) if abs(pct) > 0.0001 else 0.00,
                     "RSI (14)": round(rsi, 2)
                 })
         except: continue
@@ -77,32 +75,50 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # ฟังก์ชันกำหนดสีตัวหนังสือตามการเปลี่ยนแปลง
-        def style_positive_negative(val):
-            color = '#10b981' if val > 0 else '#ef4444' if val < 0 else 'white'
-            return f'color: {color}; font-weight: bold;'
+        # สไตล์ตัวเลข Change และ % Chg (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ)
+        def style_numbers(val):
+            if val > 0: return 'color: #10b981; font-weight: 700; text-align: center;'
+            if val < 0: return 'color: #ef4444; font-weight: 700; text-align: center;'
+            return 'color: #000000; font-weight: 700; text-align: center;'
 
-        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) ให้เปลี่ยนสีตามค่า Change
-        def style_ticker(row):
-            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else 'white'
-            prefix = "⚠️ " if row['RSI (14)'] < 30 else ""
-            # คืนค่าสไตล์สำหรับ Ticker (index 0) ส่วนคอลัมน์อื่นปล่อยว่างเพื่อให้ฟังก์ชัน map จัดการ
-            styles = [''] * len(row)
-            styles[0] = f'color: {color}; font-weight: bold;'
-            return styles
+        # สไตล์ RSI (ต่ำกว่า 30 = แดง, เกิน 30 = ดำ)
+        def style_rsi_logic(val):
+            if val < 30:
+                return 'color: #ef4444; font-weight: 700; text-align: center;'
+            return 'color: #000000; font-weight: 700; text-align: center;'
 
-        # แสดงผลตาราง
+        # สไตล์ชื่อหุ้นและราคาล่าสุด
+        def style_ticker_row(row):
+            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
+            return [
+                f'color: {color}; font-weight: 600; text-align: center;', # Ticker
+                'text-align: center; font-weight: 600; color: #1e293b;'   # Price (สีเข้มปกติ)
+            ]
+
+        # เพิ่มเครื่องหมายเตือน RSI หน้าชื่อหุ้น
+        df_display = df.copy()
+        df_display['Ticker'] = df_display.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
+
+        # แสดงผลตารางพร้อมตั้งค่าความกว้างคอลัมน์
         st.dataframe(
-            df.style.apply(style_ticker, axis=1) \
-                    .map(style_positive_negative, subset=['Change', '% Chg']) \
+            df_display.style.apply(style_ticker_row, axis=1, subset=['Ticker', 'Price'])
+                    .map(style_numbers, subset=['Change', '% Chg'])
+                    .map(style_rsi_logic, subset=['RSI (14)'])
                     .format({
                         "% Chg": "{:+.2f}%", 
                         "Change": "{:+.2f}",
                         "Price": "{:,.2f}",
                         "RSI (14)": "{:.2f}"
                     }),
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", width="medium"),
+                "Price": st.column_config.NumberColumn("Price", width="small"),
+                "Change": st.column_config.NumberColumn("Change", width="small"),
+                "% Chg": st.column_config.NumberColumn("% Chg", width="small"),
+                "RSI (14)": st.column_config.NumberColumn("RSI (14)", width="small"),
+            },
             use_container_width=True,
-            height=750,
+            height=800,
             hide_index=True
         )
         
