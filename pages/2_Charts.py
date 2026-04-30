@@ -4,14 +4,17 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS สำหรับตารางสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้า)
+# 1. การตั้งค่าหน้าจอและสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้า)
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
     <style>
+    /* ซ่อน UI ที่รบกวนสายตา */
     [data-testid="stStatusWidget"] {display: none !important;}
     .stSpinner {display: none !important;}
+    
     .main { background-color: #050a14; }
+    
     .custom-table {
         width: 100%;
         border-collapse: collapse;
@@ -38,12 +41,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนควบคุมที่ Sidebar (ช่วง 1-60 นาที)
+# 2. ส่วนควบคุมที่ Sidebar (ตั้งค่าเริ่มต้นที่ 30 นาที)
 st.sidebar.header("⏱️ Live Settings")
-refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 1)[cite: 1]
+# ปรับช่วงเป็น 1-60 นาที และตั้งค่า Default ที่ 30 นาที
+refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 30)
+refresh_sec = refresh_min * 60
 
 # ปุ่ม Manual Refresh
-if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):[cite: 1]
+if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
     st.rerun()
 
 # 3. รายชื่อหุ้น SET100
@@ -52,7 +57,7 @@ tickers = [
     'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
 ]
 
-def fetch_data():
+def fetch_stock_html():
     html_rows = ""
     for t in tickers:
         try:
@@ -87,32 +92,38 @@ def fetch_data():
             continue
     return html_rows
 
-# 4. ฟังก์ชันแสดงผลตาราง (ใช้ Fragment เพื่อให้รีเฟรชเฉพาะจุด)
-@st.fragment(run_every=f"{refresh_min}m")[cite: 1]
-def show_live_table():
-    st.title("📊 TH SET100 Live Market Board")[cite: 1]
-    rows = fetch_data()
-    table_html = f"""
-    <table class="custom-table">
-        <thead>
-            <tr>
-                <th>Ticker</th>
-                <th>ราคาปิดก่อนหน้า</th>
-                <th>ราคาล่าสุด</th>
-                <th>เปลี่ยนแปลง</th>
-                <th>%</th>
-                <th>RSI</th>
-            </tr>
-        </thead>
-        <tbody>
-            {rows}
-        </tbody>
-    </table>
-    <p style='color: gray; font-size: 12px; margin-top: 10px;'>
-        อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที
-    </p>
-    """
-    st.markdown(table_html, unsafe_allow_html=True)[cite: 1]
+# 4. การแสดงผลหลัก
+st.title("📊 TH SET100 Live Market Board")
 
-# เรียกใช้งานฟังก์ชัน
-show_live_table()
+# สร้างพื้นที่แสดงผลจุดเดียวเพื่อป้องกันโค้ดหลุด (Fix ปัญหาจากรูป 1777547068101.jpg)
+main_display = st.empty()
+
+# ดึงข้อมูลและสร้าง HTML
+rows = fetch_stock_html()
+table_html = f"""
+<table class="custom-table">
+    <thead>
+        <tr>
+            <th>Ticker</th>
+            <th>ราคาปิดก่อนหน้า</th>
+            <th>ราคาล่าสุด</th>
+            <th>เปลี่ยนแปลง</th>
+            <th>%</th>
+            <th>RSI</th>
+        </tr>
+    </thead>
+    <tbody>
+        {rows}
+    </tbody>
+</table>
+<p style='color: gray; font-size: 12px; margin-top: 10px;'>
+    อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที
+</p>
+"""
+
+# แสดงผลตารางเพียงครั้งเดียวผ่าน Placeholder
+main_display.markdown(table_html, unsafe_allow_html=True)
+
+# ระบบหน่วงเวลาเพื่อรีเฟรชอัตโนมัติ
+time.sleep(refresh_sec)
+st.rerun()
