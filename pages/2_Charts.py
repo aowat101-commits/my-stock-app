@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและ CSS (บังคับให้เป็น Dark Mode และซ่อนขีดวิ่งสีฟ้า)
+# 1. ตั้งค่าหน้าจอและสไตล์ (ล็อกสีและซ่อนขีดวิ่งสีฟ้า)
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
@@ -35,8 +35,8 @@ st.sidebar.write("⏱️ รีเฟรชอัตโนมัติ: **ทุ
 if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
     st.rerun()
 
-# 4. ฟังก์ชันจัดการข้อมูลหุ้น
-def get_table_rows():
+# 4. ฟังก์ชันดึงข้อมูล (ย้ายมาไว้ข้างในเพื่อไม่ให้ค่าหลุดไปแสดงผลข้างนอก)
+def fetch_and_build_table():
     all_rows = ""
     for t in tickers:
         try:
@@ -68,27 +68,29 @@ def get_table_rows():
                 </tr>
                 """
         except: continue
-    return all_rows
-
-# 5. การแสดงผล (ล็อคเวลา 30 นาทีด้วย Fragment)
-@st.fragment(run_every="30m")
-def show_board():
-    st.title("📊 TH SET100 Live Market Board")
-    rows = get_table_rows()
-    table_html = f"""
+    
+    # รวมร่างเป็นตารางเดียวจบ
+    return f"""
     <table class="custom-table">
         <thead>
             <tr>
                 <th>Ticker</th><th>ราคาปิดก่อนหน้า</th><th>ราคาล่าสุด</th><th>เปลี่ยนแปลง</th><th>%</th><th>RSI</th>
             </tr>
         </thead>
-        <tbody>{rows}</tbody>
+        <tbody>{all_rows}</tbody>
     </table>
     <p style='color: gray; font-size: 12px; margin-top: 10px;'>
         อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชอัตโนมัติทุก 30 นาที
     </p>
     """
-    st.markdown(table_html, unsafe_allow_html=True)
+
+# 5. การแสดงผล (ล็อคเวลา 30 นาทีด้วย Fragment)
+@st.fragment(run_every="30m")
+def show_board():
+    st.title("📊 TH SET100 Live Market Board")
+    # เรียกใช้ฟังก์ชันดึงข้อมูลและแสดงผลในคำสั่งเดียว
+    final_html = fetch_and_build_table()
+    st.markdown(final_html, unsafe_allow_html=True)
 
 # รันหน้าจอ
 show_board()
