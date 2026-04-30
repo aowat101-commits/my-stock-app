@@ -1,10 +1,9 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import time
 from datetime import datetime
 
-# 1. การตั้งค่าหน้าจอและสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้า)
+# 1. ตั้งค่าหน้าจอและสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้าเพื่อให้หน้าจอนิ่ง)
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
@@ -41,24 +40,22 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนควบคุมที่ Sidebar (ตั้งค่าเริ่มต้นที่ 30 นาที)
-st.sidebar.header("⏱️ Live Settings")
-# ปรับช่วงเป็น 1-60 นาที และตั้งค่า Default ที่ 30 นาที
-refresh_min = st.sidebar.slider("ความถี่รีเฟรชอัตโนมัติ (นาที)", 1, 60, 30)
-refresh_sec = refresh_min * 60
-
-# ปุ่ม Manual Refresh
-if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
-    st.rerun()
-
-# 3. รายชื่อหุ้น SET100
+# 2. รายชื่อหุ้น SET100 (ใช้ลิสต์เดิมของคุณ)
 tickers = [
     'ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'DELTA.BK', 
     'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'
 ]
 
-def fetch_stock_html():
-    html_rows = ""
+# --- Sidebar: ปุ่มกดอัปเดต และแจ้งสถานะเวลา ---
+st.sidebar.header("⚙️ ระบบอัปเดต")
+st.sidebar.info("ระบบจะรีเฟรชอัตโนมัติทุก 30 นาที")[cite: 1]
+
+if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้ (Manual)"):[cite: 1]
+    st.rerun()
+
+# 3. ฟังก์ชันดึงข้อมูลและสร้างแถวตาราง
+def fetch_stock_rows():
+    rows = ""
     for t in tickers:
         try:
             stock = yf.Ticker(t)
@@ -78,7 +75,7 @@ def fetch_stock_html():
                 style = "pos" if diff > 0 else "neg" if diff < 0 else ""
                 sign = "+" if diff > 0 else ""
 
-                html_rows += f"""
+                rows += f"""
                 <tr>
                     <td><b>{t.replace('.BK','')}</b></td>
                     <td>฿{prev:,.2f}</td>
@@ -90,40 +87,36 @@ def fetch_stock_html():
                 """
         except:
             continue
-    return html_rows
+    return rows
 
-# 4. การแสดงผลหลัก
+# 4. ส่วนแสดงผลหลัก (ล็อกเวลารีเฟรชที่ 30 นาที)
 st.title("📊 TH SET100 Live Market Board")
 
-# สร้างพื้นที่แสดงผลจุดเดียวเพื่อป้องกันโค้ดหลุด (Fix ปัญหาจากรูป 1777547068101.jpg)
-main_display = st.empty()
+# ใช้ st.fragment เพื่อจัดการการรีเฟรชที่เสถียรที่สุด (ป้องกัน HTML หลุด)
+@st.fragment(run_every="30m")[cite: 1]
+def display_board():
+    rows_data = fetch_stock_rows()
+    table_html = f"""
+    <table class="custom-table">
+        <thead>
+            <tr>
+                <th>Ticker</th>
+                <th>ราคาปิดก่อนหน้า</th>
+                <th>ราคาล่าสุด</th>
+                <th>เปลี่ยนแปลง</th>
+                <th>%</th>
+                <th>RSI</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows_data}
+        </tbody>
+    </table>
+    <p style='color: gray; font-size: 12px; margin-top: 10px;'>
+        อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชอัตโนมัติทุก 30 นาที
+    </p>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)[cite: 1]
 
-# ดึงข้อมูลและสร้าง HTML
-rows = fetch_stock_html()
-table_html = f"""
-<table class="custom-table">
-    <thead>
-        <tr>
-            <th>Ticker</th>
-            <th>ราคาปิดก่อนหน้า</th>
-            <th>ราคาล่าสุด</th>
-            <th>เปลี่ยนแปลง</th>
-            <th>%</th>
-            <th>RSI</th>
-        </tr>
-    </thead>
-    <tbody>
-        {rows}
-    </tbody>
-</table>
-<p style='color: gray; font-size: 12px; margin-top: 10px;'>
-    อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_min} นาที
-</p>
-"""
-
-# แสดงผลตารางเพียงครั้งเดียวผ่าน Placeholder
-main_display.markdown(table_html, unsafe_allow_html=True)
-
-# ระบบหน่วงเวลาเพื่อรีเฟรชอัตโนมัติ
-time.sleep(refresh_sec)
-st.rerun()
+# รันฟังก์ชันแสดงผล
+display_board()
