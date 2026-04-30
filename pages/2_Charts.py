@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Dark Premium (ซ่อนขีดวิ่งสีฟ้าและตั้งค่า Sorting)
+# 1. ตั้งค่าหน้าจอและสไตล์ Dark Premium (ซ่อน UI ส่วนเกิน)
 st.set_page_config(page_title="SET100 Full Monitor", layout="wide")
 
 st.markdown("""
@@ -25,7 +25,7 @@ st.markdown("""
     .custom-table td { padding: 15px; border-bottom: 1px solid #1e293b; font-size: 16px; }
     .pos { color: #10b981; font-weight: bold; }
     .neg { color: #ef4444; font-weight: bold; }
-    .rsi-alert { color: #ff4b4b; font-weight: bold; } /* สีแดงสำหรับ RSI ต่ำ */
+    .rsi-alert { color: #ff4b4b; font-weight: bold; }
     </style>
     
     <script>
@@ -41,41 +41,29 @@ st.markdown("""
           shouldSwitch = false;
           x = rows[i].getElementsByTagName("TD")[n];
           y = rows[i + 1].getElementsByTagName("TD")[n];
-          
-          // จัดการข้อมูลตัวเลขและสัญลักษณ์
           var xVal = x.innerText.replace(/[^0-9.-]+/g,"");
           var yVal = y.innerText.replace(/[^0-9.-]+/g,"");
-          
           if (!isNaN(parseFloat(xVal)) && !isNaN(parseFloat(yVal))) {
-            xVal = parseFloat(xVal);
-            yVal = parseFloat(yVal);
+            xVal = parseFloat(xVal); yVal = parseFloat(yVal);
           } else {
-            xVal = x.innerText.toLowerCase();
-            yVal = y.innerText.toLowerCase();
+            xVal = x.innerText.toLowerCase(); yVal = y.innerText.toLowerCase();
           }
-
-          if (dir == "asc") {
-            if (xVal > yVal) { shouldSwitch = true; break; }
-          } else if (dir == "desc") {
-            if (xVal < yVal) { shouldSwitch = true; break; }
-          }
+          if (dir == "asc") { if (xVal > yVal) { shouldSwitch = true; break; } }
+          else if (dir == "desc") { if (xVal < yVal) { shouldSwitch = true; break; } }
         }
         if (shouldSwitch) {
           rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
           switching = true;
           switchcount ++;      
         } else {
-          if (switchcount == 0 && dir == "asc") {
-            dir = "desc";
-            switching = true;
-          }
+          if (switchcount == 0 && dir == "asc") { dir = "desc"; switching = true; }
         }
       }
     }
     </script>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบถ้วน
+# 2. รายชื่อหุ้น SET100 ครบถ้วน (ตัดมาบางส่วนเพื่อความเร็วในการโหลดครั้งแรก)
 tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -90,7 +78,7 @@ tickers = [
     'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. Sidebar: ระบบล็อกรีเฟรช 30 นาที
+# 3. Sidebar: แจ้งสถานะและปุ่มกด
 st.sidebar.header("⚙️ ระบบอัปเดต")
 st.sidebar.info("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
 if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
@@ -104,8 +92,7 @@ def get_full_stock_html():
             hist = stock.history(period="30d")
             if not hist.empty:
                 curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
-                diff = curr - prev
-                pct = (diff / prev) * 100
+                diff, pct = curr - prev, ((curr - prev) / prev) * 100
                 delta = hist['Close'].diff()
                 up = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
                 down = -delta.clip(upper=0).rolling(window=14).mean().iloc[-1]
@@ -119,17 +106,15 @@ def get_full_stock_html():
                 rows_html += f"""
                 <tr>
                     <td><b>{alert}{t.replace('.BK','')}</b></td>
-                    <td>฿{prev:,.2f}</td>
-                    <td>฿{curr:,.2f}</td>
+                    <td>฿{prev:,.2f}</td><td>฿{curr:,.2f}</td>
                     <td class="{style}">{sign}{diff:.2f}</td>
                     <td class="{style}">{sign}{pct:.2f}%</td>
                     <td class="{rsi_style}">{rsi:.2f}</td>
-                </tr>
-                """
+                </tr>"""
         except: continue
     return rows_html
 
-# 4. การแสดงผล (ล็อกเวลา 30 นาทีด้วย Fragment)
+# 4. การแสดงผล (ล็อกเวลา 30 นาที)
 @st.fragment(run_every="30m")
 def show_premium_board():
     st.title("📊 SET100 Full Live Board (RSI Alert)")
@@ -151,8 +136,7 @@ def show_premium_board():
     </table>
     <p style='color: gray; font-size: 12px; margin-top: 10px;'>
         อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก 30 นาที
-    </p>
-    """
+    </p>"""
     st.markdown(table_html, unsafe_allow_html=True)
 
 show_premium_board()
