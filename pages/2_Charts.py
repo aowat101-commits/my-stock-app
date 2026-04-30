@@ -52,7 +52,6 @@ def get_set100_data():
             if not hist.empty and len(hist) >= 15:
                 curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
                 diff = curr - prev
-                # หากไม่มีการเปลี่ยนแปลง ให้เป็น 0.00
                 pct = ((curr - prev) / prev) * 100 if prev != 0 else 0.0
                 
                 delta = hist['Close'].diff()
@@ -63,8 +62,8 @@ def get_set100_data():
                 data_list.append({
                     "Ticker": t.replace('.BK', ''),
                     "Price": round(curr, 2),
-                    "Change": round(diff, 2) if diff != 0 else 0.00,
-                    "% Chg": round(pct, 2) if pct != 0 else 0.00,
+                    "Change": round(diff, 2) if abs(diff) > 0.0001 else 0.00,
+                    "% Chg": round(pct, 2) if abs(pct) > 0.0001 else 0.00,
                     "RSI (14)": round(rsi, 2)
                 })
         except: continue
@@ -77,24 +76,28 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # ฟังก์ชันกำหนดสีตัวหนังสือตามการเปลี่ยนแปลง
-        def style_positive_negative(val):
-            color = '#10b981' if val > 0 else '#ef4444' if val < 0 else 'white'
-            return f'color: {color}; font-weight: bold;'
+        # ฟังก์ชันกำหนดสีตัวหนังสือ (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ)
+        def style_logic(val):
+            if val > 0:
+                return 'color: #10b981; font-weight: bold;'
+            elif val < 0:
+                return 'color: #ef4444; font-weight: bold;'
+            else:
+                return 'color: #000000; font-weight: bold;' # ตัวหนังสือสีดำเมื่อไม่มีการเปลี่ยนแปลง
 
-        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) ให้เปลี่ยนสีตามค่า Change
-        def style_ticker(row):
-            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else 'white'
+        # ฟังก์ชันสำหรับแถว Ticker
+        def style_row_by_change(row):
+            color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
             prefix = "⚠️ " if row['RSI (14)'] < 30 else ""
-            # คืนค่าสไตล์สำหรับ Ticker (index 0) ส่วนคอลัมน์อื่นปล่อยว่างเพื่อให้ฟังก์ชัน map จัดการ
+            
             styles = [''] * len(row)
-            styles[0] = f'color: {color}; font-weight: bold;'
+            styles[0] = f'color: {color}; font-weight: bold;' # สีของชื่อหุ้น
             return styles
 
         # แสดงผลตาราง
         st.dataframe(
-            df.style.apply(style_ticker, axis=1) \
-                    .map(style_positive_negative, subset=['Change', '% Chg']) \
+            df.style.apply(style_row_by_change, axis=1) \
+                    .map(style_logic, subset=['Change', '% Chg']) \
                     .format({
                         "% Chg": "{:+.2f}%", 
                         "Change": "{:+.2f}",
