@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft (อ้างอิงจากรูป 1777556027968.jpg)
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft
 st.set_page_config(page_title="Hull Suite Intelligence", layout="wide")
 
 st.markdown("""
@@ -21,12 +21,23 @@ st.markdown("""
         margin-bottom: 15px;
         border: 1px solid #334155;
     }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
-    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; }
+    /* หัวตารางตัวหนาปกติ */
+    [data-testid="stDataFrame"] th { 
+        background-color: #1e293b !important; 
+        color: #94a3b8 !important; 
+        text-align: center !important; 
+        font-size: 11px !important; 
+    }
+    /* เนื้อหาตารางตัวธรรมดา */
+    [data-testid="stDataFrame"] td { 
+        font-size: 11px !important; 
+        text-align: center !important; 
+        font-weight: normal !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นที่ติดตาม (อิงตามความสนใจของคุณใน User Summary)
+# 2. รายชื่อหุ้นที่ติดตาม
 watch_list = [
     'IONQ', 'IREN', 'ONDS', 'SMX', 'DELTA.BK', 'GULF.BK', 'ADVANC.BK', 
     'PTT.BK', 'KBANK.BK', 'SCB.BK', 'CPALL.BK', 'AOT.BK', 'PTTEP.BK', 'HANA.BK'
@@ -42,7 +53,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณ (เปลี่ยนจากแดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ (แดงเป็นเขียว = ซื้อ / เขียวเป็นแดง = ขาย)
 def identify_hull_signal(df):
     if len(df) < 3: return None, None
     df['hma'] = get_hma(df['Close'], 30)
@@ -53,21 +64,19 @@ def identify_hull_signal(df):
     curr_trend = "UP" if curr_hma > prev_hma else "DOWN"
     prev_trend = "UP" if prev_hma > prev2_hma else "DOWN"
 
-    # ระบุเวลาปัจจุบันแบบ Thai Time Zone
     tz = pytz.timezone('Asia/Bangkok')
     now_time = datetime.now(tz).strftime("%H:%M:%S")
 
     if prev_trend == "DOWN" and curr_trend == "UP":
-        return "ควรซื้อ", now_time
+        return "ซื้อ", now_time
     elif prev_trend == "UP" and curr_trend == "DOWN":
-        return "ควรขาย", now_time
+        return "ขาย", now_time
     return None, None
 
-# 5. ฟังก์ชันดึงข้อมูลและกรองเฉพาะตัวที่มีสัญญาณ
+# 5. ฟังก์ชันดึงข้อมูลและกรอง
 @st.cache_data(ttl=600)
 def get_actionable_data():
     action_list = []
-    tz = pytz.timezone('Asia/Bangkok')
     for t in watch_list:
         try:
             stock = yf.Ticker(t)
@@ -95,23 +104,19 @@ st.subheader("🛰️ Hull Suite Dashboard")
 df_filtered = get_actionable_data()
 
 if not df_filtered.empty:
-    # ฟังก์ชันกำหนดสีตัวอักษรในแถว
-    def style_signal_rows(row):
-        # กำหนดสีตามข้อความในคอลัมน์ Signal
-        if row['Signal'] == "ควรซื้อ":
-            s_color = '#10b981' # สีเขียว
-        else:
-            s_color = '#ef4444' # สีแดง
-        
-        return ['', '', '', f'color: {s_color}; font-weight: bold;', 'color: #888888;']
+    # ฟังก์ชันกำหนดสีตัวอักษรทั้งแถว
+    def style_entire_row(row):
+        # กำหนดสีตามข้อความในคอลัมน์ Signal (สีเดียวกันทั้งแถว)
+        color = '#10b981' if row['Signal'] == "ซื้อ" else '#ef4444'
+        return [f'color: {color};'] * len(row)
 
     st.dataframe(
-        df_filtered.style.apply(style_signal_rows, axis=1).format({"Chg%": "{:+.2f}%"}),
+        df_filtered.style.apply(style_entire_row, axis=1).format({"Chg%": "{:+.2f}%"}),
         column_config={
             "หุ้น (Ticker)": st.column_config.TextColumn("Ticker", width=70),
             "ราคาปัจจุบัน": st.column_config.TextColumn("ราคา", width=60),
             "Chg%": st.column_config.NumberColumn("%", width=50),
-            "Signal": st.column_config.TextColumn("Signal", width=80),
+            "Signal": st.column_config.TextColumn("Signal", width=60),
             "เวลาแจ้งเตือน": st.column_config.TextColumn("เวลา", width=75),
         },
         use_container_width=True,
@@ -119,7 +124,7 @@ if not df_filtered.empty:
         hide_index=True
     )
 else:
-    st.info("🔎 ยังไม่พบหุ้นที่เปลี่ยนสี Hull Suite ในขณะนี้")
+    st.info("🔎 ยังไม่พบสัญญาณเปลี่ยนสีในขณะนี้")
 
 if st.button("🔄 สแกนตลาดใหม่", use_container_width=True):
     st.rerun()
