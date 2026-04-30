@@ -6,38 +6,21 @@ from datetime import datetime
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="SET100 Intelligence", layout="wide")
+st.set_page_config(page_title="SET100 Hull Intelligence", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .time-status {
-        background-color: #1e293b;
-        color: #10b981;
-        padding: 8px;
-        border-radius: 6px;
-        text-align: center;
-        font-size: 12px;
-        margin-bottom: 15px;
-        border: 1px solid #334155;
+        background-color: #1e293b; color: #10b981; padding: 8px; border-radius: 6px;
+        text-align: center; font-size: 12px; margin-bottom: 15px; border: 1px solid #334155;
     }
-    /* หัวตาราง */
-    [data-testid="stDataFrame"] th { 
-        background-color: #1e293b !important; 
-        color: #94a3b8 !important; 
-        text-align: center !important; 
-        font-size: 11px !important; 
-    }
-    /* เนื้อหาตารางตัวธรรมดาและจัดกลาง */
-    [data-testid="stDataFrame"] td { 
-        font-size: 11px !important; 
-        text-align: center !important; 
-        font-weight: normal !important;
-    }
+    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
+    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; font-weight: normal !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น SET100 ครบถ้วน
+# 2. รายชื่อหุ้น SET100
 set100_tickers = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -52,84 +35,87 @@ set100_tickers = [
     'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. ฟังก์ชันคำนวณ HMA (Length=30 ตามรูป 1777558595938.jpg)
+# เตรียม session_state สำหรับเก็บประวัติสัญญาณ
+if 'signal_history' not in st.session_state:
+    st.session_state.signal_history = {} 
+
+# 3. ฟังก์ชันคำนวณ HMA (Length=30)
 def get_hma(series, length):
     def wma(data, period):
         weights = np.arange(1, period + 1)
         return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    half_length = int(length / 2)
-    sqrt_length = int(np.sqrt(length))
+    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันวิเคราะห์สัญญาณเปลี่ยนสี
-def identify_hull_signal(df):
-    if len(df) < 35: return None, None
+# 4. ฟังก์ชันวิเคราะห์สัญญาณ
+def identify_hull_signal(df, ticker):
+    if len(df) < 35: return None
     df['hma'] = get_hma(df['Close'], 30)
     curr, prev, prev2 = df['hma'].iloc[-1], df['hma'].iloc[-2], df['hma'].iloc[-3]
     
     curr_trend = "UP" if curr > prev else "DOWN"
     prev_trend = "UP" if prev > prev2 else "DOWN"
     
-    tz = pytz.timezone('Asia/Bangkok')
-    time_str = datetime.now(tz).strftime("%H:%M:%S")
+    new_sig = None
+    if prev_trend == "DOWN" and curr_trend == "UP": new_sig = "🚀 ซื้อ"
+    elif prev_trend == "UP" and curr_trend == "DOWN": new_sig = "🔻 ขาย"
 
-    if prev_trend == "DOWN" and curr_trend == "UP":
-        return "🚀 ซื้อ", time_str
-    elif prev_trend == "UP" and curr_trend == "DOWN":
-        return "🔻 ขาย", time_str
-    return None, None
+    if new_sig:
+        tz = pytz.timezone('Asia/Bangkok')
+        now = datetime.now(tz)
+        # บันทึกเมื่อเป็นสัญญาณใหม่ หรือเปลี่ยนทิศทาง
+        if ticker not in st.session_state.signal_history or st.session_state.signal_history[ticker]["Signal"] != new_sig:
+            st.session_state.signal_history[ticker] = {
+                "Signal": new_sig,
+                "Date": now.strftime("%d/%m/%y"),
+                "Time": now.strftime("%H:%M:%S")
+            }
+        return st.session_state.signal_history[ticker]
+    else:
+        if ticker in st.session_state.signal_history:
+            del st.session_state.signal_history[ticker]
+        return None
 
 # 5. ส่วนแสดงผลแบบ Auto-Scan ทุก 10 นาที
 @st.fragment(run_every="10m")
 def set100_intelligence():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 SET100 Auto-Scan (10m): {datetime.now(tz).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%d/%m/%y %H:%M:%S")}</div>', unsafe_allow_html=True)
     
-    @st.cache_data(ttl=600)
-    def fetch_set100_signals():
-        signals = []
-        for t in set100_tickers:
-            try:
-                stock = yf.Ticker(t)
-                hist = stock.history(period="60d")
-                if not hist.empty:
-                    sig, sig_time = identify_hull_signal(hist)
-                    if sig:
-                        curr_p, prev_p = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
-                        signals.append({
-                            "Ticker": t.replace('.BK', ''),
-                            "ราคา": f"{curr_p:,.2f}",
-                            "Chg%": ((curr_p - prev_p) / prev_p) * 100,
-                            "Signal": sig,
-                            "เวลา": sig_time
-                        })
-            except: continue
-        return pd.DataFrame(signals)
-
-    df_signals = fetch_set100_signals()
-
-    if not df_signals.empty:
-        # ฟังก์ชันกำหนดสีตัวอักษรทั้งแถว
-        def style_entire_row(row):
-            color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
-            return [f'color: {color}; font-weight: normal;'] * len(row)
-
+    signals = []
+    for t in set100_tickers:
+        try:
+            stock = yf.Ticker(t)
+            hist = stock.history(period="60d")
+            if not hist.empty:
+                sig_data = identify_hull_signal(hist, t)
+                if sig_data:
+                    curr_p, prev_p = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
+                    signals.append({
+                        "Ticker": t.replace('.BK', ''),
+                        "ราคา": f"{curr_p:,.2f}",
+                        "Signal": sig_data["Signal"],
+                        "วันที่": sig_data["Date"],
+                        "เวลา": sig_data["Time"]
+                    })
+        except: continue
+    
+    if signals:
+        df = pd.DataFrame(signals)
         st.dataframe(
-            df_signals.style.apply(style_entire_row, axis=1).format({"Chg%": "{:+.2f}%"}),
+            df.style.apply(lambda row: [f'color: {"#10b981" if "ซื้อ" in row["Signal"] else "#ef4444"};'] * len(row), axis=1),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.TextColumn("ราคา", width=60),
-                "Chg%": st.column_config.NumberColumn("%", width=50),
+                "ราคา": st.column_config.TextColumn("ราคา", width=60), 
                 "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลา": st.column_config.TextColumn("เวลา", width=75),
+                "วันที่": st.column_config.TextColumn("วันที่", width=60),
+                "เวลา": st.column_config.TextColumn("เวลา", width=70)
             },
-            use_container_width=True,
-            height=700,
-            hide_index=True
+            use_container_width=True, height=700, hide_index=True
         )
     else:
-        st.info("🔎 กำลังสแกน SET100... ยังไม่พบสัญญาณเปลี่ยนสีในแท่งราคาล่าสุด")
+        st.info("🔎 ยังไม่พบสัญญาณเปลี่ยนสีในแท่งราคาล่าสุด")
 
 # 6. รัน Dashboard
 st.subheader("🛰️ SET100 Hull Suite Intelligence")
