@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="HMA Signal Monitor", layout="wide")
+st.set_page_config(page_title="HMA Top 30 Signals", layout="wide")
 
 st.markdown("""
     <style>
@@ -35,7 +35,7 @@ set100_tickers = [
     'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-# 3. ฟังก์ชันคำนวณ HMA (Length=30 ตามความต้องการ)
+# 3. ฟังก์ชันคำนวณ HMA 30
 def get_hma(series, length):
     def wma(data, period):
         weights = np.arange(1, period + 1)
@@ -44,85 +44,72 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันค้นหาจุดเปลี่ยนสีล่าสุด (ต้องเป็นจุดตัดจริงเท่านั้น)
-def get_actual_signal(df, ticker):
-    if len(df) < 40: return None
-    
+# 4. ฟังก์ชันค้นหาสัญญาณล่าสุดของแต่ละหุ้น
+def get_last_signal(df, ticker):
+    if len(df) < 35: return None
     tz = pytz.timezone('Asia/Bangkok')
     df['hma'] = get_hma(df['Close'], 30)
     df['trend'] = np.where(df['hma'] > df['hma'].shift(1), "UP", "DOWN")
-    
-    # ตรวจสอบจุดที่เทรนด์มีการสลับฝั่ง (Color Switch)
     df['is_switch'] = df['trend'] != df['trend'].shift(1)
     
-    # กรองเอาเฉพาะแถวที่มีการสลับสีจริง ๆ
     switches = df[df['is_switch'] == True].copy()
-    
     if not switches.empty:
-        # ดึงจุดตัดล่าสุดที่เกิดขึ้น
         last_sig = switches.iloc[-1]
-        
-        # ป้องกันกรณีที่จุดตัดเป็นจุดแรกของข้อมูลซึ่งไม่มีตัวเทียบ
-        if pd.isna(last_sig['hma']): return None
-        
-        sig_type = "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย"
         actual_time = last_sig.name.astimezone(tz)
-        
         return {
             "Ticker": ticker.replace('.BK', ''),
             "ราคา": f"{last_sig['Close']:,.2f}",
-            "Signal": sig_type,
+            "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
             "เวลา": actual_time.strftime("%H:%M:%S"),
             "วันที่": actual_time.strftime("%d/%m/%y"),
-            "raw_time": actual_time # สำหรับ Sorting
+            "raw_time": actual_time
         }
     return None
 
-# 5. การแสดงผล (Auto-Scan ทุก 10 นาที)
+# 5. Dashboard อัปเดตทุก 10 นาที
 @st.fragment(run_every="10m")
-def live_signal_dashboard():
+def dashboard_top30():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Scan: {datetime.now(tz).strftime("%H:%M:%S")} | แสดงเฉพาะหุ้นที่มีสัญญาณสลับสีล่าสุด</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Scan: {datetime.now(tz).strftime("%H:%M:%S")} | แสดง 30 สัญญาณล่าสุด</div>', unsafe_allow_html=True)
     
-    signal_results = []
+    results = []
+    bar = st.progress(0, text="กำลังสแกนหา 30 สัญญาณล่าสุด...")
     
-    # สแกน SET100
-    for t in set100_tickers:
+    for i, t in enumerate(set100_tickers):
         try:
             stock = yf.Ticker(t)
-            # ดึงข้อมูลย้อนหลัง 5 วันเพื่อให้ครอบคลุมจุดตัดล่าสุดของหุ้นทุกตัว
-            hist = stock.history(period="5d", interval="1h")
+            hist = stock.history(period="10d", interval="1h")
             if not hist.empty:
-                res = get_actual_signal(hist, t)
-                if res:
-                    signal_results.append(res)
+                res = get_last_signal(hist, t)
+                if res: results.append(res)
         except: continue
+        bar.progress((i + 1) / len(set100_tickers))
+    
+    bar.empty()
 
-    if signal_results:
-        # เรียงลำดับจากเวลาล่าสุดลงมา (Newest to Oldest)
-        df = pd.DataFrame(signal_results).sort_values(by="raw_time", ascending=False)
+    if results:
+        # เรียงตามความสดใหม่และตัดเหลือ 30 รายการ
+        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
         def style_row(row):
             color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
-            return [f'color: {color};'] * len(row)
+            return [f'color: {color}; font-weight: normal;'] * len(row)
 
         st.dataframe(
             df.drop(columns=['raw_time']).style.apply(style_row, axis=1),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.TextColumn("ราคา", width=60),
+                "ราคา": st.column_config.TextColumn("ราคา", width=65),
                 "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลา": st.column_config.TextColumn("เวลา", width=75),
+                "เวลา": st.column_config.TextColumn("เวลาจริง", width=75),
                 "วันที่": st.column_config.TextColumn("วันที่", width=65),
             },
-            use_container_width=True, height=800, hide_index=True
+            use_container_width=True, height=600, hide_index=True
         )
-    else:
-        st.warning("⚠️ ไม่พบสัญญาณการสลับสีในฐานข้อมูลปัจจุบัน")
 
-# 6. รัน Dashboard
-st.subheader("🛰️ SET100 Hull Suite: Active Signals Only")
-live_signal_dashboard()
+# 6. รัน
+st.subheader("🛰️ Top 30 Hull Suite Signals")
+dashboard_top30()
 
-if st.button("🔄 Force Scan Now", use_container_width=True):
+if st.button("🔄 Force Refresh Now", use_container_width=True):
     st.rerun()
