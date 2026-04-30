@@ -113,7 +113,7 @@ while True:
     </table>
     """
     
-    table_placeholder.markdown(table_html, unsafe_allow_html=True)
+  table_placeholder.markdown(table_html, unsafe_allow_html=True)
     info_placeholder.caption(f"อัปเดตล่าสุด: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_rate} วินาที")
     
     time.sleep(refresh_rate)
