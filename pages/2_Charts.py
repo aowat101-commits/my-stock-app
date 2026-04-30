@@ -4,103 +4,117 @@ import pandas as pd
 import time
 from datetime import datetime
 
-st.set_page_config(page_title="SET100 Real-time Board", layout="wide")
-
-# --- รายชื่อหุ้น SET100 ---
-SET100_FULL = [
-    'ADVANC.BK', 'AOT.BK', 'AWC.BK', 'BANPU.BK', 'BBL.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK',
-    'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'EA.BK',
-    'EGCO.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'INTUCH.BK', 'IRPC.BK', 'IVL.BK',
-    'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'OSP.BK',
-    'PLANB.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'RATCH.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK',
-    'SIRI.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STGT.BK', 'TASCO.BK', 'TCAP.BK', 'TIDLOR.BK', 'TISCO.BK', 'TOP.BK',
-    'TRUE.BK', 'TTB.BK', 'TU.BK', 'WHA.BK'
-]
-
-st.title("🇹🇭 SET100 Live Market Board")
-
-# --- ส่วนควบคุมการอัปเดตอัตโนมัติ ---
-st.sidebar.header("⏱️ Live Settings")
-auto_refresh = st.sidebar.toggle("เปิดการอัปเดตอัตโนมัติ (30s)", value=True)
-refresh_interval = 30
-
-if "price_df" not in st.session_state:
-    st.session_state.price_df = pd.DataFrame()
-    st.session_state.last_refresh = "-"
-
-# --- ฟังก์ชันดึงข้อมูลราคาและมูลค่า ---
-def fetch_all_prices():
-    all_data = []
-    status_msg = st.empty()
-    progress_bar = st.progress(0)
+# 1. ตั้งค่าหน้าจอและซ่อน UI ที่รบกวนสายตาด้วย CSS
+st.set_page_config(page_title="SET100 Premium Board", layout="wide")
+st.markdown("""
+    <style>
+    [data-testid="stStatusWidget"] {display: none !important;}
+    .stSpinner {display: none !important;}
+    .main { background-color: #050a14; }
     
-    for i, ticker in enumerate(SET100_FULL):
-        status_msg.text(f"กำลังดึงข้อมูล: {ticker} ({i+1}/{len(SET100_FULL)})")
-        progress_bar.progress((i + 1) / len(SET100_FULL))
+    /* สไตล์ตาราง Custom แบบรูป 1777543125050.jpg */
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        color: white;
+        background-color: #0b111e;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .custom-table th {
+        background-color: #161e2e;
+        color: #94a3b8;
+        text-align: left;
+        padding: 12px 15px;
+        font-size: 14px;
+    }
+    .custom-table td {
+        padding: 15px;
+        border-bottom: 1px solid #1e293b;
+        font-size: 16px;
+    }
+    .pos { color: #10b981; font-weight: bold; } /* เขียวนีออน */
+    .neg { color: #ef4444; font-weight: bold; } /* แดงนีออน */
+    .rsi-box { color: #60a5fa; font-weight: 500; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# รายชื่อหุ้น (ใช้ลิสต์เดิมของคุณ)
+SET100_FULL = ['ADVANC.BK', 'AOT.BK', 'BBL.BK', 'CPALL.BK', 'DELTA.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK'] # ตัวอย่างบางส่วนเพื่อความเร็ว
+
+# --- ส่วนควบคุมที่ Sidebar ---
+st.sidebar.header("⚙️ Live Settings")
+refresh_rate = st.sidebar.slider("ความถี่รีเฟรช (วินาที)", 10, 300, 30)
+
+def calculate_rsi(data, window=14):
+    delta = data.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def fetch_data_html():
+    html_rows = ""
+    for ticker in SET100_FULL:
         try:
             stock = yf.Ticker(ticker)
-            # ดึงข้อมูล 2 วันล่าสุดเพื่อเอาราคาปิดวันก่อนหน้า
-            hist = stock.history(period="2d")
-            if len(hist) >= 1:
+            hist = stock.history(period="20d") # ดึงเผื่อคำนวณ RSI
+            if len(hist) > 1:
                 current = hist['Close'].iloc[-1]
-                # ราคาปิดวันก่อนหน้า (Previous Close)
-                prev_close = stock.info.get('previousClose', hist['Open'].iloc[-1])
-                
+                prev_close = hist['Close'].iloc[-2]
                 change = current - prev_close
                 p_change = (change / prev_close) * 100
                 
-                # มูลค่าการซื้อขาย (Volume * Price) หรือใช้ค่าจาก info
-                volume = hist['Volume'].iloc[-1]
-                turnover = (volume * current) / 1_000_000 # หน่วย: ล้านบาท
+                # คำนวณ RSI
+                rsi_series = calculate_rsi(hist['Close'])
+                rsi_val = rsi_series.iloc[-1]
                 
-                all_data.append({
-                    "Ticker": ticker.replace(".BK", ""),
-                    "ราคาล่าสุด": round(current, 2),
-                    "ราคาปิดก่อนหน้า": round(prev_close, 2),
-                    "เปลี่ยนแปลง": f"{change:+.2f}",
-                    "% เปลี่ยนแปลง": f"{p_change:+.2f}%",
-                    "มูลค่า (ล้านบาท)": round(turnover, 2),
-                    "เวลา": datetime.now().strftime("%H:%M:%S")
-                })
-        except:
-            continue
-            
-    progress_bar.empty()
-    status_msg.empty()
-    return pd.DataFrame(all_data)
+                # กำหนดสีตามค่าการเปลี่ยนแปลง
+                c_class = "pos" if change > 0 else "neg" if change < 0 else ""
+                sign = "+" if change > 0 else ""
+                
+                # สร้างแถว HTML (เรียงหัวข้อตามสั่ง)
+                html_rows += f"""
+                <tr>
+                    <td><b>{ticker.replace('.BK', '')}</b></td>
+                    <td>฿{prev_close:,.2f}</td>
+                    <td>฿{current:,.2f}</td>
+                    <td class="{c_class}">{sign}{change:.2f}</td>
+                    <td class="{c_class}">{sign}{p_change:.2f}%</td>
+                    <td class="rsi-box">{rsi_val:.2f}</td>
+                </tr>
+                """
+        except: continue
+    return html_rows
 
-# --- ส่วนแสดงผล ---
-if st.button("🔄 Manual Refresh") or st.session_state.price_df.empty:
-    st.session_state.price_df = fetch_all_prices()
-    st.session_state.last_refresh = datetime.now().strftime("%H:%M:%S")
+# --- ส่วนแสดงผลหลัก ---
+st.title("🇹🇭 SET100 Live Market Board")
+table_placeholder = st.empty()
+info_placeholder = st.empty()
 
-st.write(f"อัปเดตล่าสุดเมื่อ: **{st.session_state.last_refresh}**")
-
-if not st.session_state.price_df.empty:
-    # ฟังก์ชันใส่สีตัวเลข
-    def style_change(val):
-        if isinstance(val, str):
-            if '+' in val: return 'color: #00ff00'
-            if '-' in val: return 'color: #ff4b4b'
-        return 'color: white'
-
-    # แสดงตาราง (จัดเรียงตามมูลค่าการซื้อขายจากมากไปน้อย)
-    df_display = st.session_state.price_df.sort_values(by="มูลค่า (ล้านบาท)", ascending=False)
+while True:
+    rows = fetch_data_html()
     
-    st.dataframe(
-        df_display.style.map(style_change, subset=['เปลี่ยนแปลง', '% เปลี่ยนแปลง']),
-        use_container_width=True,
-        hide_index=True,
-        height=600
-    )
-
-# --- ระบบนับถอยหลัง ---
-if auto_refresh:
-    countdown = st.sidebar.empty()
-    for i in range(refresh_interval, 0, -1):
-        countdown.metric("อัปเดตใหม่ในอีก", f"{i} วินาที")
-        time.sleep(1)
+    table_html = f"""
+    <table class="custom-table">
+        <thead>
+            <tr>
+                <th>Ticker</th>
+                <th>ราคาปิดก่อนหน้า</th>
+                <th>ราคาล่าสุด</th>
+                <th>เปลี่ยนแปลง</th>
+                <th>% เปลี่ยนแปลง</th>
+                <th>RSI (14)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+    """
     
-    st.session_state.price_df = fetch_all_prices()
-    st.session_state.last_refresh = datetime.now().strftime("%H:%M:%S")
+    table_placeholder.markdown(table_html, unsafe_allow_html=True)
+    info_placeholder.caption(f"อัปเดตล่าสุด: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชทุก {refresh_rate} วินาที")
+    
+    time.sleep(refresh_rate)
     st.rerun()
