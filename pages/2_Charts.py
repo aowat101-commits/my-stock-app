@@ -76,28 +76,39 @@ def show_final_board():
     df = get_set100_data()
     
     if not df.empty:
-        # ฟังก์ชันกำหนดสีตัวหนังสือ (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ)
-        def style_logic(val):
+        # ฟังก์ชันกำหนดสีตัวเลข Change และ % Chg (บวก=เขียว, ลบ=แดง, ศูนย์=ดำ) และใช้ตัวหนา
+        def style_numbers(val):
             if val > 0:
                 return 'color: #10b981; font-weight: bold;'
             elif val < 0:
                 return 'color: #ef4444; font-weight: bold;'
             else:
-                return 'color: #000000; font-weight: bold;' # ตัวหนังสือสีดำเมื่อไม่มีการเปลี่ยนแปลง
+                return 'color: #000000; font-weight: bold;'
 
-        # ฟังก์ชันสำหรับแถว Ticker
-        def style_row_by_change(row):
+        # ฟังก์ชันกำหนดสี RSI (ต่ำกว่า 30 เป็นสีแดง)
+        def style_rsi_color(val):
+            if val < 30:
+                return 'color: #ef4444; font-weight: bold;'
+            return 'color: white;'
+
+        # ฟังก์ชันสำหรับชื่อหุ้น (Ticker) เปลี่ยนสีตามราคา แต่ไม่เอาตัวหนา
+        def style_ticker_name(row):
             color = '#10b981' if row['Change'] > 0 else '#ef4444' if row['Change'] < 0 else '#000000'
             prefix = "⚠️ " if row['RSI (14)'] < 30 else ""
             
             styles = [''] * len(row)
-            styles[0] = f'color: {color}; font-weight: bold;' # สีของชื่อหุ้น
+            # ชื่อหุ้น (index 0) เปลี่ยนสีตามราคา แต่ไม่หนา
+            styles[0] = f'color: {color}; font-weight: normal;' 
             return styles
+
+        # เพิ่มสัญลักษณ์หน้าชื่อหุ้นก่อนแสดงผล
+        df['Ticker'] = df.apply(lambda x: f"⚠️ {x['Ticker']}" if x['RSI (14)'] < 30 else x['Ticker'], axis=1)
 
         # แสดงผลตาราง
         st.dataframe(
-            df.style.apply(style_row_by_change, axis=1) \
-                    .map(style_logic, subset=['Change', '% Chg']) \
+            df.style.apply(style_ticker_name, axis=1) \
+                    .map(style_numbers, subset=['Change', '% Chg']) \
+                    .map(style_rsi_color, subset=['RSI (14)']) \
                     .format({
                         "% Chg": "{:+.2f}%", 
                         "Change": "{:+.2f}",
