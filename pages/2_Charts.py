@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# 1. ตั้งค่าหน้าจอและสไตล์ (ล็อกสีและซ่อนขีดวิ่งสีฟ้า)
+# 1. ตั้งค่าหน้าจอและ CSS (บังคับให้เป็น Dark Mode และซ่อนขีดวิ่งสีฟ้า)
 st.set_page_config(page_title="SET100 Premium Board", layout="wide")
 
 st.markdown("""
@@ -25,18 +25,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น
+# 2. รายชื่อหุ้นที่ต้องการแสดง
 tickers = ['ADVANC.BK', 'AOT.BK', 'BBL.BK', 'BDMS.BK', 'CPALL.BK', 'DELTA.BK', 'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'SCC.BK', 'TRUE.BK']
 
-# 3. Sidebar: ล็อกเวลาไว้ที่ 30 นาที และมีปุ่มกด
+# 3. Sidebar: แจ้งสถานะและปุ่มกด
 st.sidebar.header("⚙️ ระบบอัปเดต")
 st.sidebar.write("⏱️ รีเฟรชอัตโนมัติ: **ทุก 30 นาที**")
 
 if st.sidebar.button("🔄 อัปเดตข้อมูลตอนนี้"):
     st.rerun()
 
-# 4. ฟังก์ชันดึงข้อมูล (ดึงครั้งเดียวเมื่อรันหน้าเว็บ)
-def get_stock_data():
+# 4. ฟังก์ชันจัดการข้อมูลหุ้น
+def get_table_rows():
     all_rows = ""
     for t in tickers:
         try:
@@ -48,7 +48,7 @@ def get_stock_data():
                 diff = curr - prev
                 pct = (diff / prev) * 100
                 
-                # RSI 14
+                # คำนวณ RSI 14
                 delta = hist['Close'].diff()
                 up = delta.clip(lower=0).rolling(window=14).mean().iloc[-1]
                 down = -delta.clip(upper=0).rolling(window=14).mean().iloc[-1]
@@ -70,19 +70,19 @@ def get_stock_data():
         except: continue
     return all_rows
 
-# 5. การแสดงผล (ใช้ Fragment เพื่อล็อกเวลา 30 นาที)
+# 5. การแสดงผล (ล็อคเวลา 30 นาทีด้วย Fragment)
 @st.fragment(run_every="30m")
 def show_board():
     st.title("📊 TH SET100 Live Market Board")
-    data = get_stock_data()
+    rows = get_table_rows()
     table_html = f"""
     <table class="custom-table">
         <thead>
             <tr>
-                <th>Ticker</th><th>ปิดก่อนหน้า</th><th>ล่าสุด</th><th>เปลี่ยนแปลง</th><th>%</th><th>RSI</th>
+                <th>Ticker</th><th>ราคาปิดก่อนหน้า</th><th>ราคาล่าสุด</th><th>เปลี่ยนแปลง</th><th>%</th><th>RSI</th>
             </tr>
         </thead>
-        <tbody>{data}</tbody>
+        <tbody>{rows}</tbody>
     </table>
     <p style='color: gray; font-size: 12px; margin-top: 10px;'>
         อัปเดตเมื่อ: {datetime.now().strftime('%H:%M:%S')} | รีเฟรชอัตโนมัติทุก 30 นาที
@@ -90,4 +90,5 @@ def show_board():
     """
     st.markdown(table_html, unsafe_allow_html=True)
 
+# รันหน้าจอ
 show_board()
