@@ -5,14 +5,14 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft (ให้เข้ากับงานรีโนเวทสไตล์ Japanese Vintage ของคุณ)
-st.set_page_config(page_title="Signal Summary", layout="wide")
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft
+st.set_page_config(page_title="Top 30 Market Signals", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .time-status {
-        background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 8px;
+        background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px;
         text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
     }
     [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
@@ -20,7 +20,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นแบบครอบคลุม (SET100 + sSET/MAI + หุ้นที่คุณสนใจเป็นพิเศษอย่าง TFG)
+# 2. รายชื่อหุ้นแบบจัดเต็ม (SET100 + sSET + MAI + TFG)
 set100 = [
     'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
     'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
@@ -35,13 +35,13 @@ set100 = [
     'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
 ]
 
-growth_extra = [
+extra_growth = [
     'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
     'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'MASTER.BK', 'KLINIQ.BK', 'WARRIX.BK', 
     'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK'
 ]
 
-full_scan_list = list(set(set100 + growth_extra))
+full_scan_list = list(set(set100 + extra_growth))
 
 # 3. ฟังก์ชันคำนวณ HMA 30
 def get_hma(series, length):
@@ -52,7 +52,7 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันค้นหาสัญญาณเปลี่ยนสีล่าสุด
+# 4. ฟังก์ชันค้นหาสัญญาณล่าสุด
 def get_last_signal(df, ticker):
     if len(df) < 35: return None
     tz = pytz.timezone('Asia/Bangkok')
@@ -66,28 +66,28 @@ def get_last_signal(df, ticker):
         actual_time = last_sig.name.astimezone(tz)
         return {
             "Ticker": ticker.replace('.BK', ''),
-            "ราคา": f"{last_sig['Close']:,.2f}",
+            "ราคาที่ตัด": f"{last_sig['Close']:,.2f}",
             "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
-            "เวลา": actual_time.strftime("%H:%M:%S"),
+            "เวลาจริง": actual_time.strftime("%H:%M:%S"),
             "วันที่": actual_time.strftime("%d/%m/%y"),
             "raw_time": actual_time
         }
     return None
 
-# 5. หัวข้อหน้าสรุปและปุ่มรีเฟรช
-st.subheader("📋 Top 30 Latest Signals Summary")
+# 5. ส่วนหัวและปุ่มรีเฟรช (อยู่ด้านบน)
+st.subheader("🛰️ Market Signal History: Top 30")
 
-if st.button("🔄 Refresh Data Now", use_container_width=True):
+if st.button("🔄 Force Refresh Scan", use_container_width=True):
     st.rerun()
 
-# 6. ส่วนการทำงานหลัก (Auto-Scan ทุก 10 นาที)
+# 6. Dashboard อัปเดตออโต้ทุก 10 นาที
 @st.fragment(run_every="10m")
-def signal_summary_display():
+def dashboard_tracker():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Update: {datetime.now(tz).strftime("%H:%M:%S")} | หน้าสรุปสัญญาณล่าสุด</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | แสดง 30 อันดับล่าสุดจากหุ้นทั้งหมด</div>', unsafe_allow_html=True)
     
     results = []
-    bar = st.progress(0, text="กำลังวิเคราะห์ข้อมูลหุ้นไทยล่าสุด...")
+    bar = st.progress(0, text="กำลังวิเคราะห์สัญญาณล่าสุด...")
     
     total = len(full_scan_list)
     for i, t in enumerate(full_scan_list):
@@ -103,23 +103,24 @@ def signal_summary_display():
     bar.empty()
 
     if results:
-        # เรียงตามเวลาล่าสุดและคัดเพียง 30 อันดับแรก
+        # เรียงลำดับจากใหม่ไปเก่า และเอาแค่ 30 ตัวแรก
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
         def style_row(row):
             color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
-            return [f'color: {color};'] * len(row)
+            return [f'color: {color}; font-weight: normal;'] * len(row)
 
         st.dataframe(
             df.drop(columns=['raw_time']).style.apply(style_row, axis=1),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.TextColumn("ราคา", width=65),
+                "ราคาที่ตัด": st.column_config.TextColumn("ราคา", width=65),
                 "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลา": st.column_config.TextColumn("เวลาจริง", width=75),
+                "เวลาจริง": st.column_config.TextColumn("เวลา", width=75),
                 "วันที่": st.column_config.TextColumn("วันที่", width=65),
             },
             use_container_width=True, height=650, hide_index=True
         )
 
-signal_summary_display()
+# 7. รันระบบ
+dashboard_tracker()
