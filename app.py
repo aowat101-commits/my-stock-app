@@ -2,22 +2,32 @@ import streamlit as st
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ (ใช้มาตรการขั้นเด็ดขาดในการซ่อน Header)
-st.set_page_config(page_title="Trading Home", layout="wide")
+# 1. ตั้งค่าหน้าจอ: ลบไอคอน (set page_icon เป็น None หรือค่าว่าง)
+st.set_page_config(
+    page_title="Trading Home", 
+    layout="wide",
+    page_icon=None  # กำจัดไอคอนเริ่มต้นของ Streamlit ออก
+)
 
 st.markdown("""
     <style>
-    /* 1. ซ่อน Header และส่วนเกินทั้งหมดเพื่อลบรูปไอคอนที่เสีย */
+    /* 1. มาตรการขั้นเด็ดขาด: ซ่อน Header และส่วนตกแต่งทั้งหมด */
     [data-testid="stHeader"] {display: none !important;}
-    footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
+    [data-testid="stSidebarNav"] {display: none !important;}
+    header {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
     
+    /* ลบช่องว่างด้านบนสุดของแอป */
+    .main .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 1rem !important;
+    }
+
     .main { 
         background-color: #0f172a; 
-        padding-top: 0rem !important; /* ดันเนื้อหาขึ้นไปแทนที่ Header ที่ซ่อนไว้ */
     }
     
-    /* 2. ปรับแต่งตัวหนังสือและ Metrics ให้ชัดเจนที่สุด */
+    /* 2. ปรับแต่ง Metrics ให้ชัดเจน */
     [data-testid="stMetricValue"] {
         color: #f8fafc !important;
         font-size: 28px !important;
@@ -27,7 +37,6 @@ st.markdown("""
         font-size: 16px !important;
         font-weight: normal !important;
     }
-    
     [data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 25px;
@@ -36,7 +45,7 @@ st.markdown("""
         text-align: center;
     }
     
-    /* 3. ช่อง Focus Ticker ตัวใหญ่กึ่งกลาง */
+    /* 3. ช่อง Focus Ticker */
     .focus-box {
         background-color: #1e293b;
         padding: 40px 20px;
@@ -48,7 +57,7 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    /* 4. ตกแต่งหัวข้อ TRADING HOME พร้อมไอคอนใหม่ */
+    /* 4. หัวข้อ TRADING HOME */
     h1 { 
         color: #fbbf24 !important; 
         font-weight: normal !important; 
@@ -73,11 +82,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนแสดงรูปภาพ Banner ด้านบน (เปลี่ยนเป็นรูปกราฟแนว High-Tech)
-st.image("https://images.unsplash.com/photo-1551288049-bbda3865c670?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
+# 2. ส่วนแสดงรูปภาพ Banner (รูปกราฟเท่ๆ)
+st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
          use_container_width=True)
 
-# 3. Header (เปลี่ยนไอคอนเป็นกราฟพุ่งขึ้น 📈)
+# 3. Header (ใช้ไอคอนกราฟ 📈)
 st.markdown("<h1>📈 TRADING HOME</h1>", unsafe_allow_html=True)
 
 tz_th = pytz.timezone('Asia/Bangkok')
@@ -85,7 +94,7 @@ now = datetime.now(tz_th)
 st.write(f"<p style='text-align: center; color: #94a3b8;'>📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
 st.write("---")
 
-# 4. Market Status Section
+# 4. Market Status
 st.subheader("🌐 Market Status")
 m_col1, m_col2, m_col3 = st.columns(3)
 
@@ -107,13 +116,13 @@ with m_col3:
 
 st.write("##")
 
-# 5. Quick Navigation (เชื่อมต่อตามไฟล์จริงใน pages/)
+# 5. Quick Navigation (เชื่อมตามชื่อไฟล์จริงของคุณ)
 st.subheader("🚀 Quick Navigation")
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
 
 with row1_col1:
-    if st.button("📊 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
+    if st.button("📈 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
 with row1_col2:
     if st.button("📊 Charts US Stocks"): st.switch_page("pages/4_US_Charts.py")
 with row2_col1:
