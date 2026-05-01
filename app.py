@@ -60,23 +60,25 @@ st.write("##")
 
 # 4. Quick Navigation (เพิ่มปุ่ม Charts หุ้นไทย)
 st.subheader("🚀 Quick Navigation")
-# แบ่งเป็น 2 แถว แถวละ 2 ปุ่ม เพื่อให้กดง่ายบนมือถือ
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
 
 with row1_col1:
     if st.button("📈 Charts Thai Stocks"):
-        # สมมติว่าไฟล์หน้า Charts หุ้นไทยชื่อ 2_Charts.py (ปรับชื่อตามจริงได้เลยครับ)
-        st.switch_page("pages/2_Thai_Charts.py")
+        # แก้เป็น 2_Charts.py ตามรูปภาพของคุณ
+        st.switch_page("pages/2_Charts.py") 
 with row1_col2:
     if st.button("📊 Charts US Stocks"):
+        # แก้เป็น 4_US_Charts.py ตามรูปภาพของคุณ
         st.switch_page("pages/4_US_Charts.py")
 
 with row2_col1:
     if st.button("🔍 Scan Thai Stocks"):
-        st.switch_page("pages/2_Thai_Scanner.py")
+        # แก้เป็น 1_Scanner.py ตามรูปภาพของคุณ
+        st.switch_page("pages/1_Scanner.py")
 with row2_col2:
     if st.button("🇺🇸 Scan US Stocks"):
+        # แก้เป็น 3_US_Scanner.py ตามรูปภาพของคุณ
         st.switch_page("pages/3_US_Scanner.py")
 
 st.write("---")
