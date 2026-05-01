@@ -1,42 +1,48 @@
 import streamlit as st
 from datetime import datetime
 import pytz
+import streamlit.components.v1 as components
 
-# 1. ตั้งค่าหน้าจอ: ลบไอคอน (set page_icon เป็น None หรือค่าว่าง)
-st.set_page_config(
-    page_title="Trading Home", 
-    layout="wide",
-    page_icon=None  # กำจัดไอคอนเริ่มต้นของ Streamlit ออก
+# 1. ตั้งค่าหน้าจอ (ปิดไอคอนมาตรฐาน)
+st.set_page_config(page_title="Trading Home", layout="wide", page_icon=None)
+
+# 2. JavaScript ขั้นเด็ดขาด: สแกนหาและลบรูปภาพ/ไอคอนที่มุมซ้ายทิ้งทันที
+components.html(
+    """
+    <script>
+        const removeIcons = () => {
+            // ลบรูปภาพที่โหลดไม่ติดหรือไอคอนใน header ทั้งหมด
+            const images = window.parent.document.querySelectorAll('header img, [data-testid="stHeader"] img');
+            images.forEach(img => img.remove());
+            
+            // ลบ Header ทิ้งแบบถาวร
+            const header = window.parent.document.querySelector('header');
+            if (header) header.style.display = 'none';
+        };
+        // รันทันทีและรันซ้ำเมื่อมีการเปลี่ยนแปลง
+        setInterval(removeIcons, 500);
+    </script>
+    """,
+    height=0,
 )
 
 st.markdown("""
     <style>
-    /* 1. มาตรการขั้นเด็ดขาด: ซ่อน Header และส่วนตกแต่งทั้งหมด */
-    [data-testid="stHeader"] {display: none !important;}
-    [data-testid="stSidebarNav"] {display: none !important;}
-    header {visibility: hidden !important;}
+    /* ซ่อนส่วนประกอบดั้งเดิมทั้งหมด */
+    [data-testid="stHeader"], header {display: none !important; height: 0px !important;}
     footer {visibility: hidden !important;}
     
-    /* ลบช่องว่างด้านบนสุดของแอป */
+    /* ดันเนื้อหาขึ้นไปให้สุด */
     .main .block-container {
         padding-top: 0rem !important;
-        padding-bottom: 1rem !important;
+        margin-top: -50px !important; /* ดันขึ้นไปทับที่เดิมของไอคอน */
     }
 
-    .main { 
-        background-color: #0f172a; 
-    }
+    .main { background-color: #0f172a; }
     
-    /* 2. ปรับแต่ง Metrics ให้ชัดเจน */
-    [data-testid="stMetricValue"] {
-        color: #f8fafc !important;
-        font-size: 28px !important;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #fbbf24 !important;
-        font-size: 16px !important;
-        font-weight: normal !important;
-    }
+    /* สไตล์ Metrics */
+    [data-testid="stMetricValue"] { color: #f8fafc !important; font-size: 28px !important; }
+    [data-testid="stMetricLabel"] { color: #fbbf24 !important; font-size: 16px !important; }
     [data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 25px;
@@ -45,7 +51,6 @@ st.markdown("""
         text-align: center;
     }
     
-    /* 3. ช่อง Focus Ticker */
     .focus-box {
         background-color: #1e293b;
         padding: 40px 20px;
@@ -57,36 +62,21 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    /* 4. หัวข้อ TRADING HOME */
-    h1 { 
-        color: #fbbf24 !important; 
-        font-weight: normal !important; 
-        text-align: center; 
-        margin-top: 10px;
-        letter-spacing: 3px;
-    }
+    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; margin-top: 10px; }
     
     .stButton>button {
-        width: 100%;
-        border-radius: 10px;
-        height: 4em;
-        background-color: #1e293b;
-        color: #f8fafc;
-        border: 1px solid #475569;
-        font-size: 16px;
+        width: 100%; border-radius: 10px; height: 4em;
+        background-color: #1e293b; color: #f8fafc;
+        border: 1px solid #475569; font-size: 16px;
     }
-    .stButton>button:hover {
-        border: 1px solid #fbbf24;
-        color: #fbbf24;
-    }
+    .stButton>button:hover { border: 1px solid #fbbf24; color: #fbbf24; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนแสดงรูปภาพ Banner (รูปกราฟเท่ๆ)
-st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
-         use_container_width=True)
+# 2. Banner
+st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", use_container_width=True)
 
-# 3. Header (ใช้ไอคอนกราฟ 📈)
+# 3. Header
 st.markdown("<h1>📈 TRADING HOME</h1>", unsafe_allow_html=True)
 
 tz_th = pytz.timezone('Asia/Bangkok')
@@ -107,28 +97,25 @@ def get_us_status(now):
     if now.weekday() >= 5: return "CLOSED 🔴"
     return "OPENING 🟢" if (now.hour >= 20) or (now.hour <= 4) else "CLOSED 🔴"
 
-with m_col1:
-    st.metric("SET (Thailand)", get_set_status(now))
-with m_col2:
-    st.metric("US Market", get_us_status(now))
-with m_col3:
-    st.markdown('<div class="focus-box">FOCUS TICKERS</div>', unsafe_allow_html=True)
+with m_col1: st.metric("SET (Thailand)", get_set_status(now))
+with m_col2: st.metric("US Market", get_us_status(now))
+with m_col3: st.markdown('<div class="focus-box">FOCUS TICKERS</div>', unsafe_allow_html=True)
 
 st.write("##")
 
-# 5. Quick Navigation (เชื่อมตามชื่อไฟล์จริงของคุณ)
+# 5. Quick Navigation
 st.subheader("🚀 Quick Navigation")
-row1_col1, row1_col2 = st.columns(2)
-row2_col1, row2_col2 = st.columns(2)
+r1c1, r1c2 = st.columns(2)
+r2c1, r2c2 = st.columns(2)
 
-with row1_col1:
-    if st.button("📈 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
-with row1_col2:
+with r1c1:
+    if st.button("📊 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
+with r1c2:
     if st.button("📊 Charts US Stocks"): st.switch_page("pages/4_US_Charts.py")
-with row2_col1:
+with r2c1:
     if st.button("🔍 Scan Thai Stocks"): st.switch_page("pages/1_Scanner.py")
-with row2_col2:
+with r2c2:
     if st.button("🇺🇸 Scan US Stocks"): st.switch_page("pages/3_US_Scanner.py")
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Precision Engineering & Trading")
+st.caption("Por Piang Electric Plus Co., Ltd.")
