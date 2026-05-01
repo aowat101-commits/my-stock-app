@@ -9,6 +9,10 @@ st.markdown("""
     <style>
     .main { background-color: #0f172a; }
     
+    /* สั่งซ่อนองค์ประกอบส่วนเกินที่อาจทำให้เกิดรูปภาพเสียมุมซ้าย */
+    header {visibility: hidden;}
+    [data-testid="stSidebarNav"] {display: none;}
+    
     /* ปรับแต่งตัวหนังสือและ Metrics ให้ชัดเจนที่สุด */
     [data-testid="stMetricValue"] {
         color: #f8fafc !important;
@@ -40,10 +44,18 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; margin-top: -20px; }
+    /* ตกแต่งหัวข้อ TRADING HOME */
+    h1 { 
+        color: #fbbf24 !important; 
+        font-weight: normal !important; 
+        text-align: center; 
+        margin-top: -10px;
+        letter-spacing: 3px;
+    }
     h3 { color: #fbbf24 !important; font-weight: normal !important; }
     p, span, div { font-weight: normal !important; }
     
+    /* ปุ่ม Navigation */
     .stButton>button {
         width: 100%;
         border-radius: 10px;
@@ -60,12 +72,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนแสดงรูปภาพ Banner (รูปเท่ๆ ด้านบน)
+# 2. ส่วนแสดงรูปภาพ Banner ด้านบน
 st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
          use_container_width=True)
 
-# 3. Header (เปลี่ยนชื่อเป็น Trading Home)
-st.markdown("<h1>📈 TRADING HOME</h1>", unsafe_allow_html=True)
+# 3. Header (เปลี่ยนไอคอนเป็นรูปกราฟแท่งเทียน 🕯️)
+st.markdown("<h1>🕯️ TRADING HOME</h1>", unsafe_allow_html=True)
 
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
@@ -94,7 +106,7 @@ with m_col3:
 
 st.write("##")
 
-# 5. Quick Navigation
+# 5. Quick Navigation (เชื่อมต่อตามไฟล์จริงใน pages/)
 st.subheader("🚀 Quick Navigation")
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
