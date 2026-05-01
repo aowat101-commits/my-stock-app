@@ -7,7 +7,7 @@ st.set_page_config(layout="wide", page_title=" ", page_icon=" ")
 
 st.markdown("""
     <style>
-    /* ซ่อน Header และไอคอนจิ๋วที่มุมซ้ายแบบเด็ดขาด */
+    /* ซ่อน Header และไอคอนจิ๋วที่มุมซ้ายแบบถอนรากถอนโคน */
     [data-testid="stHeader"], header, .stAppHeader {
         display: none !important;
         visibility: hidden !important;
@@ -22,15 +22,26 @@ st.markdown("""
 
     .main { background-color: #0f172a; }
     
-    /* ปรับแต่งชื่อ TRADING HOME ให้พอดีหน้าจอมือถือ */
+    /* สไตล์สำหรับคำว่า Welcome */
+    .welcome-text {
+        color: #94a3b8 !important;
+        text-align: center;
+        font-size: clamp(16px, 4vw, 24px);
+        margin-top: 20px;
+        margin-bottom: -10px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    /* ปรับแต่งชื่อ TRADING HOME ให้เด่นและพอดีหน้าจอมือถือ */
     .responsive-title {
         color: #fbbf24 !important;
         font-weight: bold !important;
         text-align: center;
         font-size: clamp(24px, 8vw, 42px); 
-        margin-top: 10px;
         margin-bottom: 5px;
         line-height: 1.2;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
 
     /* สไตล์ Metrics */
@@ -53,11 +64,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. อันดับ 1: แสดงชื่อ TRADING HOME
+# 2. ส่วนหัว: Welcome และ TRADING HOME
+st.markdown('<p class="welcome-text">Welcome</p>', unsafe_allow_html=True)
 st.markdown('<p class="responsive-title">TRADING HOME</p>', unsafe_allow_html=True)
 
-# 3. อันดับ 2: แสดงรูปกราฟขนาดเล็กลง 50% และอยู่ตรงกลาง
-# ใช้ columns ช่วยบีบขนาดรูปให้อยู่ตรงกลาง
+# 3. ส่วนรูปกราฟขนาดเล็กลง 50% อยู่ตรงกลาง
 col1, col2, col3 = st.columns([1, 2, 1]) 
 with col2:
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=600&q=80", use_container_width=True)
@@ -93,7 +104,7 @@ with m3:
 
 st.write("##")
 
-# 6. Quick Navigation (ปุ่มทางลัดเชื่อมไปยังไฟล์ชื่อเดิม)
+# 6. Quick Navigation
 st.subheader("🚀 Quick Navigation")
 r1c1, r1c2 = st.columns(2)
 r2c1, r2c2 = st.columns(2)
