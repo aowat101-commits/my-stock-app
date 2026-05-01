@@ -2,21 +2,22 @@ import streamlit as st
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอ: ล้างค่า page_icon เพื่อไม่ให้จำค่าเก่าที่ทำให้รูปแตก
+# 1. ตั้งค่าหน้าจอ: ล้างค่า page_icon เพื่อป้องกันรูปแตกค้างในระบบ
 st.set_page_config(layout="wide", page_title=" ", page_icon=" ") 
 
 st.markdown("""
     <style>
-    /* ซ่อน Header และไอคอนจิ๋วที่มุมซ้ายแบบเด็ดขาด */
+    /* ซ่อน Header และไอคอนจิ๋วที่มุมซ้ายแบบถอนรากถอนโคน */
     [data-testid="stHeader"], header, .stAppHeader {
         display: none !important;
         visibility: hidden !important;
+        height: 0px !important;
     }
     
-    /* ดันเนื้อหาขึ้นไปปิดรอยโหว่ที่เคยเป็นไอคอนรูปแตก */
+    /* ดันเนื้อหาขึ้นไปทับพื้นที่ที่เคยเป็นไอคอนรูปแตก */
     .main .block-container {
         padding-top: 0rem !important;
-        margin-top: -65px !important; 
+        margin-top: -60px !important; 
     }
 
     .main { background-color: #0f172a; }
@@ -40,9 +41,10 @@ st.markdown("""
         text-align: center;
         color: #fbbf24;
         font-size: 24px;
+        font-weight: bold;
     }
 
-    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; margin-top: 20px; }
+    h1 { color: #fbbf24 !important; font-weight: bold !important; text-align: center; margin-bottom: 20px; }
     
     .stButton>button {
         width: 100%; border-radius: 10px; height: 4em;
@@ -53,18 +55,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รูปกราฟ Banner ด้านบน (ใช้ลิงก์ใหม่ที่เสถียรกว่าเดิม)
-st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80", use_container_width=True)
-
-# 3. Header
+# 2. ส่วนแสดงผลหลัก: เอาชื่อขึ้นก่อน
 st.markdown("<h1>📊 TRADING HOME</h1>", unsafe_allow_html=True)
 
+# 3. ตามด้วยรูปกราฟ Banner (ย้ายมาอยู่ใต้ชื่อ)
+st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80", use_container_width=True)
+
+# 4. แสดงวันที่และเวลา
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
-st.write(f"<p style='text-align: center; color: #94a3b8;'>📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
+st.write(f"<p style='text-align: center; color: #94a3b8; margin-top: 15px;'>📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
 st.write("---")
 
-# 4. Market Status
+# 5. Market Status
 st.subheader("🌐 Market Status")
 m1, m2, m3 = st.columns(3)
 
@@ -84,7 +87,7 @@ with m3: st.markdown('<div class="focus-box">FOCUS TICKERS</div>', unsafe_allow_
 
 st.write("##")
 
-# 5. Quick Navigation (ปุ่มทางลัดชื่อเดิมทั้งหมด)
+# 6. Quick Navigation (เชื่อมไปยังไฟล์ชื่อเดิมใน GitHub)
 st.subheader("🚀 Quick Navigation")
 r1c1, r1c2 = st.columns(2)
 r2c1, r2c2 = st.columns(2)
@@ -103,4 +106,4 @@ with r2c2:
         st.switch_page("pages/3_US_Scanner.py")
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Trading Dashboard")
+st.caption("Por Piang Electric Plus Co., Ltd. | Industrial Automation & Trading Solutions")
