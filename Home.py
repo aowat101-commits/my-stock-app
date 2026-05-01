@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอ: ล้างค่า page_icon เพื่อป้องกันไอคอนรูปแตก
+# 1. ตั้งค่าหน้าจอ: ล้างค่า page_icon เพื่อความคลีน 100%
 st.set_page_config(layout="wide", page_title=" ", page_icon=" ") 
 
 st.markdown("""
@@ -14,7 +14,7 @@ st.markdown("""
         height: 0px !important;
     }
     
-    /* ดันเนื้อหาขึ้นไปให้สุดหน้าจอ เพื่อให้ชื่ออยู่บนสุดจริงๆ */
+    /* ดันเนื้อหาขึ้นไปให้สุดหน้าจอ */
     .main .block-container {
         padding-top: 0rem !important;
         margin-top: -60px !important; 
@@ -27,9 +27,9 @@ st.markdown("""
         color: #fbbf24 !important;
         font-weight: bold !important;
         text-align: center;
-        font-size: clamp(24px, 8vw, 48px); 
+        font-size: clamp(24px, 8vw, 42px); 
         margin-top: 10px;
-        margin-bottom: 15px;
+        margin-bottom: 5px;
         line-height: 1.2;
     }
 
@@ -45,7 +45,7 @@ st.markdown("""
     }
     
     .stButton>button {
-        width: 100%; border-radius: 10px; height: 4em;
+        width: 100%; border-radius: 10px; height: 3.5em;
         background-color: #1e293b; color: #f8fafc;
         border: 1px solid #475569; font-size: 16px;
     }
@@ -53,16 +53,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. อันดับ 1: แสดงชื่อ TRADING HOME ก่อนเลย
+# 2. อันดับ 1: แสดงชื่อ TRADING HOME
 st.markdown('<p class="responsive-title">TRADING HOME</p>', unsafe_allow_html=True)
 
-# 3. อันดับ 2: แสดงรูปกราฟตามลงมา (ใช้ลิงก์ที่เสถียรเพื่อไม่ให้แตก)
-st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80", use_container_width=True)
+# 3. อันดับ 2: แสดงรูปกราฟขนาดเล็กลง 50% และอยู่ตรงกลาง
+# ใช้ columns ช่วยบีบขนาดรูปให้อยู่ตรงกลาง
+col1, col2, col3 = st.columns([1, 2, 1]) 
+with col2:
+    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=600&q=80", use_container_width=True)
 
 # 4. แสดงวันที่และเวลา
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
-st.write(f"<p style='text-align: center; color: #94a3b8; margin-top: 10px;'>📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
+st.write(f"<p style='text-align: center; color: #94a3b8; margin-top: 5px;'>📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
 st.write("---")
 
 # 5. Market Status
@@ -83,14 +86,14 @@ with m1: st.metric("SET (Thailand)", get_status('SET'))
 with m2: st.metric("US Market", get_status('US'))
 with m3: 
     st.markdown("""
-        <div style='background-color: #1e293b; padding: 22px; border-radius: 12px; border: 1px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 18px; font-weight: bold;'>
+        <div style='background-color: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 16px; font-weight: bold;'>
             FOCUS TICKERS
         </div>
         """, unsafe_allow_html=True)
 
 st.write("##")
 
-# 6. Quick Navigation (ปุ่มทางลัดกลับไปใช้ชื่อไฟล์เดิม)
+# 6. Quick Navigation (ปุ่มทางลัดเชื่อมไปยังไฟล์ชื่อเดิม)
 st.subheader("🚀 Quick Navigation")
 r1c1, r1c2 = st.columns(2)
 r2c1, r2c2 = st.columns(2)
