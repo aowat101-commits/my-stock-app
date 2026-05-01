@@ -93,16 +93,16 @@ r2c1, r2c2 = st.columns(2)
 
 with r1c1:
     if st.button("📈 Thai Charts"): 
-        st.switch_page("pages/2_Thai_Charts.py")
+        st.switch_page("pages/2_Thai_Charts.py") # ชื่อใหม่
 with r1c2:
     if st.button("📊 US Charts"): 
         st.switch_page("pages/4_US_Charts.py")
 with r2c1:
     if st.button("🔍 Thai Scan"): 
-        st.switch_page("pages/1_Thai_Scan.py")
+        st.switch_page("pages/1_Thai_Scan.py") # ชื่อใหม่
 with r2c2:
     if st.button("🇺🇸 US Scan"): 
-        st.switch_page("pages/3_US_Scan.py")
+        st.switch_page("pages/3_US_Scan.py") # ชื่อใหม่
 
 st.write("---")
 st.caption("Por Piang Electric Plus Co., Ltd.")
