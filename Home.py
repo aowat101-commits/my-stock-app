@@ -7,7 +7,7 @@ st.set_page_config(layout="wide", page_title=" ", page_icon=" ")
 
 st.markdown("""
     <style>
-    /* นำเข้า Font ชุดใหม่ที่สวยและเท่กว่าเดิม */
+    /* นำเข้า Font ที่คุณชอบกลับมา */
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;800&family=Righteous&family=Dancing+Script:wght@700&display=swap');
 
     /* ซ่อน Header และไอคอนจิ๋ว */
@@ -25,50 +25,49 @@ st.markdown("""
 
     .main { background-color: #0f172a; }
     
-    /* บรรทัดที่ 1: Welcome (ปรับให้ดู Minimal หรูหรา) */
+    /* บรรทัดที่ 1: Welcome (ปรับให้ขาวเด่นและเว้นระยะหรูๆ) */
     .line-1 {
         font-family: 'Montserrat', sans-serif;
-        color: #f8fafc !important; 
+        color: #ffffff !important; 
         text-align: center;
-        font-size: clamp(28px, 9vw, 45px);
+        font-size: clamp(30px, 9vw, 48px);
         margin-top: 50px;
-        margin-bottom: 5px; 
-        letter-spacing: 12px; /* เว้นระยะให้ดูโปร่งและแพง */
+        margin-bottom: 10px; 
+        letter-spacing: 12px;
         text-transform: uppercase;
-        font-weight: 300;
-        opacity: 0.9;
+        font-weight: 800;
+        text-shadow: 2px 2px 10px rgba(255,255,255,0.2);
     }
 
-    /* บรรทัดที่ 2: TRADING HOME (ใช้ Font สไตล์ Sci-Fi/Trading ให้ดูเท่) */
+    /* บรรทัดที่ 2: TRADING HOME (กลับมาใช้ Righteous และเพิ่มระยะห่างตัวอักษร) */
     .line-2 {
         font-family: 'Righteous', cursive;
         color: #fbbf24 !important;
         text-align: center;
-        font-size: clamp(55px, 16vw, 110px); 
+        font-size: clamp(55px, 17vw, 115px); 
         margin-top: 15px;
         margin-bottom: 20px; 
         line-height: 1.1;
-        letter-spacing: 6px; /* เพิ่มระยะห่างตัวอักษรตามที่คุณต้องการ */
-        text-shadow: 0px 0px 20px rgba(251, 191, 36, 0.4); /* เพิ่มแสงเรืองรอง */
+        letter-spacing: 6px; /* เพิ่มระยะห่างไม่ให้ตัวหนังสือเบียดกัน */
+        text-shadow: 0px 0px 20px rgba(251, 191, 36, 0.4);
     }
 
-    /* บรรทัดที่ 3: For Milk (พริ้วไหวแต่ชัดเจน) */
+    /* บรรทัดที่ 3: For Milk (พริ้วไหวและเว้นระยะจากรูปภาพมากขึ้น) */
     .line-3 {
         font-family: 'Dancing Script', cursive;
         color: #f8fafc !important;
         text-align: center;
-        font-size: clamp(52px, 13vw, 85px);
+        font-size: clamp(52px, 14vw, 90px);
         margin-top: 15px;
-        margin-bottom: 50px; /* เว้นระยะจากรูปภาพตามที่คุณวงไว้ */
+        margin-bottom: 55px; /* เพิ่มระยะห่างเหนือรูปภาพตามที่คุณวงไว้ */
         text-shadow: 4px 4px 10px rgba(0,0,0,0.5);
     }
 
     /* หัวข้อสถานะและทางลัด */
     h2, h3 { 
-        font-size: clamp(30px, 7vw, 40px) !important; 
+        font-size: clamp(32px, 8vw, 45px) !important; 
         color: #fbbf24 !important;
         font-weight: 800 !important;
-        font-family: 'Montserrat', sans-serif;
     }
 
     /* สไตล์ Metrics */
@@ -96,7 +95,6 @@ st.markdown("""
         border: 2px solid #475569; 
         font-size: 30px !important;
         font-weight: 900 !important;
-        font-family: 'Montserrat', sans-serif;
         box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
     .stButton>button:hover { 
@@ -110,12 +108,11 @@ st.markdown("""
         color: #94a3b8; 
         font-size: clamp(22px, 5.5vw, 28px);
         margin-top: 30px;
-        font-family: 'Montserrat', sans-serif;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. แสดงผลส่วนหัว 3 บรรทัด (ฟอนต์ใหม่ทั้งหมด)
+# 2. แสดงผลส่วนหัว 3 บรรทัด (กลับมาใช้สไตล์ที่ Milk ชอบ)
 st.markdown('<p class="line-1">Welcome</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-2">TRADING HOME</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-3">For Milk</p>', unsafe_allow_html=True)
@@ -156,7 +153,7 @@ with m3:
 
 st.write("##")
 
-# 6. Quick Navigation
+# 6. Quick Navigation (ปุ่มทางลัดเชื่อมไปยังไฟล์ชื่อเดิม)
 st.subheader("🚀 Quick Navigation")
 r1c1, r1c2 = st.columns(2)
 r2c1, r2c2 = st.columns(2)
