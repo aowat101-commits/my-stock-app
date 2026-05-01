@@ -66,7 +66,7 @@ row2_col1, row2_col2 = st.columns(2)
 
 with row1_col1:
     if st.button("📈 Charts Thai Stocks"):
-        # สมมติว่าไฟล์หน้า Charts หุ้นไทยชื่อ 2_Thai_Charts.py (ปรับชื่อตามจริงได้เลยครับ)
+        # สมมติว่าไฟล์หน้า Charts หุ้นไทยชื่อ 2_Charts.py (ปรับชื่อตามจริงได้เลยครับ)
         st.switch_page("pages/2_Thai_Charts.py")
 with row1_col2:
     if st.button("📊 Charts US Stocks"):
