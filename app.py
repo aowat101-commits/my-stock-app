@@ -1,41 +1,28 @@
 import streamlit as st
 from datetime import datetime
 import pytz
-import streamlit.components.v1 as components
 
-# 1. ตั้งค่าหน้าจอ (ปิดไอคอนมาตรฐาน)
-st.set_page_config(page_title="Trading Home", layout="wide", page_icon=None)
-
-# 2. JavaScript ขั้นเด็ดขาด: สแกนหาและลบรูปภาพ/ไอคอนที่มุมซ้ายทิ้งทันที
-components.html(
-    """
-    <script>
-        const removeIcons = () => {
-            // ลบรูปภาพที่โหลดไม่ติดหรือไอคอนใน header ทั้งหมด
-            const images = window.parent.document.querySelectorAll('header img, [data-testid="stHeader"] img');
-            images.forEach(img => img.remove());
-            
-            // ลบ Header ทิ้งแบบถาวร
-            const header = window.parent.document.querySelector('header');
-            if (header) header.style.display = 'none';
-        };
-        // รันทันทีและรันซ้ำเมื่อมีการเปลี่ยนแปลง
-        setInterval(removeIcons, 500);
-    </script>
-    """,
-    height=0,
-)
+# 1. ตั้งค่าหน้าจอ: ห้ามใส่ชื่อหน้าเว็บในส่วนนี้ชั่วคราวเพื่อเช็คว่าไอคอนมาจากชื่อไหม
+st.set_page_config(layout="wide", page_title=" ") 
 
 st.markdown("""
     <style>
-    /* ซ่อนส่วนประกอบดั้งเดิมทั้งหมด */
-    [data-testid="stHeader"], header {display: none !important; height: 0px !important;}
-    footer {visibility: hidden !important;}
+    /* 1. ซ่อน Header และส่วนเกินแบบถอนรากถอนโคน */
+    header, [data-testid="stHeader"], .stAppHeader {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
+    }
     
-    /* ดันเนื้อหาขึ้นไปให้สุด */
+    /* 2. บล็อกรูปภาพหรือไอคอนที่อาจจะหลุดมาที่มุมซ้ายบน */
+    img[src*="data:image"], .st-emotion-cache-1avcm0n img {
+        display: none !important;
+    }
+
+    /* 3. ดันเนื้อหาขึ้นไปทับพื้นที่ Header ทั้งหมด */
     .main .block-container {
         padding-top: 0rem !important;
-        margin-top: -50px !important; /* ดันขึ้นไปทับที่เดิมของไอคอน */
+        margin-top: -60px !important; /* ดันขึ้นไปปิดรอยต่อ */
     }
 
     .main { background-color: #0f172a; }
@@ -62,7 +49,7 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; margin-top: 10px; }
+    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; margin-top: 15px; }
     
     .stButton>button {
         width: 100%; border-radius: 10px; height: 4em;
@@ -73,11 +60,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Banner
+# 2. Banner (ใช้รูปกราฟเท่ๆ บังไว้ด้านบนสุด)
 st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", use_container_width=True)
 
-# 3. Header
-st.markdown("<h1>📈 TRADING HOME</h1>", unsafe_allow_html=True)
+# 3. Header ใหม่ (ใช้ Emoji กราฟแท่งเทียนสไตล์โมเดิร์น 📊)
+st.markdown("<h1>📊 TRADING HOME</h1>", unsafe_allow_html=True)
 
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
@@ -111,11 +98,11 @@ r2c1, r2c2 = st.columns(2)
 with r1c1:
     if st.button("📊 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
 with r1c2:
-    if st.button("📊 Charts US Stocks"): st.switch_page("pages/4_US_Charts.py")
+    if st.button("📈 Charts US Stocks"): st.switch_page("pages/4_US_Charts.py")
 with r2c1:
     if st.button("🔍 Scan Thai Stocks"): st.switch_page("pages/1_Scanner.py")
 with r2c2:
     if st.button("🇺🇸 Scan US Stocks"): st.switch_page("pages/3_US_Scanner.py")
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd.")
+st.caption("Por Piang Electric Plus Co., Ltd. | Trading Systems")
