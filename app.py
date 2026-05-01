@@ -2,18 +2,22 @@ import streamlit as st
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์
+# 1. ตั้งค่าหน้าจอและสไตล์ (ใช้มาตรการขั้นเด็ดขาดในการซ่อน Header)
 st.set_page_config(page_title="Trading Home", layout="wide")
 
 st.markdown("""
     <style>
-    .main { background-color: #0f172a; }
+    /* 1. ซ่อน Header และส่วนเกินทั้งหมดเพื่อลบรูปไอคอนที่เสีย */
+    [data-testid="stHeader"] {display: none !important;}
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
     
-    /* สั่งซ่อนองค์ประกอบส่วนเกินที่อาจทำให้เกิดรูปภาพเสียมุมซ้าย */
-    header {visibility: hidden;}
-    [data-testid="stSidebarNav"] {display: none;}
+    .main { 
+        background-color: #0f172a; 
+        padding-top: 0rem !important; /* ดันเนื้อหาขึ้นไปแทนที่ Header ที่ซ่อนไว้ */
+    }
     
-    /* ปรับแต่งตัวหนังสือและ Metrics ให้ชัดเจนที่สุด */
+    /* 2. ปรับแต่งตัวหนังสือและ Metrics ให้ชัดเจนที่สุด */
     [data-testid="stMetricValue"] {
         color: #f8fafc !important;
         font-size: 28px !important;
@@ -32,7 +36,7 @@ st.markdown("""
         text-align: center;
     }
     
-    /* ช่อง Focus Ticker ตัวใหญ่กึ่งกลาง */
+    /* 3. ช่อง Focus Ticker ตัวใหญ่กึ่งกลาง */
     .focus-box {
         background-color: #1e293b;
         padding: 40px 20px;
@@ -44,18 +48,15 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    /* ตกแต่งหัวข้อ TRADING HOME */
+    /* 4. ตกแต่งหัวข้อ TRADING HOME พร้อมไอคอนใหม่ */
     h1 { 
         color: #fbbf24 !important; 
         font-weight: normal !important; 
         text-align: center; 
-        margin-top: -10px;
+        margin-top: 10px;
         letter-spacing: 3px;
     }
-    h3 { color: #fbbf24 !important; font-weight: normal !important; }
-    p, span, div { font-weight: normal !important; }
     
-    /* ปุ่ม Navigation */
     .stButton>button {
         width: 100%;
         border-radius: 10px;
@@ -72,12 +73,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนแสดงรูปภาพ Banner ด้านบน
-st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
+# 2. ส่วนแสดงรูปภาพ Banner ด้านบน (เปลี่ยนเป็นรูปกราฟแนว High-Tech)
+st.image("https://images.unsplash.com/photo-1551288049-bbda3865c670?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
          use_container_width=True)
 
-# 3. Header (เปลี่ยนไอคอนเป็นรูปกราฟแท่งเทียน 🕯️)
-st.markdown("<h1>🕯️ TRADING HOME</h1>", unsafe_allow_html=True)
+# 3. Header (เปลี่ยนไอคอนเป็นกราฟพุ่งขึ้น 📈)
+st.markdown("<h1>📈 TRADING HOME</h1>", unsafe_allow_html=True)
 
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
@@ -112,7 +113,7 @@ row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
 
 with row1_col1:
-    if st.button("📈 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
+    if st.button("📊 Charts Thai Stocks"): st.switch_page("pages/2_Charts.py")
 with row1_col2:
     if st.button("📊 Charts US Stocks"): st.switch_page("pages/4_US_Charts.py")
 with row2_col1:
