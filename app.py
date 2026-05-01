@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์
-st.set_page_config(page_title="Quantum Command Center", layout="wide")
+st.set_page_config(page_title="Trading Home", layout="wide")
 
 st.markdown("""
     <style>
@@ -40,7 +40,7 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; }
+    h1 { color: #fbbf24 !important; font-weight: normal !important; text-align: center; margin-top: -20px; }
     h3 { color: #fbbf24 !important; font-weight: normal !important; }
     p, span, div { font-weight: normal !important; }
     
@@ -60,13 +60,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนแสดงรูปภาพ Banner (คุณสามารถเปลี่ยน URL รูปภาพที่ต้องการได้ที่นี่)
-# ผมเลือกรูปแนว Cyberpunk/Trading ที่ดูเท่และเข้ากับโทนสีทอง-ดำ
+# 2. ส่วนแสดงรูปภาพ Banner (รูปเท่ๆ ด้านบน)
 st.image("https://images.unsplash.com/photo-1611974714851-eb605161882c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", 
          use_container_width=True)
 
-# 3. Header (เปลี่ยนชื่อเป็น Quantum Command Center)
-st.markdown("<h1>⚡ QUANTUM COMMAND CENTER</h1>", unsafe_allow_html=True)
+# 3. Header (เปลี่ยนชื่อเป็น Trading Home)
+st.markdown("<h1>📈 TRADING HOME</h1>", unsafe_allow_html=True)
 
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
@@ -77,7 +76,6 @@ st.write("---")
 st.subheader("🌐 Market Status")
 m_col1, m_col2, m_col3 = st.columns(3)
 
-# (ลอจิกเช็คสถานะตลาดเหมือนเดิม)
 def get_set_status(now):
     if now.weekday() >= 5: return "CLOSED 🔴"
     t = now.hour * 100 + now.minute
