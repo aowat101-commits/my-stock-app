@@ -3,100 +3,104 @@ from datetime import datetime
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์
-st.set_page_config(page_title="Control Center", layout="wide")
+st.set_page_config(page_title="Trading Control Center", layout="wide")
 
 st.markdown("""
     <style>
     .main { background-color: #0f172a; }
-    .stMetric {
+    
+    /* การตกแต่ง Metrics ให้ดูทันสมัย */
+    [data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #fbbf24;
+        border-radius: 12px;
+        border: 1px solid #334155;
+        text-align: center;
     }
+    
+    /* ปรับสีตัวอักษรหัวข้อ */
     h1, h2, h3 { color: #fbbf24 !important; font-weight: normal !important; }
     p, span, div { font-weight: normal !important; }
     
+    /* ปรับแต่งปุ่มกด Navigation */
     .stButton>button {
         width: 100%;
-        border-radius: 8px;
-        height: 3.5em;
+        border-radius: 10px;
+        height: 4em;
         background-color: #1e293b;
         color: #f8fafc;
-        border: 1px solid #334155;
-        font-size: 14px;
+        border: 1px solid #475569;
+        font-size: 16px;
+        transition: 0.3s;
     }
     .stButton>button:hover {
         border: 1px solid #fbbf24;
         color: #fbbf24;
+        background-color: #334155;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Header & Time
+# 2. คำนวณเวลาและสถานะตลาด
 tz_th = pytz.timezone('Asia/Bangkok')
-now_th = datetime.now(tz_th)
+now = datetime.now(tz_th)
+day_of_week = now.weekday() # 0=Monday, 6=Sunday
 
-st.title("👨‍💻 Control Center")
-st.write(f"วันที่ {now_th.strftime('%d/%m/%Y')} | เวลา {now_th.strftime('%H:%M')} น.")
+# ฟังก์ชันเช็คสถานะตลาดไทย (10:00-12:30, 14:30-16:30 จันทร์-ศุกร์)
+def get_set_status(now):
+    if day_of_week >= 5: return "CLOSED (Weekend) 🔴"
+    time_val = now.hour * 100 + now.minute
+    if (1000 <= time_val <= 1230) or (1430 <= time_val <= 1630):
+        return "OPENING 🟢"
+    return "CLOSED 🔴"
+
+# ฟังก์ชันเช็คสถานะตลาด US (20:30-03:00 จันทร์-ศุกร์ ตามเวลาไทย)
+def get_us_status(now):
+    if day_of_week >= 5: return "CLOSED (Weekend) 🔴"
+    # ตลาด US เปิดคืนวันจันทร์ ถึงเช้ามืดวันเสาร์
+    h = now.hour
+    if (h >= 20) or (h <= 4): # ช่วงเวลาประมาณการเปิดตลาด US ในไทย
+        return "OPENING 🟢"
+    return "CLOSED 🔴"
+
+# 3. Header Section
+st.title("👨‍💻 Trading Control Center")
+st.write(f"📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')} (Thai Time)")
 st.write("---")
 
-# 3. Quick Stats (Metrics)
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    # ตลาดเมกาเปิด 20:30 (หรือ 21:30 หน้าหนาว) - 03:00/04:00
-    is_us_open = 20 <= now_th.hour or now_th.hour <= 4
-    st.metric("US Market", "OPEN 🟢" if is_us_open else "CLOSED 🔴")
-with col2:
-    # ตลาดไทยเปิด 10:00-12:30 และ 14:30-16:30
-    is_th_open = (10 <= now_th.hour < 13) or (14 <= now_th.hour < 17)
-    st.metric("Thai Market", "OPEN 🟢" if is_th_open else "CLOSED 🔴")
-with col3:
-    st.metric("Project", "Renovation")
-with col4:
+# 4. Market Status Section (ขยายใหญ่ขึ้น)
+st.subheader("🌐 Market Status")
+m_col1, m_col2, m_col3 = st.columns(3)
+
+with m_col1:
+    st.metric("SET (Thailand)", get_set_status(now))
+with m_col2:
+    st.metric("US Market", get_us_status(now))
+with m_col3:
     st.metric("Focus Tickers", "IONQ / IREN")
 
 st.write("##")
 
-# 4. Quick Navigation (เพิ่มปุ่ม Charts หุ้นไทย)
+# 5. Quick Navigation Section (ลิ้งค์ตรงตามไฟล์ในเครื่องคุณ)
 st.subheader("🚀 Quick Navigation")
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
 
 with row1_col1:
     if st.button("📈 Charts Thai Stocks"):
-        # แก้เป็น 2_Charts.py ตามรูปภาพของคุณ
-        st.switch_page("pages/2_Charts.py") 
+        st.switch_page("pages/2_Charts.py") #
+
 with row1_col2:
     if st.button("📊 Charts US Stocks"):
-        # แก้เป็น 4_US_Charts.py ตามรูปภาพของคุณ
-        st.switch_page("pages/4_US_Charts.py")
+        st.switch_page("pages/4_US_Charts.py") #
 
 with row2_col1:
     if st.button("🔍 Scan Thai Stocks"):
-        # แก้เป็น 1_Scanner.py ตามรูปภาพของคุณ
-        st.switch_page("pages/1_Scanner.py")
+        st.switch_page("pages/1_Scanner.py") #
+
 with row2_col2:
     if st.button("🇺🇸 Scan US Stocks"):
-        # แก้เป็น 3_US_Scanner.py ตามรูปภาพของคุณ
-        st.switch_page("pages/3_US_Scanner.py")
+        st.switch_page("pages/3_US_Scanner.py") #
 
 st.write("---")
-
-# 5. Engineering & Projects Section
-st.subheader("🛠️ Engineering & Renovation")
-p_col1, p_col2 = st.columns(2)
-
-with p_col1:
-    with st.expander("📍 Active Projects", expanded=True):
-        st.write("- **Industrial Automation:** PLC System Maintenance")
-        st.write("- **Renovation:** Japanese Vintage Loft Project")
-        st.write("- **Infrastructure:** Office BOQ Preparation")
-
-with p_col2:
-    with st.expander("📝 To-do List", expanded=True):
-        st.write("✅ ตรวจสอบ HMA 30 Signals (US Market)")
-        st.write("⏳ เช็คหน้างานติดตั้งระบบไฟฟ้าโรงงาน")
-        st.write("⏳ อัปเดตรายการหุ้นใน Watchlist")
-
-st.caption("Developed by Por Piang Electric Plus Co., Ltd.")
+st.caption("Por Piang Electric Plus Co., Ltd. | Portfolio Management System")
