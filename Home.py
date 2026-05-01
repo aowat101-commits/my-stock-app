@@ -7,9 +7,8 @@ st.set_page_config(layout="wide", page_title=" ", page_icon=" ")
 
 st.markdown("""
     <style>
-    /* นำ Font สวยๆ มาใช้ */
-    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@900&display=swap');
+    /* นำเข้า Font ชุดใหม่ที่สวยและเท่กว่าเดิม */
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;800&family=Righteous&family=Dancing+Script:wght@700&display=swap');
 
     /* ซ่อน Header และไอคอนจิ๋ว */
     [data-testid="stHeader"], header, .stAppHeader {
@@ -18,7 +17,7 @@ st.markdown("""
         height: 0px !important;
     }
     
-    /* ดันเนื้อหาขึ้นไปให้สุดหน้าจอ */
+    /* ดันเนื้อหาขึ้นให้สุดหน้าจอ */
     .main .block-container {
         padding-top: 0rem !important;
         margin-top: -60px !important; 
@@ -26,49 +25,50 @@ st.markdown("""
 
     .main { background-color: #0f172a; }
     
-    /* บรรทัดที่ 1: Welcome (ทำให้เด่นขึ้นมาก) */
+    /* บรรทัดที่ 1: Welcome (ปรับให้ดู Minimal หรูหรา) */
     .line-1 {
-        color: #ffffff !important; /* เปลี่ยนเป็นสีขาวให้เด่น */
+        font-family: 'Montserrat', sans-serif;
+        color: #f8fafc !important; 
         text-align: center;
-        font-size: clamp(34px, 11vw, 50px);
-        margin-top: 45px;
+        font-size: clamp(28px, 9vw, 45px);
+        margin-top: 50px;
         margin-bottom: 5px; 
-        letter-spacing: 10px; /* เว้นระยะตัวอักษรให้ดูหรู */
+        letter-spacing: 12px; /* เว้นระยะให้ดูโปร่งและแพง */
         text-transform: uppercase;
-        font-weight: 800;
-        text-shadow: 2px 2px 10px rgba(255,255,255,0.3);
+        font-weight: 300;
+        opacity: 0.9;
     }
 
-    /* บรรทัดที่ 2: TRADING HOME (แก้ตัวหนังสือชิดกัน) */
+    /* บรรทัดที่ 2: TRADING HOME (ใช้ Font สไตล์ Sci-Fi/Trading ให้ดูเท่) */
     .line-2 {
-        font-family: 'Kanit', sans-serif;
+        font-family: 'Righteous', cursive;
         color: #fbbf24 !important;
-        font-weight: 900 !important;
         text-align: center;
-        font-size: clamp(55px, 17vw, 105px); 
-        margin-top: 10px;
-        margin-bottom: 15px; 
+        font-size: clamp(55px, 16vw, 110px); 
+        margin-top: 15px;
+        margin-bottom: 20px; 
         line-height: 1.1;
-        letter-spacing: 4px; /* เพิ่มระยะห่างระหว่างตัวอักษรไม่ให้เบียดกัน */
-        text-shadow: 6px 6px 15px rgba(0,0,0,0.8);
+        letter-spacing: 6px; /* เพิ่มระยะห่างตัวอักษรตามที่คุณต้องการ */
+        text-shadow: 0px 0px 20px rgba(251, 191, 36, 0.4); /* เพิ่มแสงเรืองรอง */
     }
 
-    /* บรรทัดที่ 3: For Milk (ปรับระยะห่างตามวงกลมสีแดง) */
+    /* บรรทัดที่ 3: For Milk (พริ้วไหวแต่ชัดเจน) */
     .line-3 {
         font-family: 'Dancing Script', cursive;
         color: #f8fafc !important;
         text-align: center;
-        font-size: clamp(50px, 14vw, 80px);
+        font-size: clamp(52px, 13vw, 85px);
         margin-top: 15px;
-        margin-bottom: 45px; /* เพิ่มระยะห่างจากรูปภาพด้านล่าง */
-        text-shadow: 5px 5px 12px rgba(251, 191, 36, 0.5);
+        margin-bottom: 50px; /* เว้นระยะจากรูปภาพตามที่คุณวงไว้ */
+        text-shadow: 4px 4px 10px rgba(0,0,0,0.5);
     }
 
-    /* ขยายขนาดหัวข้อ Subheader */
+    /* หัวข้อสถานะและทางลัด */
     h2, h3 { 
-        font-size: clamp(32px, 8vw, 45px) !important; 
+        font-size: clamp(30px, 7vw, 40px) !important; 
         color: #fbbf24 !important;
         font-weight: 800 !important;
+        font-family: 'Montserrat', sans-serif;
     }
 
     /* สไตล์ Metrics */
@@ -77,10 +77,7 @@ st.markdown("""
         font-size: 45px !important; 
         font-weight: 900 !important; 
     }
-    [data-testid="stMetricLabel"] { 
-        color: #fbbf24 !important; 
-        font-size: 22px !important; 
-    }
+    [data-testid="stMetricLabel"] { color: #fbbf24 !important; font-size: 22px !important; }
     [data-testid="stMetric"] {
         background-color: #1e293b;
         padding: 40px 20px;
@@ -89,40 +86,42 @@ st.markdown("""
         text-align: center;
     }
     
-    /* ปุ่มกดขนาดใหญ่ */
+    /* ปุ่มกด Giant Size */
     .stButton>button {
         width: 100%; 
         border-radius: 20px; 
-        height: 4.5em;
+        height: 4.8em;
         background-color: #1e293b; 
         color: #f8fafc;
         border: 2px solid #475569; 
         font-size: 30px !important;
         font-weight: 900 !important;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        font-family: 'Montserrat', sans-serif;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
     .stButton>button:hover { 
         border: 4px solid #fbbf24; 
         color: #fbbf24;
-        transform: translateY(-3px);
+        transform: scale(1.02);
     }
 
     .date-text {
         text-align: center; 
         color: #94a3b8; 
         font-size: clamp(22px, 5.5vw, 28px);
-        margin-top: 25px;
+        margin-top: 30px;
+        font-family: 'Montserrat', sans-serif;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนหัว 3 บรรทัด (ปรับปรุงตามที่แจ้ง)
+# 2. แสดงผลส่วนหัว 3 บรรทัด (ฟอนต์ใหม่ทั้งหมด)
 st.markdown('<p class="line-1">Welcome</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-2">TRADING HOME</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-3">For Milk</p>', unsafe_allow_html=True)
 
-# 3. รูปภาพ (ใช้ Column ช่วยจัดขนาด)
-col1, col2, col3 = st.columns([0.2, 5, 0.2]) 
+# 3. ส่วนรูปภาพ
+col1, col2, col3 = st.columns([0.1, 5, 0.1]) 
 with col2:
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80", use_container_width=True)
 
@@ -150,7 +149,7 @@ with m1: st.metric("SET (Thailand)", get_status('SET'))
 with m2: st.metric("US Market", get_status('US'))
 with m3: 
     st.markdown("""
-        <div style='background-color: #1e293b; padding: 30px; border-radius: 20px; border: 2px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 26px; font-weight: 900;'>
+        <div style='background-color: #1e293b; padding: 32px; border-radius: 20px; border: 2px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 26px; font-weight: 900;'>
             FOCUS TICKERS
         </div>
         """, unsafe_allow_html=True)
@@ -172,4 +171,4 @@ with r2c2:
     if st.button("🇺🇸 US Scanner"): st.switch_page("pages/3_US_Scanner.py")
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Trading Systems")
+st.caption("Por Piang Electric Plus Co., Ltd. | Trading Dashboard")
