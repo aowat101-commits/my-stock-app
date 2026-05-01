@@ -63,11 +63,11 @@ st.subheader("🚀 Quick Navigation")
 # แบ่งเป็น 2 แถว แถวละ 2 ปุ่ม เพื่อให้กดง่ายบนมือถือ
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
-
-with row1_col1:
+ with row1_col1:
     if st.button("📈 Charts Thai Stocks"):
-        # สมมติว่าไฟล์หน้า Charts หุ้นไทยชื่อ 2_Thai_Charts.py (ปรับชื่อตามจริงได้เลยครับ)
-        st.switch_page("pages/2_Thai_Charts.py")
+        # ตรวจสอบชื่อไฟล์ในเครื่องคุณอีกครั้ง
+        # หากไฟล์จริงชื่อ "2_Thai_Scanner.py" ก็ต้องเปลี่ยนเป็นชื่อนั้นครับ
+        st.switch_page("pages/ชื่อไฟล์จริงของคุณ.py")
 with row1_col2:
     if st.button("📊 Charts US Stocks"):
         st.switch_page("pages/4_US_Charts.py")
