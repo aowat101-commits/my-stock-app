@@ -20,66 +20,82 @@ st.markdown("""
     /* ดันเนื้อหาขึ้นไปให้สุดหน้าจอ */
     .main .block-container {
         padding-top: 0rem !important;
-        margin-top: -60px !important; 
+        margin-top: -65px !important; 
     }
 
     .main { background-color: #0f172a; }
     
-    /* สไตล์สำหรับคำว่า Welcome */
+    /* สไตล์สำหรับคำว่า Welcome (ขยายให้ใหญ่ขึ้น) */
     .welcome-text {
         color: #94a3b8 !important;
         text-align: center;
-        font-size: clamp(18px, 5vw, 28px);
-        margin-top: 20px;
+        font-size: clamp(22px, 6vw, 34px);
+        margin-top: 25px;
         margin-bottom: -15px;
-        letter-spacing: 3px;
+        letter-spacing: 4px;
         text-transform: uppercase;
     }
 
-    /* ปรับแต่งชื่อ TRADING HOME ให้ใหญ่และเด่นชัด */
+    /* ปรับแต่งชื่อ TRADING HOME ให้ใหญ่แบบตะโกนและเด่นชัด */
     .responsive-title {
         color: #fbbf24 !important;
-        font-weight: bold !important;
+        font-weight: 900 !important;
         text-align: center;
-        font-size: clamp(32px, 10vw, 56px); 
-        margin-bottom: -5px;
-        line-height: 1.1;
-        text-shadow: 3px 3px 6px rgba(0,0,0,0.4);
+        font-size: clamp(40px, 12vw, 72px); 
+        margin-bottom: -10px;
+        line-height: 1.0;
+        text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
     }
 
-    /* สไตล์พิเศษสำหรับ For Milk */
+    /* สไตล์พิเศษสำหรับ For Milk (ขยายให้ใหญ่และหวานขึ้น) */
     .for-milk-text {
         font-family: 'Dancing Script', cursive;
         color: #f8fafc !important;
         text-align: center;
-        font-size: clamp(28px, 7vw, 40px);
-        margin-top: 0px;
-        margin-bottom: 15px;
-        text-shadow: 2px 2px 4px rgba(251, 191, 36, 0.4);
+        font-size: clamp(36px, 9vw, 52px);
+        margin-top: 5px;
+        margin-bottom: 20px;
+        text-shadow: 3px 3px 6px rgba(251, 191, 36, 0.5);
     }
 
-    /* สไตล์ Metrics */
-    [data-testid="stMetricValue"] { color: #f8fafc !important; font-size: 26px !important; }
-    [data-testid="stMetricLabel"] { color: #fbbf24 !important; font-size: 16px !important; }
+    /* ขยายขนาด Subheader ต่างๆ */
+    h2, h3 { 
+        font-size: clamp(24px, 5vw, 32px) !important; 
+        color: #fbbf24 !important;
+    }
+
+    /* สไตล์ Metrics (ปรับตัวเลขให้ใหญ่ขึ้น) */
+    [data-testid="stMetricValue"] { color: #f8fafc !important; font-size: 32px !important; font-weight: bold !important; }
+    [data-testid="stMetricLabel"] { color: #fbbf24 !important; font-size: 18px !important; }
     [data-testid="stMetric"] {
         background-color: #1e293b;
-        padding: 25px;
-        border-radius: 12px;
+        padding: 30px;
+        border-radius: 15px;
         border: 1px solid #475569;
         text-align: center;
     }
     
+    /* ปรับขนาดปุ่มกดให้ใหญ่สะใจ */
     .stButton>button {
-        width: 100%; border-radius: 10px; height: 3.8em;
+        width: 100%; border-radius: 12px; height: 4.2em;
         background-color: #1e293b; color: #f8fafc;
-        border: 1px solid #475569; font-size: 18px;
-        font-weight: bold;
+        border: 1px solid #475569; 
+        font-size: 22px !important;
+        font-weight: 900 !important;
     }
-    .stButton>button:hover { border: 1px solid #fbbf24; color: #fbbf24; }
+    .stButton>button:hover { border: 2px solid #fbbf24; color: #fbbf24; }
+
+    /* ปรับขนาดวันที่ */
+    .date-text {
+        text-align: center; 
+        color: #94a3b8; 
+        font-size: clamp(16px, 4vw, 20px);
+        margin-top: 15px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. ส่วนหัว: Welcome -> TRADING HOME -> For Milk
+# 2. ส่วนหัว: Welcome -> TRADING HOME -> For Milk (ขนาดใหญ่พิเศษ)
 st.markdown('<p class="welcome-text">Welcome</p>', unsafe_allow_html=True)
 st.markdown('<p class="responsive-title">TRADING HOME</p>', unsafe_allow_html=True)
 st.markdown('<p class="for-milk-text">For Milk</p>', unsafe_allow_html=True)
@@ -92,7 +108,7 @@ with col2:
 # 4. แสดงวันที่และเวลา
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
-st.write(f"<p style='text-align: center; color: #94a3b8; margin-top: 10px;'>📅 {now.strftime('%A, %d %B %Y')} | 🕒 {now.strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
+st.markdown(f'<p class="date-text">📅 {now.strftime("%A, %d %B %Y")} | 🕒 {now.strftime("%H:%M:%S")}</p>', unsafe_allow_html=True)
 st.write("---")
 
 # 5. Market Status
@@ -113,14 +129,14 @@ with m1: st.metric("SET (Thailand)", get_status('SET'))
 with m2: st.metric("US Market", get_status('US'))
 with m3: 
     st.markdown("""
-        <div style='background-color: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 18px; font-weight: bold;'>
+        <div style='background-color: #1e293b; padding: 25px; border-radius: 12px; border: 1px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 20px; font-weight: 900;'>
             FOCUS TICKERS
         </div>
         """, unsafe_allow_html=True)
 
 st.write("##")
 
-# 6. Quick Navigation
+# 6. Quick Navigation (ปุ่มใหญ่พิเศษ)
 st.subheader("🚀 Quick Navigation")
 r1c1, r1c2 = st.columns(2)
 r2c1, r2c2 = st.columns(2)
