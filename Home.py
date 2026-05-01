@@ -2,124 +2,76 @@ import streamlit as st
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอ
+# 1. บังคับตั้งค่าหน้าจอใหม่
 st.set_page_config(layout="wide", page_title="TRADING HOME", page_icon="📈") 
 
+# 2. CSS ชุดใหม่ (เน้นความหนาและระยะห่างที่ถูกต้อง)
 st.markdown("""
     <style>
-    /* นำเข้าฟอนต์ที่อ่านง่ายและเท่ */
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;800&family=Kanit:wght@900&family=Dancing+Script:wght@700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Kanit:wght@900&family=Dancing+Script:wght@700&display=swap');
 
-    /* ซ่อน Header */
-    [data-testid="stHeader"], header, .stAppHeader {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    
-    .main .block-container {
-        padding-top: 0rem !important;
-        margin-top: -65px !important; 
-    }
-
+    [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
+    .main .block-container { padding-top: 2rem !important; }
     .main { background-color: #0f172a; }
     
-    /* บรรทัดที่ 1: Welcome (เด่นและชัดเจน) */
     .line-1 {
         font-family: 'Montserrat', sans-serif;
         color: #ffffff !important; 
         text-align: center;
-        font-size: clamp(30px, 9vw, 48px);
-        margin-top: 50px;
-        margin-bottom: 10px; 
+        font-size: clamp(30px, 8vw, 45px);
         letter-spacing: 10px;
         text-transform: uppercase;
-        font-weight: 800;
+        margin-bottom: 5px;
     }
-
-    /* บรรทัดที่ 2: TRADING HOME (ปรับให้อ่านง่ายขึ้นตามฟีดแบ็ก) */
     .line-2 {
         font-family: 'Kanit', sans-serif !important; 
         color: #fbbf24 !important;
-        font-weight: 900 !important;
         text-align: center;
-        font-size: clamp(55px, 17vw, 110px); 
-        margin-top: 15px !important;
-        margin-bottom: 20px !important; 
-        line-height: 1.1 !important;
-        letter-spacing: 2px !important; /* ปรับให้ชิดกันนิดนึงเพื่อให้มองเป็นคำเดียวง่ายขึ้น */
-        text-shadow: 4px 4px 12px rgba(0,0,0,0.6);
+        font-size: clamp(50px, 15vw, 100px); 
+        margin-bottom: 10px;
+        letter-spacing: 2px;
+        font-weight: 900;
+        text-shadow: 4px 4px 10px rgba(0,0,0,0.5);
     }
-
-    /* บรรทัดที่ 3: For Milk (เว้นระยะสวยๆ) */
     .line-3 {
         font-family: 'Dancing Script', cursive;
         color: #f8fafc !important;
         text-align: center;
-        font-size: clamp(52px, 14vw, 90px);
-        margin-top: 20px;
-        margin-bottom: 60px; /* เว้นระยะจากรูปภาพตามที่คุณต้องการ */
-        text-shadow: 4px 4px 10px rgba(0,0,0,0.5);
+        font-size: clamp(45px, 12vw, 80px);
+        margin-bottom: 40px;
     }
-
-    /* Metrics & Buttons */
-    [data-testid="stMetricValue"] { color: #f8fafc !important; font-size: 45px !important; font-weight: 900 !important; }
-    [data-testid="stMetricLabel"] { color: #fbbf24 !important; font-size: 22px !important; }
-    [data-testid="stMetric"] { background-color: #1e293b; padding: 40px 20px; border-radius: 25px; border: 2px solid #334155; text-align: center; }
     
+    /* ปรับปุ่มให้กลับมาเป็น 2 คอลัมน์สวยๆ เหมือนเดิม */
     .stButton>button {
-        width: 100%; border-radius: 20px; height: 4.8em;
+        width: 100%; border-radius: 15px; height: 4em;
         background-color: #1e293b; color: #f8fafc;
-        border: 2px solid #475569; font-size: 30px !important;
+        border: 2px solid #475569; font-size: 22px !important;
         font-weight: 900 !important;
+        margin-bottom: 10px;
     }
-    
-    .date-text { text-align: center; color: #94a3b8; font-size: clamp(22px, 5.5vw, 28px); margin-top: 30px; }
     </style>
     """, unsafe_allow_html=True)
 
-# แสดงผลส่วนหัว 3 บรรทัด
+# แสดงหัวข้อ
 st.markdown('<p class="line-1">Welcome</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-2">TRADING HOME</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-3">For Milk</p>', unsafe_allow_html=True)
 
-# ส่วนรูปภาพ
-col1, col2, col3 = st.columns([0.1, 5, 0.1]) 
-with col2:
-    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80", use_container_width=True)
+# รูปภาพ
+st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80", use_container_width=True)
 
-# วันที่และเวลา
+# วันที่
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
-st.markdown(f'<p class="date-text">📅 {now.strftime("%A, %d %B %Y")} | 🕒 {now.strftime("%H:%M:%S")}</p>', unsafe_allow_html=True)
+st.markdown(f'<p style="text-align: center; color: #94a3b8; font-size: 20px;">📅 {now.strftime("%A, %d %B %Y")} | 🕒 {now.strftime("%H:%M:%S")}</p>', unsafe_allow_html=True)
+
 st.write("---")
 
-# Market Status
-st.subheader("🌐 Market Status")
-m1, m2, m3 = st.columns(3)
-def get_status(market):
-    now_th = datetime.now(tz_th)
-    if now_th.weekday() >= 5: return "CLOSED 🔴"
-    h = now_th.hour
-    if market == 'SET':
-        t = h * 100 + now_th.minute
-        return "OPENING 🟢" if (1000 <= t <= 1230) or (1430 <= t <= 1630) else "CLOSED 🔴"
-    else: return "OPENING 🟢" if (h >= 20) or (h <= 4) else "CLOSED 🔴"
-
-with m1: st.metric("SET (Thailand)", get_status('SET'))
-with m2: st.metric("US Market", get_status('US'))
-with m3: st.markdown('<div style="background-color: #1e293b; padding: 32px; border-radius: 20px; border: 2px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 26px; font-weight: 900;">FOCUS TICKERS</div>', unsafe_allow_html=True)
-
-st.write("##")
-st.subheader("🚀 Quick Navigation")
-r1c1, r1c2 = st.columns(2)
-r2c1, r2c2 = st.columns(2)
-with r1c1:
+# ปุ่มกด (ใช้ Columns เพื่อบังคับให้แบ่งฝั่ง ไม่ให้เป็นแถวเดี่ยว)
+col1, col2 = st.columns(2)
+with col1:
     if st.button("📊 Charts"): st.switch_page("pages/2_Charts.py")
-with r1c2:
-    if st.button("📈 US Charts"): st.switch_page("pages/4_US_Charts.py")
-with r2c1:
     if st.button("🔍 Scanner"): st.switch_page("pages/1_Scanner.py")
-with r2c2:
+with col2:
+    if st.button("📈 US Charts"): st.switch_page("pages/4_US_Charts.py")
     if st.button("🇺🇸 US Scanner"): st.switch_page("pages/3_US_Scanner.py")
-st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Trading Systems")
