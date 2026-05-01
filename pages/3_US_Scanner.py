@@ -5,8 +5,8 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์
-st.set_page_config(page_title="US Stocks Monitor", layout="wide")
+# 1. ตั้งค่าหน้าจอและสไตล์ (เน้นความเรียบง่ายและตัวหนังสือปกติ)
+st.set_page_config(page_title="US Broad Market Monitor", layout="wide")
 
 st.markdown("""
     <style>
@@ -15,7 +15,6 @@ st.markdown("""
         background-color: #1e293b; color: #fbbf24; padding: 10px; border-radius: 6px;
         text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #d97706;
     }
-    /* ปรับหัวตารางและตัวเลขให้เป็นตัวธรรมดา (Normal Weight) */
     [data-testid="stDataFrame"] th { 
         background-color: #0f172a !important; 
         color: #fbbf24 !important; 
@@ -24,15 +23,28 @@ st.markdown("""
         font-weight: normal !important;
     }
     [data-testid="stDataFrame"] td { 
-        font-size: 12px !important; 
+        font-size: 11px !important; 
         text-align: center !important; 
         font-weight: normal !important; 
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้นสหรัฐฯ
-us_tickers = ['IREN', 'IONQ', 'SMX', 'ONDS', 'TSLA', 'NVDA', 'AAPL', 'AMD', 'MARA', 'RIOT']
+# 2. รายชื่อหุ้นสหรัฐฯ แบบครอบคลุม (Tech, AI, Energy, Crypto, Index ETF)
+us_full_list = [
+    # กลุ่มที่คุณวิเคราะห์ (Quantum & AI)
+    'IONQ', 'IREN', 'EOSE', 'SMX', 'ONDS', 'PLTR', 'SOUN', 'BBAI', 'RGTI',
+    # กลุ่ม Semiconductor (ชิปเซ็ต)
+    'NVDA', 'AMD', 'TSM', 'INTC', 'ARM', 'MU', 'AVGO', 'ASML',
+    # กลุ่ม Big Tech (Magnificent 7)
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA',
+    # กลุ่ม Crypto Mining & Blockchain
+    'MARA', 'RIOT', 'CLSK', 'HIVE', 'COIN', 'MSTR',
+    # กลุ่มพลังงานและอุตสาหกรรม
+    'XOM', 'CVX', 'CAT', 'GE', 'BA',
+    # ดัชนีและ ETF สำคัญ
+    'SPY', 'QQQ', 'SOXX', 'BITO', 'BTC-USD', 'ETH-USD'
+]
 
 # 3. ฟังก์ชันคำนวณ HMA 30
 def get_hma(series, length):
@@ -44,7 +56,7 @@ def get_hma(series, length):
     return wma(raw_hma, sqrt_length)
 
 # 4. ฟังก์ชันค้นหาสัญญาณล่าสุดพร้อม % Change
-def get_us_signal_detailed(df, ticker):
+def get_us_signal_broad(df, ticker):
     if len(df) < 35: return None
     tz_th = pytz.timezone('Asia/Bangkok')
     
@@ -56,7 +68,7 @@ def get_us_signal_detailed(df, ticker):
     if not switches.empty:
         last_sig = switches.iloc[-1]
         
-        # คำนวณ % Change ของแท่งที่เกิดสัญญาณเทียบกับแท่งก่อนหน้า
+        # คำนวณ % Change เทียบแท่งก่อนหน้า
         prev_close = df.shift(1).loc[last_sig.name, 'Close']
         pct_change = ((last_sig['Close'] - prev_close) / prev_close) * 100 if prev_close != 0 else 0
         
@@ -74,37 +86,39 @@ def get_us_signal_detailed(df, ticker):
     return None
 
 # 5. ส่วนหัวและปุ่มรีเฟรช
-st.subheader("🇺🇸 US Market Monitor (Thai Time)")
+st.subheader("🇺🇸 US Broad Market Scanner (Thai Time)")
 
-if st.button("🔄 Refresh US Market", use_container_width=True):
+if st.button("🔄 Refresh All US Market", use_container_width=True):
     st.rerun()
 
 # 6. Dashboard Runtime
 @st.fragment(run_every="5m")
-def us_dashboard_v3():
+def us_broad_dashboard():
     now_th = datetime.now(pytz.timezone('Asia/Bangkok')).strftime("%H:%M:%S")
-    st.markdown(f'<div class="time-status">🇹🇭 Thai Time: {now_th} | สัญญาณล่าสุดพร้อม % เปลี่ยนแปลง</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🇹🇭 Thai Time: {now_th} | สแกนหุ้น US แบบครอบคลุม 40+ ตัว</div>', unsafe_allow_html=True)
     
     results = []
     bar = st.progress(0)
     
-    for i, t in enumerate(us_tickers):
+    total = len(us_full_list)
+    for i, t in enumerate(us_full_list):
         try:
             stock = yf.Ticker(t)
+            # ดึงข้อมูลย้อนหลัง 20 วัน เพื่อให้คำนวณ HMA ได้แม่นยำ
             hist = stock.history(period="20d", interval="1h")
             if not hist.empty:
-                res = get_us_signal_detailed(hist, t)
+                res = get_us_signal_broad(hist, t)
                 if res: results.append(res)
         except: continue
-        bar.progress((i + 1) / len(us_tickers))
+        bar.progress((i + 1) / total)
     
     bar.empty()
 
     if results:
+        # เรียงตามความสดใหม่ของสัญญาณ
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False)
         
         def style_row(row):
-            # ใช้สีเพื่อแยกสัญญาณ แต่รักษาความหนาตัวอักษรเป็นปกติ (Normal)
             color = '#10b981' if "BUY" in row['Signal'] else '#ef4444'
             return [f'color: {color}; font-weight: normal;'] * len(row)
 
@@ -119,7 +133,7 @@ def us_dashboard_v3():
                 "เวลาไทย": st.column_config.TextColumn("เวลาไทย", width=80),
                 "วันที่": st.column_config.TextColumn("วันที่", width=55),
             },
-            use_container_width=True, height=500, hide_index=True
+            use_container_width=True, height=750, hide_index=True
         )
 
-us_dashboard_v3()
+us_broad_dashboard()
