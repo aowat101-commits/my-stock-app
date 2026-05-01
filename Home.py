@@ -38,15 +38,16 @@ st.markdown("""
 
     /* บรรทัดที่ 2: TRADING HOME (บังคับใช้ Righteous) */
     .line-2 {
-        font-family: 'Righteous', cursive !important; /* บังคับใช้ฟอนต์นี้ */
+        font-family: 'Kanit', sans-serif !important; 
         color: #fbbf24 !important;
         text-align: center;
-        font-size: clamp(55px, 17vw, 115px); 
-        margin-top: 20px !important; /* เพิ่มระยะห่างจากบรรทัดบน */
-        margin-bottom: 25px !important; /* เพิ่มระยะห่างจากบรรทัดล่าง */
-        line-height: 1.2 !important;
-        letter-spacing: 6px !important; /* เว้นระยะตัวอักษรไม่ให้เบียด */
-        text-shadow: 0px 0px 20px rgba(251, 191, 36, 0.4);
+        font-size: clamp(50px, 16vw, 100px); 
+        margin-top: 10px !important;
+        margin-bottom: 15px !important; 
+        line-height: 1.1 !important;
+        letter-spacing: 2px !important; /* ลดระยะห่างลงให้อ่านง่ายขึ้น */
+        font-weight: 900 !important; /* เพิ่มความหนา */
+        text-shadow: 3px 3px 10px rgba(0,0,0,0.5);
     }
 
     /* บรรทัดที่ 3: For Milk */
