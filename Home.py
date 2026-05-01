@@ -2,124 +2,79 @@ import streamlit as st
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอ
+# 1. ตั้งค่าหน้าจอสำหรับโทรศัพท์ (Wide Mode)
 st.set_page_config(layout="wide", page_title="TRADING HOME", page_icon="📈") 
 
 st.markdown("""
     <style>
-    /* นำเข้าฟอนต์ที่อ่านง่ายและเท่ */
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;800&family=Kanit:wght@900&family=Dancing+Script:wght@700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Kanit:wght@900&family=Dancing+Script:wght@700&display=swap');
 
-    /* ซ่อน Header */
-    [data-testid="stHeader"], header, .stAppHeader {
+    /* ซ่อน Header และ Sidebar เพื่อคืนพื้นที่หน้าจอโทรศัพท์ */
+    [data-testid="stHeader"], header, .stAppHeader, [data-testid="stSidebar"], .stSidebar {
         display: none !important;
         visibility: hidden !important;
     }
     
+    /* จัดเนื้อหาให้อยู่ตรงกลางหน้าจอ */
     .main .block-container {
-        padding-top: 0rem !important;
-        margin-top: -65px !important; 
+        max-width: 900px !important; 
+        margin: 0 auto !important;
+        padding-top: 1rem !important;
     }
 
     .main { background-color: #0f172a; }
     
-    /* บรรทัดที่ 1: Welcome (เด่นและชัดเจน) */
-    .line-1 {
-        font-family: 'Montserrat', sans-serif;
-        color: #ffffff !important; 
-        text-align: center;
-        font-size: clamp(30px, 9vw, 48px);
-        margin-top: 50px;
-        margin-bottom: 10px; 
-        letter-spacing: 10px;
-        text-transform: uppercase;
-        font-weight: 800;
-    }
+    /* สไตล์ตัวหนังสือ 3 บรรทัดบน (เน้นใหญ่และห่างตามที่คุณต้องการ) */
+    .line-1 { font-family: 'Montserrat', sans-serif; color: #ffffff !important; text-align: center; font-size: clamp(32px, 9vw, 48px); margin-top: 40px; margin-bottom: 5px; letter-spacing: 10px; text-transform: uppercase; font-weight: 800; }
+    .line-2 { font-family: 'Kanit', sans-serif !important; color: #fbbf24 !important; text-align: center; font-size: clamp(55px, 17vw, 115px); margin-top: 10px; margin-bottom: 15px; line-height: 1.1; letter-spacing: 2px; font-weight: 900; text-shadow: 4px 4px 12px rgba(0,0,0,0.6); }
+    .line-3 { font-family: 'Dancing Script', cursive; color: #f8fafc !important; text-align: center; font-size: clamp(52px, 14vw, 95px); margin-bottom: 55px; text-shadow: 4px 4px 10px rgba(0,0,0,0.5); }
 
-    /* บรรทัดที่ 2: TRADING HOME (ปรับให้อ่านง่ายขึ้นตามฟีดแบ็ก) */
-    .line-2 {
-        font-family: 'Kanit', sans-serif !important; 
-        color: #fbbf24 !important;
-        font-weight: 900 !important;
-        text-align: center;
-        font-size: clamp(55px, 17vw, 110px); 
-        margin-top: 15px !important;
-        margin-bottom: 20px !important; 
-        line-height: 1.1 !important;
-        letter-spacing: 2px !important; /* ปรับให้ชิดกันนิดนึงเพื่อให้มองเป็นคำเดียวง่ายขึ้น */
-        text-shadow: 4px 4px 12px rgba(0,0,0,0.6);
-    }
-
-    /* บรรทัดที่ 3: For Milk (เว้นระยะสวยๆ) */
-    .line-3 {
-        font-family: 'Dancing Script', cursive;
-        color: #f8fafc !important;
-        text-align: center;
-        font-size: clamp(52px, 14vw, 90px);
-        margin-top: 20px;
-        margin-bottom: 60px; /* เว้นระยะจากรูปภาพตามที่คุณต้องการ */
-        text-shadow: 4px 4px 10px rgba(0,0,0,0.5);
-    }
-
-    /* Metrics & Buttons */
-    [data-testid="stMetricValue"] { color: #f8fafc !important; font-size: 45px !important; font-weight: 900 !important; }
-    [data-testid="stMetricLabel"] { color: #fbbf24 !important; font-size: 22px !important; }
-    [data-testid="stMetric"] { background-color: #1e293b; padding: 40px 20px; border-radius: 25px; border: 2px solid #334155; text-align: center; }
-    
+    /* ปุ่มกด (ขยายใหญ่พิเศษสำหรับนิ้วสัมผัสในโทรศัพท์) */
     .stButton>button {
-        width: 100%; border-radius: 20px; height: 4.8em;
-        background-color: #1e293b; color: #f8fafc;
-        border: 2px solid #475569; font-size: 30px !important;
+        width: 100% !important;
+        border-radius: 20px !important;
+        height: 4.8em !important;
+        background-color: #1e293b !important;
+        color: #f8fafc !important;
+        border: 2px solid #475569 !important;
+        font-size: 28px !important; 
         font-weight: 900 !important;
+        margin-bottom: 10px !important;
     }
+    .stButton>button:hover { border-color: #fbbf24 !important; color: #fbbf24 !important; }
     
-    .date-text { text-align: center; color: #94a3b8; font-size: clamp(22px, 5.5vw, 28px); margin-top: 30px; }
+    .date-text { text-align: center; color: #94a3b8; font-size: clamp(20px, 5.5vw, 26px); margin-top: 25px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# แสดงผลส่วนหัว 3 บรรทัด
+# --- ส่วนหัว ---
 st.markdown('<p class="line-1">Welcome</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-2">TRADING HOME</p>', unsafe_allow_html=True)
 st.markdown('<p class="line-3">For Milk</p>', unsafe_allow_html=True)
 
-# ส่วนรูปภาพ
-col1, col2, col3 = st.columns([0.1, 5, 0.1]) 
-with col2:
-    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80", use_container_width=True)
+# รูปภาพกราฟ
+st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80", use_container_width=True)
 
-# วันที่และเวลา
+# วันที่และเวลา (Timezone Bangkok)
 tz_th = pytz.timezone('Asia/Bangkok')
 now = datetime.now(tz_th)
 st.markdown(f'<p class="date-text">📅 {now.strftime("%A, %d %B %Y")} | 🕒 {now.strftime("%H:%M:%S")}</p>', unsafe_allow_html=True)
+
 st.write("---")
-
-# Market Status
-st.subheader("🌐 Market Status")
-m1, m2, m3 = st.columns(3)
-def get_status(market):
-    now_th = datetime.now(tz_th)
-    if now_th.weekday() >= 5: return "CLOSED 🔴"
-    h = now_th.hour
-    if market == 'SET':
-        t = h * 100 + now_th.minute
-        return "OPENING 🟢" if (1000 <= t <= 1230) or (1430 <= t <= 1630) else "CLOSED 🔴"
-    else: return "OPENING 🟢" if (h >= 20) or (h <= 4) else "CLOSED 🔴"
-
-with m1: st.metric("SET (Thailand)", get_status('SET'))
-with m2: st.metric("US Market", get_status('US'))
-with m3: st.markdown('<div style="background-color: #1e293b; padding: 32px; border-radius: 20px; border: 2px solid #fbbf24; text-align: center; color: #fbbf24; font-size: 26px; font-weight: 900;">FOCUS TICKERS</div>', unsafe_allow_html=True)
-
-st.write("##")
 st.subheader("🚀 Quick Navigation")
-r1c1, r1c2 = st.columns(2)
-r2c1, r2c2 = st.columns(2)
-with r1c1:
-    if st.button("📊 Charts"): st.switch_page("pages/2_Charts.py")
-with r1c2:
-    if st.button("📈 US Charts"): st.switch_page("pages/4_US_Charts.py")
-with r2c1:
-    if st.button("🔍 Scanner"): st.switch_page("pages/1_Scanner.py")
-with r2c2:
-    if st.button("🇺🇸 US Scanner"): st.switch_page("pages/3_US_Scanner.py")
+
+# 🚨 แก้ไขชื่อไฟล์ให้ตรงกับที่คุณตั้งไว้ในโฟลเดอร์ pages 🚨
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("📊 Charts"):
+        st.switch_page("pages/Thai_Charts.py") # แก้จาก 2_Charts.py เป็น Thai_Charts.py
+    if st.button("🔍 Scanner"):
+        st.switch_page("pages/Thai_Scan.py")   # แก้จาก 1_Scanner.py เป็น Thai_Scan.py
+with c2:
+    if st.button("📈 US Charts"):
+        st.switch_page("pages/US_Charts.py")   # แก้จาก 4_US_Charts.py เป็น US_Charts.py
+    if st.button("🇺🇸 US Scanner"):
+        st.switch_page("pages/US_Scan.py")     # แก้จาก 3_US_Scanner.py เป็น US_Scan.py
+
 st.write("---")
 st.caption("Por Piang Electric Plus Co., Ltd. | Trading Systems")
