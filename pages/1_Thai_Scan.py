@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import pandas_ta as ta
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์ Loft
@@ -48,13 +48,14 @@ def get_wavetrend(df, n1=10, n2=21):
     wt2 = ta.sma(wt1, length=4)
     return wt1, wt2
 
-# 4. ฟังก์ชันวิเคราะห์ Guardian Swing Logic
-def analyze_guardian(ticker):
+# 4. ฟังก์ชันวิเคราะห์ Guardian Swing (เช็คย้อนหลัง 5 วัน)
+def analyze_guardian_history(ticker):
     try:
-        df = yf.download(ticker, period="20d", interval="1h", progress=False)
+        # ดึงข้อมูล 1 ชม. ย้อนหลังเพื่อให้ครอบคลุม 5 วันทำการ (ประมาณ 10 วันปฏิทิน)
+        df = yf.download(ticker, period="10d", interval="1h", progress=False)
         if len(df) < 40: return None
 
-        # คำนวณ Indicators
+        tz = pytz.timezone('Asia/Bangkok')
         df['ema8'] = ta.ema(df['Close'], length=8)
         df['ema20'] = ta.ema(df['Close'], length=20)
         df['hma30'] = get_hma(df['Close'], 30)
@@ -62,87 +63,86 @@ def analyze_guardian(ticker):
         wt1, wt2 = get_wavetrend(df)
         df['wt1'], df['wt2'] = wt1, wt2
 
-        last = df.iloc[-1]
-        prev = df.iloc[-2]
-
-        # เงื่อนไข Trend & Momentum
-        is_above_ema = last['Close'] > last['ema8'] and last['Close'] > last['ema20']
-        is_hull_green = last['hma30'] > prev['hma30']
+        # หาสัญญาณย้อนหลัง
+        df['trend_up'] = df['hma30'] > df['hma30'].shift(1)
+        df['above_ema'] = (df['Close'] > df['ema8']) & (df['Close'] > df['ema20'])
+        df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
+        df['vol_ok'] = df['Volume'] > (df['vma5'] * 1.5)
         
-        # เงื่อนไข WaveTrend (Cross Up Below -53)
-        wt_cross_up = prev['wt1'] < prev['wt2'] and last['wt1'] > last['wt2']
-        wt_oversold = last['wt1'] < -53
+        # เงื่อนไข BUY
+        df['buy_signal'] = (df['above_ema']) & (df['trend_up']) & (df['wt_cross_up']) & (df['wt1'] < -53) & (df['vol_ok'])
         
-        # เงื่อนไข Volume (มากกว่า VMA5 1.5 เท่า)
-        vol_confirmation = last['Volume'] > (last['vma5'] * 1.5)
-
-        # ตัดสินใจ Signal
-        signal = "WAIT"
-        action_note = "-"
+        # เงื่อนไข EXIT
+        df['exit_signal'] = (df['Close'] < df['ema20']) | (df['hma30'] < df['hma30'].shift(1))
         
-        if is_above_ema and is_hull_green and wt_cross_up and wt_oversold and vol_confirmation:
-            signal = "🚀 BUY"
-            action_note = "Strong Volume Confirmation"
-        elif last['wt1'] > 53 and prev['wt1'] > prev['wt2'] and last['wt1'] < last['wt2']:
-            signal = "💰 TAKE PROFIT"
-            action_note = "WT Red Cross Over 53"
-        elif last['Close'] < last['ema20'] or last['hma30'] < prev['hma30']:
-            signal = "🔻 EXIT"
-            action_note = "Protect Profit/Capital"
-
-        return {
-            "Ticker": ticker.replace('.BK', ''),
-            "Price": last['Close'],
-            "Signal": signal,
-            "Note": action_note,
-            "WT": round(last['wt1'], 2),
-            "Vol/VMA5": round(last['Volume'] / last['vma5'], 2)
-        }
+        # ค้นหาแถวที่มีสัญญาณในช่วง 5 วันล่าสุด
+        recent_cutoff = datetime.now(tz) - timedelta(days=5)
+        signals = df[df['buy_signal'] | (df['wt1'] > 53)].copy()
+        
+        if not signals.empty:
+            last_sig = signals.iloc[-1]
+            sig_time = last_sig.name.astimezone(tz)
+            
+            if sig_time > recent_cutoff:
+                status = "🚀 BUY" if last_sig['buy_signal'] else "💰 TP ZONE"
+                return {
+                    "Ticker": ticker.replace('.BK', ''),
+                    "Price": last_sig['Close'],
+                    "Signal": status,
+                    "Time": sig_time.strftime("%d/%m %H:%M"),
+                    "WT": round(last_sig['wt1'], 2),
+                    "Vol_Force": round(last_sig['Volume'] / last_sig['vma5'], 2),
+                    "raw_time": sig_time
+                }
     except: return None
+    return None
 
-# 5. UI และ Dashboard
-st.subheader("🛡️ The Guardian Swing: High Confirmation Scan")
+# 5. ส่วนหัวและปุ่มรีเฟรช
+st.subheader("🛡️ Guardian Swing: 5-Day Historical Signal Scan")
 
+if st.button("🔄 Force Refresh Scan Now", use_container_width=True):
+    st.rerun()
+
+# 6. Dashboard อัปเดตออโต้ทุก 10 นาที
 @st.fragment(run_every="10m")
-def guardian_runtime():
+def dashboard_runtime():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Sync: {datetime.now(tz).strftime("%H:%M:%S")} | Logic: EMA + Hull + WT + Vol</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | Looking back 5 days</div>', unsafe_allow_html=True)
     
     results = []
-    bar = st.progress(0, text="กำลังวิเคราะห์หุ้นตามสูตร The Guardian Swing...")
+    bar = st.progress(0, text="กำลังสแกนหาจังหวะ Guardian Swing ย้อนหลัง 5 วัน...")
     
     total = len(full_scan_list)
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian(t)
+        res = analyze_guardian_history(t)
         if res: results.append(res)
         bar.progress((i + 1) / total)
     bar.empty()
 
     if results:
-        df = pd.DataFrame(results)
-        # แสดงเฉพาะหุ้นที่มีสัญญาณ BUY, EXIT หรือ TAKE PROFIT
-        active_df = df[df['Signal'] != "WAIT"].sort_values(by="Signal")
+        # เรียงตามความใหม่ล่าสุดและคัด 30 แถว
+        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
-        if active_df.empty:
-            st.info("🔎 ขณะนี้ยังไม่มีหุ้นที่ครบเงื่อนไข Strong Buy")
-        else:
-            def style_signal(row):
-                if "BUY" in row['Signal']: color = '#10b981'
-                elif "EXIT" in row['Signal']: color = '#ef4444'
-                else: color = '#fbbf24'
-                return [f'color: {color}; font-weight: bold;'] * len(row)
+        def style_signal(row):
+            color = '#10b981' if "BUY" in row['Signal'] else '#fbbf24'
+            return [f'color: {color}; font-weight: bold;'] * len(row)
 
-            st.dataframe(
-                active_df.style.apply(style_signal, axis=1).format({"Price": "{:,.2f}"}),
-                column_config={
-                    "Ticker": st.column_config.TextColumn("Ticker", width=80),
-                    "Price": st.column_config.NumberColumn("Price", width=70),
-                    "Signal": st.column_config.TextColumn("Action Signal", width=120),
-                    "Note": st.column_config.TextColumn("Reason", width=180),
-                    "WT": st.column_config.NumberColumn("WT Value", width=70),
-                    "Vol/VMA5": st.column_config.NumberColumn("Vol Force", width=80),
-                },
-                use_container_width=True, height=500, hide_index=True
-            )
+        st.dataframe(
+            df.drop(columns=['raw_time']).style.apply(style_signal, axis=1)
+            .format({"Price": "{:,.2f}", "Vol_Force": "{:.2f}x"}),
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", width=80),
+                "Price": st.column_config.NumberColumn("Price", width=70),
+                "Signal": st.column_config.TextColumn("Signal", width=100),
+                "Time": st.column_config.TextColumn("Date/Time", width=100),
+                "WT": st.column_config.NumberColumn("WT", width=60),
+                "Vol_Force": st.column_config.TextColumn("Vol Force", width=80),
+            },
+            use_container_width=True, height=650, hide_index=True
+        )
+    else:
+        st.info("🔎 ไม่พบสัญญาณในช่วง 5 วันที่ผ่านมา")
 
-guardian_runtime()
+dashboard_runtime()
+st.write("---")
+st.caption("Por Piang Electric Plus Co., Ltd. | Guardian Swing Strategy")
