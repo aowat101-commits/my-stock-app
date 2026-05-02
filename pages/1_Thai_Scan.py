@@ -12,12 +12,14 @@ st.set_page_config(page_title="Guardian Mobile", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
-    /* บีบตารางให้เล็กที่สุดแต่ยังอ่านออก */
+    /* บีบตารางให้เล็กที่สุดแต่ยังอ่านออกและตัดระบบ Sort หัวตารางออก */
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { 
-        font-size: 10.5px !important; padding: 2px !important; 
+        font-size: 10.5px !important; padding: 2px !important;
     }
+    /* ซ่อนไอคอน Sort เพื่อความสะอาดตาบนมือถือ */
+    button[title="Sort column"] { display: none !important; }
+    
     .stDataFrame { height: 420px; }
-    /* หน้าจอ Pop-up วิเคราะห์เต็มจอ */
     .mobile-overlay {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
         background-color: #0f172a; z-index: 100000; overflow-y: auto; padding: 10px;
@@ -61,7 +63,7 @@ def get_slim_test_20():
     return pd.DataFrame(results)
 
 # --- 4. หน้าจอหลัก (Main Interface) ---
-st.subheader("🛰️ Guardian: Mobile Alpha (Sort & Color Fix)")
+st.subheader("🛰️ Guardian: Mobile Alpha (Color Fixed)")
 
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
@@ -76,22 +78,18 @@ def apply_color_logic(val):
         return f'color: {color}'
     return 'color: #ffffff'
 
-# แสดงตารางพร้อมระบบ Sort และการเปลี่ยนสี
+# แสดงตารางพร้อมการเปลี่ยนสี (ใช้ .map แทน .applymap เพื่อแก้ Error)
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
         "Price": "{:.2f}",
         "Chg%": "{:.2f}"
-    }).applymap(apply_color_logic, subset=['Price', 'Chg%']),
+    }).map(apply_color_logic, subset=['Price', 'Chg%']),
     use_container_width=True, 
-    hide_index=True,
-    column_config={
-        "Ticker": st.column_config.TextColumn("Ticker", help="คลิกหัวเพื่อ Sort"),
-        "Chg%": st.column_config.NumberColumn("Chg%", format="%.2f")
-    }
+    hide_index=True
 )
 
-# --- 5. Pop-up วิเคราะห์เต็มจอ (Mobile Pop-up) ---
+# --- 5. Pop-up วิเคราะห์เต็มจอ ---
 if selected != "--- Select Ticker ---":
     with st.container():
         st.markdown('<div class="mobile-overlay">', unsafe_allow_html=True)
