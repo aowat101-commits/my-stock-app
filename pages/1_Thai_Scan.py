@@ -45,7 +45,7 @@ def get_slim_test_20():
     now = datetime.now(pytz.timezone('Asia/Bangkok'))
     for i, t in enumerate(tickers):
         prev_c = 12.0 + i
-        curr_p = prev_c * (1 + np.random.uniform(-0.01, 0.03))
+        curr_p = prev_c * (1 + np.random.uniform(-0.03, 0.05))
         chg = ((curr_p - prev_c) / prev_c) * 100
         
         results.append({
@@ -61,25 +61,34 @@ def get_slim_test_20():
     return pd.DataFrame(results)
 
 # --- 4. หน้าจอหลัก (Main Interface) ---
-st.subheader("🛰️ Guardian: Mobile Alpha Test")
+st.subheader("🛰️ Guardian: Mobile Alpha (Sort & Color Fix)")
 
-# ปุ่มสแกนแบบเต็มความกว้าง
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
 
 df_slim = get_slim_test_20()
-
-# เมนูเลือกหุ้นที่ออกแบบมาให้แตะง่าย
 selected = st.selectbox("🎯 Tap to View Details", ["--- Select Ticker ---"] + list(df_slim['Ticker']))
 
-# แสดงตารางด้วยตัวย่อภาษาอังกฤษ และทศนิยม 2 ตำแหน่ง
+# ฟังก์ชันกำหนดสีตัวอักษร (เขียว-แดง)
+def apply_color_logic(val):
+    if isinstance(val, (int, float)):
+        color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#ffffff'
+        return f'color: {color}'
+    return 'color: #ffffff'
+
+# แสดงตารางพร้อมระบบ Sort และการเปลี่ยนสี
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
         "Price": "{:.2f}",
         "Chg%": "{:.2f}"
-    }).apply(lambda x: ["color: #10b981" if x.name == "Chg%" and x.value > 0 else "color: #ffffff"] * len(x), axis=1),
-    use_container_width=True, hide_index=True
+    }).applymap(apply_color_logic, subset=['Price', 'Chg%']),
+    use_container_width=True, 
+    hide_index=True,
+    column_config={
+        "Ticker": st.column_config.TextColumn("Ticker", help="คลิกหัวเพื่อ Sort"),
+        "Chg%": st.column_config.NumberColumn("Chg%", format="%.2f")
+    }
 )
 
 # --- 5. Pop-up วิเคราะห์เต็มจอ (Mobile Pop-up) ---
@@ -90,17 +99,12 @@ if selected != "--- Select Ticker ---":
             st.rerun()
         
         st.markdown(f"### 📈 {selected}")
-        
-        # กราฟที่ปรับให้เลื่อนดูง่ายบนพื้นที่จำกัด
         fig = go.Figure(data=[go.Candlestick(x=[1,2,3,4,5], open=[10,11,10,12,11], 
                                             high=[12,13,12,14,13], low=[9,10,9,11,10], close=[11,10,12,11,12])])
         fig.update_layout(height=300, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        # ข้อมูลย่อยและปุ่ม Bid/Offer
         st.info(get_mock_summary_brief(selected))
-        
         if st.button("📊 View Bid / Offer", use_container_width=True):
             st.table(get_mock_bo_slim())
-            
         st.markdown('</div>', unsafe_allow_html=True)
