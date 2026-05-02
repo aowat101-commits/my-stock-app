@@ -3,3 +3,7 @@ yfinance
 pandas
 numpy
 plotly
+pandas
+pandas_ta
+yfinance
+pytz
