@@ -27,7 +27,7 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_v3_5_final(ticker):
+def analyze_guardian_triangle(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -54,7 +54,7 @@ def analyze_guardian_v3_5_final(ticker):
         df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
         
-        # Signals
+        # Signals (Balanced)
         df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
         df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
         df['sell_p'] = df['wt_cross_down'] & (df['wt1'] > 48)
@@ -63,8 +63,8 @@ def analyze_guardian_v3_5_final(ticker):
         if not all_sig.empty:
             last_sig = all_sig.iloc[-1]
             
-            # ปรับสัญลักษณ์ตามสั่ง: Deep Buy (⬆️) / Buy (🚀) / P-Sell (⚠️)
-            if last_sig['buy_deep']: sig_label = "⬆️ Deep Buy"
+            # ปรับสัญลักษณ์: Deep Buy (▲) / Buy (🚀) / P-Sell (⚠️)
+            if last_sig['buy_deep']: sig_label = "▲ Deep Buy"
             elif last_sig['buy_std']: sig_label = "🚀 Buy"
             else: sig_label = "⚠️ P-Sell"
             
@@ -90,7 +90,7 @@ def analyze_guardian_v3_5_final(ticker):
     return None
 
 # --- 4. DASHBOARD ---
-st.subheader("🛡️ Guardian Balanced Strategy")
+st.subheader("🛡️ Guardian Balanced Dashboard")
 
 if st.button("🔄 Refresh Market", use_container_width=True):
     st.rerun()
@@ -98,14 +98,14 @@ if st.button("🔄 Refresh Market", use_container_width=True):
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Balanced v3.5 (Final Style)</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Balanced v3.5 (Triangle Style)</div>', unsafe_allow_html=True)
     
     results = []
     total = len(full_scan_list)
-    bar = st.progress(0, text="กำลังวิเคราะห์สัญญาณ...")
+    bar = st.progress(0, text="กำลังสแกนหาจังหวะเทรด...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_v3_5_final(t)
+        res = analyze_guardian_triangle(t)
         if res:
             results.append(res)
         bar.progress((i + 1) / total)
@@ -114,11 +114,11 @@ def dashboard():
     if results:
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         
-        # การทำสี (ตัวอักษรบางตามเดิม)
+        # การทำสี (Original Font Weight)
         def get_signal_color(val):
-            if "Deep Buy" in val: return 'color: #4fd1c5;'
-            if "Buy" in val: return 'color: #10b981;'
-            if "P-Sell" in val: return 'color: #ef4444;'
+            if "▲ Deep Buy" in val: return 'color: #4fd1c5;' # เขียวจาง
+            if "🚀 Buy" in val: return 'color: #10b981;'      # เขียวเข้ม
+            if "⚠️ P-Sell" in val: return 'color: #ef4444;'   # แดง
             return ''
 
         styled = df.drop(columns=['raw_time']).style.format({
