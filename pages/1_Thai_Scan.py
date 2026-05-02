@@ -12,13 +12,10 @@ st.set_page_config(page_title="Guardian Mobile", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
-    /* บีบตารางให้เล็กที่สุดแต่ยังอ่านออกและตัดระบบ Sort หัวตารางออก */
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { 
         font-size: 10.5px !important; padding: 2px !important;
     }
-    /* ซ่อนไอคอน Sort เพื่อความสะอาดตาบนมือถือ */
     button[title="Sort column"] { display: none !important; }
-    
     .stDataFrame { height: 420px; }
     .mobile-overlay {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -41,13 +38,16 @@ def get_mock_bo_slim():
 # --- 3. ฟังก์ชันดึงหุ้นย้อนหลัง 20 ตัว (Test UI) ---
 @st.cache_data
 def get_slim_test_20():
+    # เพิ่มหุ้น CHG เข้ามาตามคำขอ
     tickers = ['AU', 'SPA', 'TKN', 'XO', 'DITTO', 'BE8', 'BBIK', 'MASTER', 'SABINA', 'WHA', 
                'SAPPE', 'SISB', 'SNNP', 'ICHI', 'KAMART', 'COCOCO', 'KLINIQ', 'PLANB', 'MC', 'CHG']
     results = []
     now = datetime.now(pytz.timezone('Asia/Bangkok'))
     for i, t in enumerate(tickers):
         prev_c = 12.0 + i
-        curr_p = prev_c * (1 + np.random.uniform(-0.03, 0.05))
+        # สุ่มสัญญาณเพื่อให้เห็นทั้งสีเขียว (Buy) และแดง (Sell) สำหรับเทส
+        signal_type = "🚀 BUY" if i % 2 == 0 else "🔻 SELL"
+        curr_p = prev_c * (1 + (0.03 if signal_type == "🚀 BUY" else -0.03))
         chg = ((curr_p - prev_c) / prev_c) * 100
         
         results.append({
@@ -55,15 +55,30 @@ def get_slim_test_20():
             "Prev": prev_c,
             "Price": curr_p,
             "Chg%": chg,
-            "Signal": "🚀 BUY",
+            "Signal": signal_type,
             "Time": (now - timedelta(minutes=i*15)).strftime("%H:%M"),
             "Date": (now - timedelta(minutes=i*15)).strftime("%d/%m/%y"),
             "raw_t": now - timedelta(minutes=i*15)
         })
     return pd.DataFrame(results)
 
-# --- 4. หน้าจอหลัก (Main Interface) ---
-st.subheader("🛰️ Guardian: Mobile Alpha (Color Fixed)")
+# --- 4. ฟังก์ชันกำหนดสีทั้งแถว (Row-wise Color Logic) ---
+def style_row(row):
+    # กำหนดสีตาม Signal
+    color = '#10b981' if "BUY" in str(row['Signal']) else '#ef4444' if "SELL" in str(row['Signal']) else '#ffffff'
+    
+    # สร้างลิสต์สไตล์สำหรับทุกคอลัมน์ในแถว
+    styles = []
+    for col in row.index:
+        # ยกเว้นคอลัมน์ที่ 2 (Prev) และ 3 (Price) ให้เป็นสีขาวเสมอ
+        if col in ['Prev', 'Price']:
+            styles.append('color: #ffffff')
+        else:
+            styles.append(f'color: {color}')
+    return styles
+
+# --- 5. หน้าจอหลัก (Main Interface) ---
+st.subheader("🛰️ Guardian: Mobile Alpha (Full Row Style)")
 
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
@@ -71,25 +86,18 @@ if st.button("🔄 REFRESH SCAN", use_container_width=True):
 df_slim = get_slim_test_20()
 selected = st.selectbox("🎯 Tap to View Details", ["--- Select Ticker ---"] + list(df_slim['Ticker']))
 
-# ฟังก์ชันกำหนดสีตัวอักษร (เขียว-แดง)
-def apply_color_logic(val):
-    if isinstance(val, (int, float)):
-        color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#ffffff'
-        return f'color: {color}'
-    return 'color: #ffffff'
-
-# แสดงตารางพร้อมการเปลี่ยนสี (ใช้ .map แทน .applymap เพื่อแก้ Error)
+# แสดงตารางพร้อมการเปลี่ยนสีทั้งแถว (ยกเว้นคอลัมน์ 2,3)
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
         "Price": "{:.2f}",
         "Chg%": "{:.2f}"
-    }).map(apply_color_logic, subset=['Price', 'Chg%']),
+    }).apply(style_row, axis=1), # ใช้ .apply แบบ axis=1 เพื่อคุมทั้งแถว
     use_container_width=True, 
     hide_index=True
 )
 
-# --- 5. Pop-up วิเคราะห์เต็มจอ ---
+# --- 6. Pop-up วิเคราะห์เต็มจอ ---
 if selected != "--- Select Ticker ---":
     with st.container():
         st.markdown('<div class="mobile-overlay">', unsafe_allow_html=True)
