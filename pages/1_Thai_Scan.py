@@ -1,126 +1,106 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import pandas_ta as ta
 import numpy as np
-from datetime import datetime
+import plotly.graph_objects as os
+from datetime import datetime, timedelta
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="Market Intelligence Dashboard", layout="wide")
+# --- 1. ฟังก์ชันคำนวณ WaveTrend (WT_LB) ---
+def calculate_wavetrend(df, ch_len=9, avg_len=12):
+    ap = (df['High'] + df['Low'] + df['Close']) / 3
+    esa = ta.ema(ap, length=ch_len)
+    d = ta.ema(abs(ap - esa), length=ch_len)
+    ci = (ap - esa) / (0.015 * d)
+    tci = ta.ema(ci, length=avg_len)
+    wt1 = tci
+    wt2 = ta.sma(wt1, length=4)
+    return wt1, wt2
 
-st.markdown("""
-    <style>
-    [data-testid="stStatusWidget"] {display: none !important;}
-    .time-status {
-        background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px;
-        text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
-    }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
-    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; font-weight: normal !important; }
-    </style>
-    """, unsafe_allow_html=True)
+# --- 2. ฟังก์ชันคำนวณ HMA (Hull Suite) ---
+def get_hma(series, length=55):
+    return ta.hma(series, length=length)
 
-# 2. รายชื่อหุ้นแบบจัดเต็ม (SET100 + sSET/MAI ตัวเด่น)
-set100 = [
-    'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
-    'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
-    'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
-    'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
-    'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
-    'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK',
-    'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK',
-    'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK',
-    'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK',
-    'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK',
-    'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
-]
+# --- 3. ฟังก์ชันหลักในการสแกนและคำนวณ R:R ---
+def scan_mai_hunter(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        # ดึงข้อมูลย้อนหลังให้พอสำหรับคำนวณ HMA 55 และดูย้อนหลัง 48 ชม.
+        df = stock.history(period="10d", interval="1h")
+        if len(df) < 60: return None
 
-extra_growth = [
-    'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
-    'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'MASTER.BK', 'KLINIQ.BK', 'WARRIX.BK', 
-    'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK'
-]
+        # คำนวณ Indicators
+        df['ema8'] = ta.ema(df['Close'], length=8)
+        df['ema20'] = ta.ema(df['Close'], length=20)
+        df['hma'] = get_hma(df['Close'], 55)
+        df['wt1'], df['wt2'] = calculate_wavetrend(df, 9, 12)
+        df['vma5'] = df['Volume'].rolling(window=5).mean()
+        
+        curr = df.iloc[-1]
+        prev = df.iloc[-2]
+        
+        # เงื่อนไข Volume 10M+ และ RVOL 1.5x
+        daily_val = curr['Close'] * curr['Volume']
+        vol_confirm = (daily_val > 10_000_000) and (curr['Volume'] > curr['vma5'] * 1.5)
+        
+        if not vol_confirm: return None
 
-full_scan_list = list(set(set100 + extra_growth))
+        # เช็คสัญญาณซื้อ (The Guardian Logic)
+        wt_cross_up = (prev['wt1'] < prev['wt2']) and (curr['wt1'] > curr['wt2'])
+        wt_low = curr['wt1'] < -53
+        above_ema = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
+        hull_green = curr['Close'] > curr['hma']
 
-# 3. ฟังก์ชันคำนวณ HMA 30
-def get_hma(series, length):
-    def wma(data, period):
-        weights = np.arange(1, period + 1)
-        return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
-    raw_hma = 2 * wma(series, half_length) - wma(series, length)
-    return wma(raw_hma, sqrt_length)
+        status = "WAIT"
+        rr_ratio = 0
+        target = 0
+        stop_loss = curr['ema20'] # ใช้ EMA 20 เป็นจุดคัด
 
-# 4. ฟังก์ชันค้นหาจุดเปลี่ยนสีล่าสุด
-def get_last_signal(df, ticker):
-    if len(df) < 35: return None
-    tz = pytz.timezone('Asia/Bangkok')
-    df['hma'] = get_hma(df['Close'], 30)
-    df['trend'] = np.where(df['hma'] > df['hma'].shift(1), "UP", "DOWN")
-    df['is_switch'] = df['trend'] != df['trend'].shift(1)
-    
-    switches = df[df['is_switch'] == True].copy()
-    if not switches.empty:
-        last_sig = switches.iloc[-1]
-        actual_time = last_sig.name.astimezone(tz)
+        if wt_cross_up and wt_low and above_ema and hull_green:
+            status = "🚀 BUY"
+            # คำนวณ R:R (สมมติเป้ากำไรที่แนวต้านเดิม หรือ 3% จากจุดเข้า)
+            target = curr['Close'] * 1.05 
+            risk = curr['Close'] - stop_loss
+            reward = target - curr['Close']
+            rr_ratio = reward / risk if risk > 0 else 0
+
         return {
             "Ticker": ticker.replace('.BK', ''),
-            "ราคาที่ตัด": last_sig['Close'], # ส่งเป็นตัวเลขเพื่อนำไป Format ในตาราง
-            "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
-            "เวลา": actual_time.strftime("%H:%M:%S"),
-            "วันที่": actual_time.strftime("%d/%m/%y"),
-            "raw_time": actual_time
+            "Price": curr['Close'],
+            "Signal": status,
+            "RR_Ratio": rr_ratio,
+            "Target": target,
+            "StopLoss": stop_loss,
+            "Data": df.tail(48) # ข้อมูลย้อนหลัง 48 ชม. สำหรับกราฟ
         }
-    return None
+    except: return None
 
-# 5. ส่วนหัวและปุ่มรีเฟรช
-st.subheader("🛰️ Market Intelligence: Top 30 Active Signals")
+# --- 4. ส่วนแสดงผล Streamlit Dashboard ---
+st.title("🛡️ The Guardian: MAI Alpha Hunter")
 
-if st.button("🔄 Force Refresh Scan", use_container_width=True):
-    st.rerun()
+# จำลองรายชื่อหุ้น mai (ในโปรเจกต์จริงควรใช้ API ดึงรายชื่อทั้งหมด)
+mai_list = ['AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'DITTO.BK', 'BE8.BK'] 
 
-# 6. Dashboard อัปเดตออโต้ทุก 10 นาที
-@st.fragment(run_every="10m")
-def dashboard_runtime():
-    tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | สแกนหุ้น SET100 + sSET + MAI</div>', unsafe_allow_html=True)
-    
-    results = []
-    bar = st.progress(0, text="กำลังสแกนหาจังหวะเปลี่ยนสีล่าสุด...")
-    
-    total = len(full_scan_list)
-    for i, t in enumerate(full_scan_list):
-        try:
-            stock = yf.Ticker(t)
-            hist = stock.history(period="10d", interval="1h")
-            if not hist.empty:
-                res = get_last_signal(hist, t)
-                if res: results.append(res)
-        except: continue
-        bar.progress((i + 1) / total)
-    
-    bar.empty()
+results = []
+for t in mai_list:
+    res = scan_mai_hunter(t)
+    if res: results.append(res)
 
-    if results:
-        # เรียงตามความสดใหม่และคัดเฉพาะ 30 ตัวล่าสุด
-        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
-        
-        def style_row(row):
-            color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
-            return [f'color: {color};'] * len(row)
-
-        st.dataframe(
-            df.drop(columns=['raw_time']).style.apply(style_row, axis=1)
-            .format({"ราคาที่ตัด": "{:,.2f}"}), # กำหนดทศนิยม 2 ตำแหน่ง (0.00) ตรงนี้
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคาที่ตัด": st.column_config.NumberColumn("ราคา", width=65, format="%.2f"), # บังคับ Format ใน Column Config ด้วย
-                "Signal": st.column_config.TextColumn("Signal", width=70),
-                "เวลา": st.column_config.TextColumn("เวลาจริง", width=75),
-                "วันที่": st.column_config.TextColumn("วันที่", width=65),
-            },
-            use_container_width=True, height=650, hide_index=True
-        )
-
-dashboard_runtime()
+if results:
+    for item in results:
+        with st.expander(f"{item['Ticker']} | Signal: {item['Signal']} | RR: {item['RR_Ratio']:.2f}"):
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.metric("Price", f"{item['Price']:.2f}")
+                st.write(f"🎯 Target: {item['Target']:.2f}")
+                st.write(f"🛑 Stop: {item['StopLoss']:.2f}")
+                if item['RR_Ratio'] >= 2: st.success("💎 High Reward Ratio!")
+            
+            with col2:
+                # กราฟ Interactive (Plotly)
+                fig = os.Figure(data=[os.Candlestick(x=item['Data'].index,
+                                        open=item['Data']['Open'], high=item['Data']['High'],
+                                        low=item['Data']['Low'], close=item['Data']['Close'])])
+                fig.update_layout(height=300, margin=dict(l=0, r=0, t=0, b=0))
+                st.plotly_chart(fig, use_container_width=True)
