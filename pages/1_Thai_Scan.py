@@ -3,56 +3,66 @@ import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
 
-# 1. ตั้งค่าหน้าจอ (กลับมาใช้แบบเดิม)
+# 1. ตั้งค่าหน้าจอแบบกึ่งกลาง PC (เหมือนหน้าแรกที่คุณชอบ)
 st.set_page_config(layout="wide", page_title="Thai Scan")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Kanit:wght@900&family=Dancing+Script:wght@700&display=swap');
 
-    /* ซ่อน Header และ Sidebar */
+    /* ซ่อนส่วนเกินเพื่อให้ดูคลีนที่สุด */
     [data-testid="stHeader"], header, .stAppHeader, [data-testid="stSidebar"], .stSidebar {
         display: none !important;
     }
     
+    /* บังคับเนื้อหาให้อยู่ตรงกลางเหมือนหน้า Home */
     .main .block-container {
-        max-width: 900px !important; 
+        max-width: 800px !important; 
         margin: 0 auto !important;
-        padding-top: 1rem !important;
+        padding-top: 2rem !important;
     }
 
     .main { background-color: #0f172a; }
     
-    /* สไตล์บรรทัดหัวข้อเดิม */
-    .line-1 { font-family: 'Montserrat', sans-serif; color: #ffffff !important; text-align: center; font-size: 32px; margin-top: 20px; letter-spacing: 5px; font-weight: 800; }
-    .line-2 { font-family: 'Kanit', sans-serif !important; color: #fbbf24 !important; text-align: center; font-size: 60px; font-weight: 900; line-height: 1.1; }
+    /* หัวข้อใช้สไตล์เดิมเป๊ะ */
+    .line-title {
+        font-family: 'Kanit', sans-serif;
+        color: #fbbf24 !important;
+        text-align: center;
+        font-size: clamp(45px, 12vw, 85px);
+        font-weight: 900;
+        margin-bottom: 30px;
+    }
 
-    /* ปุ่มกดสีเทาเข้มขนาดใหญ่แบบเดิม */
+    /* ปุ่มกดสีเทาเข้ม Spencer Fit สไตล์เดิม */
     .stButton>button {
         width: 100% !important;
         border-radius: 20px !important;
-        height: 4.5em !important;
+        height: 4.8em !important;
         background-color: #1e293b !important;
         color: #f8fafc !important;
         border: 2px solid #475569 !important;
-        font-size: 26px !important; 
+        font-size: 28px !important; 
         font-weight: 900 !important;
-        margin-top: 20px;
+        margin-bottom: 20px !important;
     }
     
-    /* สไตล์ตารางให้เข้ากับโหมดมืด */
-    div[data-testid="stDataFrame"] { background-color: #1e293b; border-radius: 15px; }
+    /* ปรับแต่งตารางให้ดูง่ายในมือถือ */
+    div[data-testid="stDataFrame"] {
+        background-color: #1e293b;
+        border-radius: 15px;
+        padding: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# ส่วนหัวหน้าสแกน
-st.markdown('<p class="line-1">STRATEGY</p>', unsafe_allow_html=True)
-st.markdown('<p class="line-2">GUARDIAN SCAN</p>', unsafe_allow_html=True)
+# --- ส่วนแสดงผลหน้าตาเดิม ---
+st.markdown('<p class="line-title">THAI SCAN</p>', unsafe_allow_html=True)
 
-# รายชื่อหุ้น SET100 หลักๆ
+# รายชื่อหุ้น (SET100)
 tickers = ["DELTA.BK", "ADVANC.BK", "PTT.BK", "CPALL.BK", "AOT.BK", "SCB.BK", "KBANK.BK", "GULF.BK", "KTB.BK"]
 
-def guardian_scan():
+def guardian_logic():
     results = []
     for ticker in tickers:
         try:
@@ -76,35 +86,32 @@ def guardian_scan():
             curr = df.iloc[-1]
             prev = df.iloc[-2]
 
-            # เงื่อนไข Buy Signal ตามสูตรเป๊ะๆ
-            wt_cross = (prev['wt1'] < prev['wt2']) and (curr['wt1'] >= curr['wt2'])
-            wt_low = curr['wt1'] < -53
-            trend_ok = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
-            hull_green = curr['hull'] > prev['hull']
-            vol_ok = curr['Volume'] > (curr['vma5'] * 1.5)
+            # เช็คเงื่อนไขตามสูตร
+            wt_buy = (prev['wt1'] < prev['wt2']) and (curr['wt1'] >= curr['wt2']) and (curr['wt1'] < -53)
+            trend_buy = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
+            hull_buy = curr['hull'] > prev['hull']
+            vol_buy = curr['Volume'] > (curr['vma5'] * 1.5)
 
-            signal = "Wait"
-            if wt_cross and wt_low and trend_ok and hull_green and vol_ok:
+            signal = "-"
+            if wt_buy and trend_buy and hull_buy and vol_buy:
                 signal = "🔥 BUY"
             elif curr['Close'] < curr['ema20'] or curr['hull'] < prev['hull']:
                 signal = "⚠️ EXIT"
 
             results.append({
-                "หุ้น": ticker.replace(".BK", ""),
-                "ราคา": f"{curr['Close']:.2f}",
-                "WT": f"{curr['wt1']:.1f}",
-                "Vol": f"{curr['Volume']/curr['vma5']:.1f}x",
-                "สัญญาณ": signal
+                "STOCK": ticker.replace(".BK", ""),
+                "PRICE": f"{curr['Close']:.2f}",
+                "SIGNAL": signal
             })
         except: continue
     return pd.DataFrame(results)
 
-# ปุ่มกดเดิมๆ ที่คุ้นเคย
-if st.button("🚀 เริ่มสแกนหุ้น"):
-    with st.spinner("Guardian is checking..."):
-        data = guardian_scan()
+# ปุ่มกดที่หน้าตาเหมือนเดิม
+if st.button("🚀 เริ่มสแกนหุ้นไทย"):
+    with st.spinner("กำลังสแกน..."):
+        data = guardian_logic()
         if not data.empty:
-            st.dataframe(data, use_container_width=True)
+            st.dataframe(data, use_container_width=True, hide_index=True)
         else:
             st.write("ไม่พบข้อมูล")
 
