@@ -6,8 +6,9 @@ import pandas_ta as ta
 from datetime import datetime, timedelta
 import pytz
 
-# 1. Page & Style
-st.set_page_config(page_title="The Guardian Swing v3.1", layout="wide")
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft (เหมือนเดิม)
+st.set_page_config(page_title="The Guardian Swing", layout="wide")
+
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
@@ -18,82 +19,116 @@ st.markdown("""
         text-align: center; font-size: 14px; margin-bottom: 15px; border: 1px solid #334155;
         font-weight: bold;
     }
-    .debug-log {
-        background-color: #1e293b; color: #94a3b8; padding: 10px; border-radius: 5px; 
-        font-family: monospace; font-size: 11px; height: 100px; overflow-y: auto; 
-        border: 1px solid #334155; margin-bottom: 20px;
-    }
     [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 12px !important; }
-    [data-testid="stDataFrame"] td { font-size: 13px !important; text-align: center !important; }
+    [data-testid="stDataFrame"] td { font-size: 12px !important; text-align: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. Ticker List
+# 2. รายชื่อหุ้น (SET100 + Extra Growth)
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-# 3. Scanner Function
-def analyze_guardian_v3(ticker):
+# 3. ฟังก์ชันวิเคราะห์ (Deep Scan 60D + Multi-index Fix)
+def analyze_guardian_v3_final(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
+        
+        # แก้ปัญหา Multi-index
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
+            
         if df.empty or len(df) < 50: return None
         df = df.dropna()
 
-        # Indicators
+        # คำนวณ Indicators
         df['hma'] = ta.hma(df['Close'], length=24)
         df['ema21'] = ta.ema(df['Close'], length=21)
         df['vma5'] = ta.sma(df['Volume'], length=5)
+        
+        # WaveTrend
         ap = (df['High'] + df['Low'] + df['Close']) / 3
         esa = ta.ema(ap, length=10)
         d = ta.ema(abs(ap - esa), length=10)
         ci = (ap - esa) / (0.015 * d)
         df['wt1'] = ta.ema(ci, length=21)
         df['wt2'] = ta.sma(df['wt1'], length=4)
+        
         df = df.dropna()
 
-        # Logic
+        # เงื่อนไขการสแกน (The Guardian Swing Logic)
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         df['wt_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['vol_ok'] = df['Volume'] >= (df['vma5'] * 1.2)
         
-        # BUY Signal: Hull เขียว + WT ตัดขึ้น (เน้นโซนล่าง < -45) + วอลุ่มเข้า
-        df['buy_signal'] = df['hull_up'] & df['wt_cross'] & (df['wt1'] < -45) & df['vol_ok']
+        # BUY: Hull เขียว + WT ตัดขึ้น (< -45) + วอลุ่มเข้า + อยู่บน EMA 21
+        df['buy_signal'] = df['hull_up'] & df['wt_cross'] & (df['wt1'] < -45) & df['vol_ok'] & (df['Close'] > df['ema21'])
         
         signals = df[df['buy_signal']].copy()
         if not signals.empty:
             last_sig = signals.iloc[-1]
             tz = pytz.timezone('Asia/Bangkok')
             sig_time = last_sig.name.astimezone(tz)
+            
+            # กรองย้อนหลัง 60 วัน
             if sig_time > datetime.now(tz) - timedelta(days=60):
                 return {
                     "Ticker": ticker.replace('.BK', ''),
                     "Price": float(last_sig['Close']),
                     "Signal": "🚀 BUY",
-                    "Date": sig_time.strftime("%d/%m %H:%M"),
+                    "Time": sig_time.strftime("%d/%m %H:%M"),
                     "WT": round(float(last_sig['wt1']), 2),
-                    "Vol": f"{round(float(last_sig['Volume']/last_sig['vma5']), 2)}x",
+                    "Vol_Force": f"{round(float(last_sig['Volume']/last_sig['vma5']), 2)}x",
                     "raw_time": sig_time
                 }
     except: pass
     return None
 
-# 4. UI
-st.subheader("🛡️ The Guardian Swing: Thai Edition (Deep Scan 60D)")
-if st.button("🔄 Start Scan Now", use_container_width=True):
+# 4. ส่วนแสดงผล Dashboard
+st.subheader("🛡️ Guardian Swing: The Final Dashboard")
+
+# ปุ่ม Refresh
+if st.button("🔄 Force Refresh Scan Now", use_container_width=True):
+    st.rerun()
+
+# Dashboard Runtime (Auto update ทุก 10 นาที)
+@st.fragment(run_every="10m")
+def dashboard_runtime():
+    tz = pytz.timezone('Asia/Bangkok')
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: The Guardian Swing (v3.1)</div>', unsafe_allow_html=True)
+    
     results = []
-    log = st.empty()
-    progress = st.progress(0)
+    bar = st.progress(0, text="กำลังสแกนหาจุดซื้อคุณภาพย้อนหลัง 60 วัน...")
+    
+    total = len(full_scan_list)
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_v3(t)
+        res = analyze_guardian_v3_final(t)
         if res: results.append(res)
-        log.markdown(f'<div class="debug-log">Scanning: {t} | Match: {len(results)}</div>', unsafe_allow_html=True)
-        progress.progress((i + 1) / len(full_scan_list))
-    progress.empty()
+        bar.progress((i + 1) / total)
+    bar.empty()
+
     if results:
-        final_df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(30)
-        st.dataframe(final_df.drop(columns=['raw_time']), use_container_width=True, hide_index=True)
+        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
+        
+        def style_signal(row):
+            return ['color: #10b981; font-weight: bold;'] * len(row)
+
+        st.dataframe(
+            df.drop(columns=['raw_time']).style.apply(style_signal, axis=1)
+            .format({"Price": "{:,.2f}"}),
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", width=80),
+                "Price": st.column_config.NumberColumn("Price", width=70),
+                "Signal": st.column_config.TextColumn("Signal", width=80),
+                "Time": st.column_config.TextColumn("Date/Time", width=100),
+                "WT": st.column_config.NumberColumn("WT", width=60),
+                "Vol_Force": st.column_config.TextColumn("Vol Force", width=80),
+            },
+            use_container_width=True, height=650, hide_index=True
+        )
     else:
-        st.warning("ไม่พบสัญญาณจุดซื้อคุณภาพในช่วง 60 วันที่ผ่านมา")
+        st.info("🔎 ไม่พบสัญญาณจุดซื้อคุณภาพในช่วง 60 วันที่ผ่านมา")
+
+dashboard_runtime()
+st.write("---")
+st.caption("Por Piang Electric Plus Co., Ltd. | Trading Systems")
