@@ -15,7 +15,9 @@ st.markdown("""
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { 
         font-size: 10.5px !important; padding: 2px !important;
     }
+    /* ปิดการแสดงผลปุ่ม Sort ที่หัวตารางเพื่อป้องกันความสับสน */
     button[title="Sort column"] { display: none !important; }
+    
     .stDataFrame { height: 420px; }
     .mobile-overlay {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -44,9 +46,7 @@ def get_slim_test_20():
     now = datetime.now(pytz.timezone('Asia/Bangkok'))
     for i, t in enumerate(tickers):
         prev_c = 12.0 + i
-        # สุ่มสัญญาณ Buy/Sell
         signal_type = "🚀 BUY" if i % 2 == 0 else "🔻 SELL"
-        # สุ่มราคาปัจจุบันให้มีทั้งบวกและลบเทียบกับราคาปิดวันก่อนหน้า
         curr_p = prev_c * (1 + np.random.uniform(-0.05, 0.05))
         chg = ((curr_p - prev_c) / prev_c) * 100
         
@@ -60,13 +60,14 @@ def get_slim_test_20():
             "Date": (now - timedelta(minutes=i*15)).strftime("%d/%m/%y"),
             "raw_t": now - timedelta(minutes=i*15)
         })
-    return pd.DataFrame(results)
+    # เรียงตามเวลาล่าสุดจากบนลงล่างเสมอ
+    return pd.DataFrame(results).sort_values(by="raw_t", ascending=False)
 
 # --- 4. ฟังก์ชันกำหนดสีตามเงื่อนไข (Advanced Row Style) ---
 def style_specific_columns(row):
-    # สีตามสัญญาณ (สำหรับ Col 1, 2, 5, 6, 7)
+    # สีตามสัญญาณ (สำหรับ Ticker, Prev, Signal, Time, Date)
     sig_color = '#10b981' if "BUY" in str(row['Signal']) else '#ef4444' if "SELL" in str(row['Signal']) else '#ffffff'
-    # สีตามสถานะราคา (สำหรับ Col 3, 4)
+    # สีตามสถานะราคาจริง (สำหรับ Price, Chg%)
     price_status_color = '#10b981' if row['Chg%'] > 0 else '#ef4444' if row['Chg%'] < 0 else '#ffffff'
     
     styles = []
@@ -78,7 +79,7 @@ def style_specific_columns(row):
     return styles
 
 # --- 5. หน้าจอหลัก (Main Interface) ---
-st.subheader("🛰️ Guardian: Mobile Alpha (Dynamic Color Fix)")
+st.subheader("🛰️ Guardian: Mobile Alpha (Static Sort & Latest First)")
 
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
@@ -86,7 +87,7 @@ if st.button("🔄 REFRESH SCAN", use_container_width=True):
 df_slim = get_slim_test_20()
 selected = st.selectbox("🎯 Tap to View Details", ["--- Select Ticker ---"] + list(df_slim['Ticker']))
 
-# แสดงตารางพร้อมการเปลี่ยนสีตามเงื่อนไขรายคอลัมน์
+# แสดงตารางแบบ Sort ไม่ได้ และเรียงตามเวลาล่าสุด
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
@@ -94,7 +95,12 @@ st.dataframe(
         "Chg%": "{:.2f}"
     }).apply(style_specific_columns, axis=1),
     use_container_width=True, 
-    hide_index=True
+    hide_index=True,
+    column_config={
+        "Ticker": st.column_config.TextColumn("Ticker", disabled=True), # ปิดการแก้ไขและการ Sort ทางอ้อม
+        "Price": st.column_config.NumberColumn("Price", disabled=True),
+        "Chg%": st.column_config.NumberColumn("Chg%", disabled=True)
+    }
 )
 
 # --- 6. Pop-up วิเคราะห์เต็มจอ ---
