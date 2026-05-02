@@ -27,7 +27,7 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_stable(ticker):
+def analyze_guardian_v3_5_final(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -35,6 +35,7 @@ def analyze_guardian_stable(ticker):
         if df.empty or len(df) < 50: return None
         df = df.dropna()
 
+        # Indicators
         df['hma'] = ta.hma(df['Close'], length=24)
         df['ema8'] = ta.ema(df['Close'], length=8)
         df['ema21'] = ta.ema(df['Close'], length=21)
@@ -52,7 +53,7 @@ def analyze_guardian_stable(ticker):
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         
-        # Signal Conditions
+        # Signals
         df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
         df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
         df['sell_p'] = df['wt_cross_down'] & (df['wt1'] > 48)
@@ -60,7 +61,6 @@ def analyze_guardian_stable(ticker):
         all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_p']].copy()
         if not all_sig.empty:
             last_sig = all_sig.iloc[-1]
-            
             if last_sig['buy_deep']: sig_label = "▲ Deep Buy"
             elif last_sig['buy_std']: sig_label = "🚀 Buy"
             else: sig_label = "⚠️ P-Sell"
@@ -95,33 +95,31 @@ if st.button("🔄 Refresh Market", use_container_width=True):
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Dynamic Stable UI</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Custom Color Mapping</div>', unsafe_allow_html=True)
     
     results = []
     total = len(full_scan_list)
-    bar = st.progress(0, text="กำลังประมวลผลข้อมูลตลาด...")
+    bar = st.progress(0, text="กำลังวิเคราะห์ข้อมูลตลาด...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_stable(t)
+        res = analyze_guardian_v3_5_final(t)
         if res:
             results.append(res)
         bar.progress((i + 1) / total)
     bar.empty()
 
     if results:
-        # เตรียมข้อมูล DataFrame และตัด raw_time ออกก่อนทำ Styling
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         df_display = df.drop(columns=['raw_time']).reset_index(drop=True)
 
-        # ฟังก์ชันกำหนดสีตาม Signal
-        def apply_signal_colors(row):
+        # 1. ฟังก์ชันกำหนดสีคอลัมน์ Ticker, Signal, Time/Date ตาม Signal
+        def apply_signal_styles(row):
             sig = row['Signal']
             if "▲ Deep Buy" in sig: color = '#4fd1c5'
             elif "🚀 Buy" in sig: color = '#10b981'
             elif "⚠️ P-Sell" in sig: color = '#ef4444'
             else: color = ''
             
-            # ส่งคืนรูปแบบสีให้คอลัมน์ Ticker, Signal, Time/Date
             styles = []
             for col in df_display.columns:
                 if col in ['Ticker', 'Signal', 'Time/Date']:
@@ -130,12 +128,29 @@ def dashboard():
                     styles.append('')
             return styles
 
-        # การทำ Styling
+        # 2. ฟังก์ชันกำหนดสีคอลัมน์ Prev, Price, %Chg ตามความเป็นจริง
+        def apply_price_styles(row):
+            pct = row['%Chg']
+            # ช่อง 3 และ 4 (Price, %Chg) ใช้สีตาม %Chg
+            price_color = '#10b981' if pct > 0 else '#ef4444'
+            # ช่อง 2 (Prev) ใช้สีตามราคาปิดวันก่อนหน้า (ที่นี่ใช้สีเทาเพื่อให้ Price เด่น หรือปรับเป็นเขียว/แดงตามจริงได้)
+            prev_color = '#94a3b8' 
+            
+            styles = []
+            for col in df_display.columns:
+                if col == 'Price' or col == '%Chg':
+                    styles.append(f'color: {price_color}')
+                elif col == 'Prev':
+                    styles.append(f'color: {prev_color}')
+                else:
+                    styles.append('')
+            return styles
+
+        # การแสดงผล Styled DataFrame
         styled = df_display.style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).apply(apply_signal_colors, axis=1
-        ).map(lambda x: 'color: #10b981;' if isinstance(x, (int, float)) and x > 0 else ('color: #ef4444;' if isinstance(x, (int, float)) and x < 0 else ''), subset=['Price', '%Chg']
-        ).map(lambda x: 'color: #94a3b8;', subset=['Prev'])
+        }).apply(apply_signal_styles, axis=1 # จัดการสี Ticker, Signal, Time/Date
+        ).apply(apply_price_styles, axis=1)  # จัดการสี Prev, Price, %Chg
 
         st.dataframe(styled, column_config={
             "Ticker": st.column_config.TextColumn("Ticker", width=75),
@@ -146,8 +161,8 @@ def dashboard():
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
         }, use_container_width=True, height=700, hide_index=True)
     else:
-        st.info("🔎 ไม่พบสัญญาณใหม่ในขณะนี้")
+        st.info("🔎 ไม่พบสัญญาณใหม่")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Fix Value Error)")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Final Color Mode)")
