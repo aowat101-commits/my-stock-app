@@ -7,8 +7,9 @@ import plotly.graph_objects as go
 from datetime import datetime
 import pytz
 
-# --- 1. การตั้งค่าหน้าจอและสไตล์ Loft (คงเดิม) ---
+# --- 1. ตั้งค่าหน้าจอและสไตล์ Loft แบบเดิมที่คุณชอบ ---
 st.set_page_config(page_title="Market Intelligence Dashboard", layout="wide")
+
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
@@ -21,7 +22,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ฟังก์ชันคำนวณ WaveTrend (WT_LB) และ R:R ---
+# --- 2. ฟังก์ชันคำนวณ Technical (HMA 30 + WT_LB 9,12) ---
+def get_hma(series, length=30):
+    def wma(data, period):
+        weights = np.arange(1, period + 1)
+        return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
+    raw_hma = 2 * wma(series, half_length) - wma(series, length)
+    return wma(raw_hma, sqrt_length)
+
 def calculate_wavetrend(df, ch_len=9, avg_len=12):
     ap = (df['High'] + df['Low'] + df['Close']) / 3
     esa = ta.ema(ap, length=ch_len)
@@ -32,17 +41,9 @@ def calculate_wavetrend(df, ch_len=9, avg_len=12):
     wt2 = ta.sma(wt1, length=4)
     return wt1, wt2
 
-def get_hma(series, length=30): # ใช้ค่า 30 ตามที่คุณตั้งไว้เดิม
-    def wma(data, period):
-        weights = np.arange(1, period + 1)
-        return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
-    raw_hma = 2 * wma(series, half_length) - wma(series, length)
-    return wma(raw_hma, sqrt_length)
-
-# --- 3. ฟังก์ชันสแกนและคำนวณเงื่อนไขใหม่ ---
-def get_guardian_signal(df, ticker):
-    if len(df) < 35: return None
+# --- 3. ฟังก์ชันหลักในการสแกน (เพิ่มเกณฑ์ Vol > 10M และ R:R) ---
+def get_last_signal(df, ticker):
+    if len(df) < 60: return None
     tz = pytz.timezone('Asia/Bangkok')
     
     # คำนวณ Indicators
@@ -54,17 +55,19 @@ def get_guardian_signal(df, ticker):
     
     curr = df.iloc[-1]
     prev = df.iloc[-2]
-
-    # เงื่อนไข Volume 10M+ และ RVOL 1.5x
-    daily_val = curr['Close'] * curr['Volume']
-    vol_confirm = (daily_val > 10_000_000) and (curr['Volume'] > curr['vma5'] * 1.5)
     
-    # เงื่อนไขสัญญาณ (EMA/HMA/WT)
+    # 🚩 เงื่อนไขใหม่: วอลุ่ม > 10 ล้านบาท และแรงกว่าค่าเฉลี่ย 1.5 เท่า
+    daily_value = curr['Close'] * curr['Volume']
+    vol_confirm = (daily_value > 10_000_000) and (curr['Volume'] > curr['vma5'] * 1.5)
+    
+    if not vol_confirm: return None
+
+    # สัญญาณการตัด
+    hma_up = curr['hma'] > prev['hma']
     wt_cross_up = (prev['wt1'] < prev['wt2']) and (curr['wt1'] > curr['wt2'])
     above_ema = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
-    hma_up = curr['hma'] > df['hma'].shift(1).iloc[-1]
 
-    # คำนวณ R:R (Target 5% / Stop Loss ที่ EMA 20)
+    # 🚩 คำนวณ Risk/Reward (Target 5%, Stop Loss ที่ EMA 20)
     target = curr['Close'] * 1.05
     stop_loss = curr['ema20']
     risk = curr['Close'] - stop_loss
@@ -75,49 +78,69 @@ def get_guardian_signal(df, ticker):
     return {
         "Ticker": ticker.replace('.BK', ''),
         "ราคา": curr['Close'],
-        "Signal": "🚀 ซื้อ" if (wt_cross_up and above_ema and hma_up and vol_confirm) else "🔻 ขาย" if not above_ema else "WAIT",
-        "R:R": f"{rr_ratio:.2f}",
-        "Volume": f"{(daily_val/1_000_000):.1f}M",
+        "Signal": "🚀 ซื้อ" if (hma_up and wt_cross_up and above_ema) else "🔻 ขาย" if curr['Close'] < curr['ema20'] else "WAIT",
+        "R:R": round(rr_ratio, 2),
+        "Value(M)": round(daily_value / 1_000_000, 1),
         "เวลา": actual_time.strftime("%H:%M:%S"),
+        "วันที่": actual_time.strftime("%d/%m/%y"),
         "raw_time": actual_time,
-        "hist": df.tail(24) # ส่งข้อมูลไปทำกราฟ Interactive
+        "hist": df.tail(30) # เก็บไว้ทำกราฟจิ๋ว
     }
 
-# --- 4. ส่วน Dashboard (คงรูปแบบตารางเดิม) ---
-st.subheader("🛰️ Market Intelligence: MAI Alpha Hunter")
+# --- 4. ส่วนหัวและรายการหุ้น (SET100 + MAI ทั้งหมด) ---
+st.subheader("🛰️ Market Intelligence: Top 30 Active Signals")
 
-# (รายชื่อหุ้น full_scan_list เดิมของคุณ)
-full_scan_list = ['AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'DITTO.BK', 'BE8.BK', 'WHA.BK'] # ตัวอย่าง
+# รายชื่อหุ้น (ควรดึงรายชื่อจาก API ตลาดหลักทรัพย์เพื่อให้ครอบคลุม MAI ทั้งหมด)
+full_scan_list = ['WHA.BK', 'AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'DITTO.BK', 'BE8.BK'] # ตัวอย่างลิสต์เดิมของคุณ
 
+if st.button("🔄 Force Refresh Scan", use_container_width=True):
+    st.rerun()
+
+# --- 5. Dashboard Runtime อัปเดตออโต้ ---
 @st.fragment(run_every="10m")
 def dashboard_runtime():
     tz = pytz.timezone('Asia/Bangkok')
     st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | สแกนหุ้น mai (Value > 10M)</div>', unsafe_allow_html=True)
     
     results = []
-    for t in full_scan_list:
+    bar = st.progress(0, text="กำลังสแกนหาจังหวะที่แม่นยำ...")
+    
+    for i, t in enumerate(full_scan_list):
         try:
             hist = yf.Ticker(t).history(period="10d", interval="1h")
-            res = get_guardian_signal(hist, t)
-            if res: results.append(res)
+            if not hist.empty:
+                res = get_last_signal(hist, t)
+                if res: results.append(res)
         except: continue
+        bar.progress((i + 1) / len(full_scan_list))
+    bar.empty()
 
     if results:
-        df_display = pd.DataFrame(results).sort_values(by="raw_time", ascending=False)
+        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
-        # แสดงตารางหลัก (คงรูปแบบเดิม)
+        # แสดงตารางรูปแบบเดิมที่คุณต้องการ
         st.dataframe(
-            df_display.drop(columns=['raw_time', 'hist']).style.apply(lambda x: [f"color: {'#10b981' if 'ซื้อ' in str(x['Signal']) else '#ef4444' if 'ขาย' in str(x['Signal']) else '#94a3b8'}"] * len(x), axis=1)
+            df.drop(columns=['raw_time', 'hist']).style.apply(lambda x: [f"color: {'#10b981' if 'ซื้อ' in str(x['Signal']) else '#ef4444' if 'ขาย' in str(x['Signal']) else '#94a3b8'}"] * len(x), axis=1)
             .format({"ราคา": "{:,.2f}"}),
-            use_container_width=True, hide_index=True
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", width=70),
+                "ราคา": st.column_config.NumberColumn("ราคา", width=65, format="%.2f"),
+                "Signal": st.column_config.TextColumn("Signal", width=75),
+                "R:R": st.column_config.NumberColumn("R:R", width=50),
+                "Value(M)": st.column_config.NumberColumn("Vol(M)", width=60),
+                "เวลา": st.column_config.TextColumn("เวลา", width=75),
+            },
+            use_container_width=True, height=500, hide_index=True
         )
 
-        # เพิ่มกราฟ Interactive ด้านล่างตารางเมื่อคลิกเลือกหุ้น
-        selected_ticker = st.selectbox("🔍 เลือกหุ้นเพื่อดูรายละเอียดและกราฟ Interactive", df_display['Ticker'])
-        selected_data = df_display[df_display['Ticker'] == selected_ticker].iloc[0]
+        # 🚩 ฟังก์ชันใหม่: เลือกหุ้นเพื่อดูกราฟ Interactive ย้อนหลัง
+        selected_ticker = st.selectbox("🔍 คลิกเพื่อเลือกหุ้นดูรายละเอียดกราฟ Interactive", df['Ticker'])
+        selected_row = df[df['Ticker'] == selected_ticker].iloc[0]
         
-        fig = go.Figure(data=[go.Candlestick(x=selected_data['hist'].index,
-                                open=selected_data['hist']['Open'], high=selected_data['hist']['High'],
-                                low=selected_data['hist']['Low'], close=selected_data['hist']['Close'])])
-        fig.update_layout(height=400, margin=dict(l=0, r=0, t=0, b=0), template="plotly_dark")
+        fig = go.Figure(data=[go.Candlestick(x=selected_row['hist'].index,
+                                open=selected_row['hist']['Open'], high=selected_row['hist']['High'],
+                                low=selected_row['hist']['Low'], close=selected_row['hist']['Close'])])
+        fig.update_layout(height=400, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
+
+dashboard_runtime()
