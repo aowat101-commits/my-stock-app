@@ -2,65 +2,60 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
+from datetime import datetime
+import pytz
 
-# 1. ตั้งค่าหน้าจอแบบกึ่งกลาง PC (เหมือนหน้าแรกที่คุณชอบ)
-st.set_page_config(layout="wide", page_title="Thai Scan")
+# 1. ตั้งค่าหน้าจอ (Wide Mode เพื่อให้ตารางดูง่ายเหมือนในรูป)
+st.set_page_config(layout="wide", page_title="Thai Market Monitor")
 
+# CSS ปรับแต่งหน้าตาให้เหมือนในรูปตัวอย่าง
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Kanit:wght@900&family=Dancing+Script:wght@700&display=swap');
-
-    /* ซ่อนส่วนเกินเพื่อให้ดูคลีนที่สุด */
     [data-testid="stHeader"], header, .stAppHeader, [data-testid="stSidebar"], .stSidebar {
         display: none !important;
     }
+    .main { background-color: #ffffff; }
     
-    /* บังคับเนื้อหาให้อยู่ตรงกลางเหมือนหน้า Home */
-    .main .block-container {
-        max-width: 800px !important; 
-        margin: 0 auto !important;
-        padding-top: 2rem !important;
-    }
-
-    .main { background-color: #0f172a; }
-    
-    /* หัวข้อใช้สไตล์เดิมเป๊ะ */
-    .line-title {
-        font-family: 'Kanit', sans-serif;
-        color: #fbbf24 !important;
-        text-align: center;
-        font-size: clamp(45px, 12vw, 85px);
-        font-weight: 900;
-        margin-bottom: 30px;
-    }
-
-    /* ปุ่มกดสีเทาเข้ม Spencer Fit สไตล์เดิม */
+    /* ปุ่ม Force Refresh */
     .stButton>button {
         width: 100% !important;
-        border-radius: 20px !important;
-        height: 4.8em !important;
-        background-color: #1e293b !important;
-        color: #f8fafc !important;
-        border: 2px solid #475569 !important;
-        font-size: 28px !important; 
-        font-weight: 900 !important;
-        margin-bottom: 20px !important;
+        background-color: #ffffff !important;
+        color: #1e40af !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 8px !important;
+        height: 35px !important;
+        font-size: 14px !important;
     }
-    
-    /* ปรับแต่งตารางให้ดูง่ายในมือถือ */
-    div[data-testid="stDataFrame"] {
+
+    /* แถบสถานะสีดำ/น้ำเงินเข้มด้านบน */
+    .status-bar {
         background-color: #1e293b;
-        border-radius: 15px;
-        padding: 10px;
+        color: #fbbf24;
+        text-align: center;
+        padding: 8px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+
+    /* ปรับแต่งตาราง */
+    div[data-testid="stTable"] {
+        font-size: 14px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- ส่วนแสดงผลหน้าตาเดิม ---
-st.markdown('<p class="line-title">THAI SCAN</p>', unsafe_allow_html=True)
+# --- ส่วนควบคุมด้านบน ---
+if st.button("🔄 Force Refresh Now"):
+    st.rerun()
 
-# รายชื่อหุ้น (SET100)
-tickers = ["DELTA.BK", "ADVANC.BK", "PTT.BK", "CPALL.BK", "AOT.BK", "SCB.BK", "KBANK.BK", "GULF.BK", "KTB.BK"]
+tz_th = pytz.timezone('Asia/Bangkok')
+now_th = datetime.now(tz_th).strftime("%H:%M:%S")
+st.markdown(f'<div class="status-bar">🇹🇭 Thai Time: {now_th} | ระบบกำลังสแกนทุกๆ 5 นาทีอัตโนมัติ</div>', unsafe_allow_html=True)
+
+# รายชื่อหุ้นไทย (คุณมิลค์เพิ่มเพิ่มลดได้ที่นี่ครับ)
+tickers = ["DELTA.BK", "ADVANC.BK", "PTT.BK", "CPALL.BK", "AOT.BK", "SCB.BK", "KBANK.BK", "GULF.BK", "KTB.BK", "BBL.BK"]
 
 def guardian_logic():
     results = []
@@ -69,12 +64,12 @@ def guardian_logic():
             df = yf.download(ticker, period="1y", interval="1d", progress=False)
             if df.empty: continue
 
-            # สูตร The Guardian Swing
+            # คำนวณสูตร The Guardian Swing
             df['ema8'] = ta.ema(df['Close'], length=8)
             df['ema20'] = ta.ema(df['Close'], length=20)
             df['hull'] = ta.hma(df['Close'], length=55)
             
-            # WaveTrend (9, 12)
+            # WaveTrend
             ap = (df['High'] + df['Low'] + df['Close']) / 3
             esa = ta.ema(ap, length=9)
             d = ta.ema(abs(ap - esa), length=9)
@@ -86,34 +81,45 @@ def guardian_logic():
             curr = df.iloc[-1]
             prev = df.iloc[-2]
 
-            # เช็คเงื่อนไขตามสูตร
+            # เงื่อนไข Signal
             wt_buy = (prev['wt1'] < prev['wt2']) and (curr['wt1'] >= curr['wt2']) and (curr['wt1'] < -53)
-            trend_buy = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
-            hull_buy = curr['hull'] > prev['hull']
-            vol_buy = curr['Volume'] > (curr['vma5'] * 1.5)
+            trend_ok = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
+            hull_ok = curr['hull'] > prev['hull']
+            vol_ok = curr['Volume'] > (curr['vma5'] * 1.5)
 
-            signal = "-"
-            if wt_buy and trend_buy and hull_buy and vol_buy:
-                signal = "🔥 BUY"
+            signal = "SELL" # Default
+            if wt_buy and trend_ok and hull_ok and vol_ok:
+                signal = "🚀 BUY"
             elif curr['Close'] < curr['ema20'] or curr['hull'] < prev['hull']:
-                signal = "⚠️ EXIT"
+                signal = "▼ SELL"
+            else:
+                signal = "HOLD"
+
+            # คำนวณ % Change
+            p_change = ((curr['Close'] - prev['Close']) / prev['Close']) * 100
 
             results.append({
-                "STOCK": ticker.replace(".BK", ""),
-                "PRICE": f"{curr['Close']:.2f}",
-                "SIGNAL": signal
+                "Ticker": ticker.replace(".BK", ""),
+                "Price": f"{curr['Close']:,.2f}",
+                "% Chg": f"{p_change:+.22f}%",
+                "Signal": signal,
+                "เวลาไทย": now_th,
+                "วันที่": datetime.now(tz_th).strftime("%d/%m")
             })
         except: continue
     return pd.DataFrame(results)
 
-# ปุ่มกดที่หน้าตาเหมือนเดิม
-if st.button("🚀 เริ่มสแกนหุ้นไทย"):
-    with st.spinner("กำลังสแกน..."):
-        data = guardian_logic()
-        if not data.empty:
-            st.dataframe(data, use_container_width=True, hide_index=True)
-        else:
-            st.write("ไม่พบข้อมูล")
+# แสดงผลตาราง
+with st.spinner("Scanning..."):
+    df_final = guardian_logic()
+    if not df_final.empty:
+        # ฟังก์ชันแต่งสีตัวหนังสือให้เหมือนในรูป
+        def color_row(val):
+            if "BUY" in str(val): return 'color: #10b981' # เขียว
+            if "SELL" in str(val): return 'color: #ef4444' # แดง
+            return 'color: #6b7280' # เทา
 
-if st.button("⬅️ กลับหน้าหลัก"):
+        st.table(df_final)
+
+if st.button("⬅️ Back"):
     st.switch_page("Home.py")
