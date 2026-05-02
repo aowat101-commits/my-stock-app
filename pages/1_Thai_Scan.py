@@ -50,12 +50,10 @@ def analyze_guardian_final(ticker):
         df['wt2'] = ta.sma(df['wt1'], length=4)
         df = df.dropna()
 
-        # Logic
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         df['wt_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['vol_ok'] = df['Volume'] >= (df['vma5'] * 1.2)
         
-        # BUY: Hull เขียว + WT ตัดขึ้น (< -45) + วอลุ่มเข้า + ยืนเหนือ EMA 21
         df['buy_signal'] = df['hull_up'] & df['wt_cross'] & (df['wt1'] < -45) & df['vol_ok'] & (df['Close'] > df['ema21'])
         
         signals = df[df['buy_signal']].copy()
@@ -99,9 +97,13 @@ def dashboard_runtime():
     if results:
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
+        # แก้ไขจุดนี้: เปลี่ยนจาก .applymap เป็น .map (สำหรับ Pandas 2.x)
+        styled_df = df.drop(columns=['raw_time']).style.format({"Price": "{:,.2f}"}).map(
+            lambda x: 'color: #10b981; font-weight: bold;', subset=['Signal']
+        )
+        
         st.dataframe(
-            df.drop(columns=['raw_time']).style.format({"Price": "{:,.2f}"})
-            .applymap(lambda x: 'color: #10b981; font-weight: bold;', subset=['Signal']),
+            styled_df,
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=100),
                 "Price": st.column_config.NumberColumn("Price", width=100),
