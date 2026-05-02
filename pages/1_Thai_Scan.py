@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 
 # 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="Guardian Swing: 2-Month Deep Scan", layout="wide")
+st.set_page_config(page_title="Guardian Swing: Thai Edition", layout="wide")
 
 st.markdown("""
     <style>
@@ -15,7 +15,7 @@ st.markdown("""
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
     .main { background-color: #0f172a; }
     .time-status {
-        background-color: #1e293b; color: #fbbf24; padding: 12px; border-radius: 8px;
+        background-color: #1e293b; color: #10b981; padding: 12px; border-radius: 8px;
         text-align: center; font-size: 14px; margin-bottom: 15px; border: 1px solid #334155;
         font-weight: bold;
     }
@@ -48,29 +48,29 @@ def get_wavetrend(df, n1=10, n2=21):
     wt2 = ta.sma(wt1, length=4)
     return wt1, wt2
 
-# 4. ฟังก์ชันวิเคราะห์ย้อนหลัง 60 วัน
-def analyze_guardian_60d(ticker):
+# 4. ฟังก์ชันวิเคราะห์ Logic (Thai Edition)
+def analyze_thai_edition(ticker):
     try:
-        # ดึงข้อมูลรายชั่วโมงย้อนหลัง 90 วัน เพื่อให้ครอบคลุม 60 วันทำการ
+        # ดึงข้อมูลรายชั่วโมงย้อนหลัง 90 วัน เพื่อความแม่นยำ 60 วันทำการ
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if len(df) < 50: return None
 
         tz = pytz.timezone('Asia/Bangkok')
         df['ema8'] = ta.ema(df['Close'], length=8)
-        df['ema20'] = ta.ema(df['Close'], length=20)
-        df['hma30'] = get_hma(df['Close'], 30)
+        df['ema21'] = ta.ema(df['Close'], length=21)
+        df['hma24'] = get_hma(df['Close'], 24) # ปรับเหลือ 24 ให้ไวขึ้น
         df['vma5'] = ta.sma(df['Volume'], length=5)
         wt1, wt2 = get_wavetrend(df)
         df['wt1'], df['wt2'] = wt1, wt2
 
-        # เงื่อนไข Logic
-        df['trend_up'] = df['hma30'] > df['hma30'].shift(1)
-        df['above_ema'] = (df['Close'] > df['ema8']) & (df['Close'] > df['ema20'])
+        # สร้างเงื่อนไข
+        df['trend_up'] = df['hma24'] > df['hma24'].shift(1)
+        df['above_ema'] = (df['Close'] > df['ema8']) & (df['Close'] > df['ema21'])
         df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
-        df['vol_ok'] = df['Volume'] > (df['vma5'] * 1.5)
+        df['vol_ok'] = df['Volume'] > (df['vma5'] * 1.2) # ปรับเหลือ 1.2x เพื่อความยืดหยุ่น
         
-        # ค้นหา BUY Signal
-        df['buy_signal'] = (df['above_ema']) & (df['trend_up']) & (df['wt_cross_up']) & (df['wt1'] < -53) & (df['vol_ok'])
+        # เงื่อนไข BUY: Thai Edition (OS ที่ -48)
+        df['buy_signal'] = (df['above_ema']) & (df['trend_up']) & (df['wt_cross_up']) & (df['wt1'] < -48) & (df['vol_ok'])
         
         cutoff = datetime.now(tz) - timedelta(days=60)
         signals = df[df['buy_signal']].copy()
@@ -92,24 +92,23 @@ def analyze_guardian_60d(ticker):
     except: return None
     return None
 
-# 5. UI ส่วนควบคุม
-st.subheader("🛰️ Guardian Swing: 2-Month Deep History Scan")
+# 5. UI Dashboard
+st.subheader("🇹🇭 Guardian Swing: Thai Edition Deep Scan (60D)")
 
-if st.button("🔄 Start Deep Scan (60 Days)", use_container_width=True):
+if st.button("🔄 Start Thai Edition Scan (60 Days)", use_container_width=True):
     st.rerun()
 
-# 6. Dashboard Runtime
 @st.fragment(run_every="10m")
-def deep_runtime():
+def thai_runtime():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Deep Scanning: {datetime.now(tz).strftime("%H:%M:%S")} | Looking back 60 Days</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Scan Active: {datetime.now(tz).strftime("%H:%M:%S")} | Mode: Thai Edition (Fast Signal)</div>', unsafe_allow_html=True)
     
     results = []
-    bar = st.progress(0, text="กำลังขุดประวัติสัญญาณย้อนหลัง 2 เดือน...")
+    bar = st.progress(0, text="กำลังวิเคราะห์หุ้นตามสูตร Thai Edition ย้อนหลัง 2 เดือน...")
     
     total = len(full_scan_list)
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_60d(t)
+        res = analyze_thai_edition(t)
         if res: results.append(res)
         bar.progress((i + 1) / total)
     bar.empty()
@@ -121,17 +120,17 @@ def deep_runtime():
             .applymap(lambda x: 'color: #10b981; font-weight: bold;', subset=['Signal']),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=80),
-                "Price": st.column_config.NumberColumn("Entry Price", width=90),
-                "Signal": st.column_config.TextColumn("Signal", width=80),
-                "Date": st.column_config.TextColumn("Signal Date", width=120),
-                "WT": st.column_config.NumberColumn("WT Level", width=70),
-                "Vol_Force": st.column_config.TextColumn("Vol Force", width=80),
+                "Price": st.column_config.NumberColumn("Entry", width=80),
+                "Signal": st.column_config.TextColumn("Status", width=80),
+                "Date": st.column_config.TextColumn("Date/Time", width=110),
+                "WT": st.column_config.NumberColumn("WT", width=60),
+                "Vol_Force": st.column_config.TextColumn("Volume", width=80),
             },
             use_container_width=True, height=650, hide_index=True
         )
     else:
-        st.info("🔎 ไม่พบหุ้นที่เกิดสัญญาณสมบูรณ์แบบในช่วง 2 เดือนที่ผ่านมา")
+        st.info("🔎 ไม่พบหุ้นที่เข้าเงื่อนไขในช่วง 2 เดือนนี้")
 
-deep_runtime()
+thai_runtime()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Portfolio Strategy Analysis")
+st.caption("Por Piang Electric Plus Co., Ltd. | Thai Stock Market Optimization")
