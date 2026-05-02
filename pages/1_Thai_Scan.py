@@ -38,16 +38,16 @@ def get_mock_bo_slim():
 # --- 3. ฟังก์ชันดึงหุ้นย้อนหลัง 20 ตัว (Test UI) ---
 @st.cache_data
 def get_slim_test_20():
-    # เพิ่มหุ้น CHG เข้ามาตามคำขอ
     tickers = ['AU', 'SPA', 'TKN', 'XO', 'DITTO', 'BE8', 'BBIK', 'MASTER', 'SABINA', 'WHA', 
                'SAPPE', 'SISB', 'SNNP', 'ICHI', 'KAMART', 'COCOCO', 'KLINIQ', 'PLANB', 'MC', 'CHG']
     results = []
     now = datetime.now(pytz.timezone('Asia/Bangkok'))
     for i, t in enumerate(tickers):
         prev_c = 12.0 + i
-        # สุ่มสัญญาณเพื่อให้เห็นทั้งสีเขียว (Buy) และแดง (Sell) สำหรับเทส
+        # สุ่มสัญญาณ Buy/Sell
         signal_type = "🚀 BUY" if i % 2 == 0 else "🔻 SELL"
-        curr_p = prev_c * (1 + (0.03 if signal_type == "🚀 BUY" else -0.03))
+        # สุ่มราคาปัจจุบันให้มีทั้งบวกและลบเทียบกับราคาปิดวันก่อนหน้า
+        curr_p = prev_c * (1 + np.random.uniform(-0.05, 0.05))
         chg = ((curr_p - prev_c) / prev_c) * 100
         
         results.append({
@@ -62,23 +62,23 @@ def get_slim_test_20():
         })
     return pd.DataFrame(results)
 
-# --- 4. ฟังก์ชันกำหนดสีทั้งแถว (Row-wise Color Logic) ---
-def style_row(row):
-    # กำหนดสีตาม Signal
-    color = '#10b981' if "BUY" in str(row['Signal']) else '#ef4444' if "SELL" in str(row['Signal']) else '#ffffff'
+# --- 4. ฟังก์ชันกำหนดสีตามเงื่อนไข (Advanced Row Style) ---
+def style_specific_columns(row):
+    # สีตามสัญญาณ (สำหรับ Col 1, 2, 5, 6, 7)
+    sig_color = '#10b981' if "BUY" in str(row['Signal']) else '#ef4444' if "SELL" in str(row['Signal']) else '#ffffff'
+    # สีตามสถานะราคา (สำหรับ Col 3, 4)
+    price_status_color = '#10b981' if row['Chg%'] > 0 else '#ef4444' if row['Chg%'] < 0 else '#ffffff'
     
-    # สร้างลิสต์สไตล์สำหรับทุกคอลัมน์ในแถว
     styles = []
     for col in row.index:
-        # ยกเว้นคอลัมน์ที่ 2 (Prev) และ 3 (Price) ให้เป็นสีขาวเสมอ
-        if col in ['Prev', 'Price']:
-            styles.append('color: #ffffff')
+        if col in ['Price', 'Chg%']:
+            styles.append(f'color: {price_status_color}')
         else:
-            styles.append(f'color: {color}')
+            styles.append(f'color: {sig_color}')
     return styles
 
 # --- 5. หน้าจอหลัก (Main Interface) ---
-st.subheader("🛰️ Guardian: Mobile Alpha (Full Row Style)")
+st.subheader("🛰️ Guardian: Mobile Alpha (Dynamic Color Fix)")
 
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
@@ -86,13 +86,13 @@ if st.button("🔄 REFRESH SCAN", use_container_width=True):
 df_slim = get_slim_test_20()
 selected = st.selectbox("🎯 Tap to View Details", ["--- Select Ticker ---"] + list(df_slim['Ticker']))
 
-# แสดงตารางพร้อมการเปลี่ยนสีทั้งแถว (ยกเว้นคอลัมน์ 2,3)
+# แสดงตารางพร้อมการเปลี่ยนสีตามเงื่อนไขรายคอลัมน์
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
         "Price": "{:.2f}",
         "Chg%": "{:.2f}"
-    }).apply(style_row, axis=1), # ใช้ .apply แบบ axis=1 เพื่อคุมทั้งแถว
+    }).apply(style_specific_columns, axis=1),
     use_container_width=True, 
     hide_index=True
 )
