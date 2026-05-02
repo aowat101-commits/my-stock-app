@@ -6,7 +6,7 @@ import pandas_ta as ta
 from datetime import datetime, timedelta
 import pytz
 
-# 1. Page Configuration & Style
+# 1. Page Configuration
 st.set_page_config(page_title="Guardian Mobile", layout="wide")
 st.markdown("""
     <style>
@@ -27,8 +27,8 @@ set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-# 3. Enhanced Scanner Function
-def analyze_guardian_optimized(ticker):
+# 3. Core Logic (Stable Signal Mode)
+def analyze_guardian_broad(ticker):
     try:
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
@@ -38,17 +38,17 @@ def analyze_guardian_optimized(ticker):
         # Indicators
         df['hma'] = ta.hma(df['Close'], length=24)
         df['ema21'] = ta.ema(df['Close'], length=21)
-        df['vma5'] = ta.sma(df['Volume'], length=5)
         wt = ta.wavetrend(df['High'], df['Low'], df['Close'])
         df['wt1'], df['wt2'] = wt.iloc[:, 0], wt.iloc[:, 1]
         
-        # เงื่อนไข Logic (แบบ Window check)
+        # Logic Conditions
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         df['wt_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['above_ema'] = df['Close'] > df['ema21']
         
-        # สัญญาณซื้อ: WT ตัดขึ้นภายใน 3 แท่งล่าสุด + ปัจจุบัน Hull เขียว และราคาอยู่เหนือ EMA 21
-        df['buy_sig'] = df['wt_cross'].rolling(window=3).max().astype(bool) & df['hull_up'] & df['above_ema']
+        # คลายล็อก: WT ตัดขึ้นในโซนล่าง (< 0) ภายใน 5 แท่งล่าสุด + ปัจจุบัน Hull เขียว และราคาอยู่เหนือ EMA 21
+        df['buy_sig'] = df['wt_cross'].rolling(window=5).max().astype(bool) & \
+                        (df['wt1'] < 0) & df['hull_up'] & df['above_ema']
         
         signals = df[df['buy_sig']].copy()
         if not signals.empty:
@@ -57,45 +57,47 @@ def analyze_guardian_optimized(ticker):
             sig_time = last_sig.name.astimezone(tz)
             
             curr_price = float(df['Close'].iloc[-1])
-            # ดึงราคาปิดก่อนหน้าเพื่อหา %Chg
             idx = df.index.get_loc(last_sig.name)
             prev_close = float(df['Close'].iloc[idx-1]) if idx > 0 else curr_price
             pct_chg = ((curr_price - prev_close) / prev_close) * 100
             
-            return {
-                "Ticker": ticker.replace('.BK', ''),
-                "Prev": prev_close,
-                "Price": curr_price,
-                "%Chg": pct_chg,
-                "Signal": "🚀 BUY",
-                "Time/Date": sig_time.strftime("%H:%M %d/%m"),
-                "raw_time": sig_time
-            }
+            # กรองย้อนหลัง 60 วันตาม UI
+            if sig_time > datetime.now(tz) - timedelta(days=60):
+                return {
+                    "Ticker": ticker.replace('.BK', ''),
+                    "Prev": prev_close,
+                    "Price": curr_price,
+                    "%Chg": pct_chg,
+                    "Signal": "🚀 BUY",
+                    "Time/Date": sig_time.strftime("%H:%M %d/%m"),
+                    "raw_time": sig_time
+                }
     except: pass
     return None
 
-# 4. Mobile Dashboard UI
+# 4. UI Rendering
 st.subheader("🛡️ Guardian Swing (Mobile Optim)")
 if st.button("🔄 Refresh Market Scan", use_container_width=True): st.rerun()
 
 @st.fragment(run_every="10m")
 def runtime():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Sync: {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Stable Swing</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Sync: {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Broad Signal</div>', unsafe_allow_html=True)
     
     results = []
     bar = st.progress(0, text="Scanning Market...")
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_optimized(t)
+        res = analyze_guardian_broad(t)
         if res: results.append(res)
         bar.progress((i + 1) / len(full_scan_list))
     bar.empty()
 
     if results:
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(30)
-        styled = df.drop(columns=['raw_time']).style.format({"Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"}).map(
-            lambda x: 'color: #10b981; font-weight: bold;', subset=['Signal']
-        ).map(lambda x: 'color: #10b981;' if x > 0 else 'color: #ef4444;', subset=['%Chg'])
+        styled = df.drop(columns=['raw_time']).style.format({
+            "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
+        }).map(lambda x: 'color: #10b981; font-weight: bold;', subset=['Signal']) \
+          .map(lambda x: 'color: #10b981;' if x > 0 else 'color: #ef4444;', subset=['%Chg'])
         
         st.dataframe(styled, column_config={
             "Ticker": st.column_config.TextColumn("Ticker", width=70),
@@ -104,8 +106,8 @@ def runtime():
             "%Chg": st.column_config.TextColumn("%Chg", width=65),
             "Signal": st.column_config.TextColumn("Signal", width=70),
             "Time/Date": st.column_config.TextColumn("Time/Date", width=95),
-        }, use_container_width=True, hide_index=True)
+        }, use_container_width=True, height=650, hide_index=True)
     else:
-        st.info("No entry signals found in 60 days.")
+        st.info("No entry signals found in 60 days. Trying Broad Scan...")
 
 runtime()
