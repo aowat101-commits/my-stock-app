@@ -8,7 +8,6 @@ import pytz
 import requests
 
 # --- 1. LINE NOTIFY CONFIG ---
-# ใส่ Token ของคุณมิลค์ที่นี่
 LINE_TOKEN = "YOUR_LINE_NOTIFY_TOKEN"
 
 def send_line_notify(message):
@@ -22,8 +21,8 @@ def send_line_notify(message):
     except:
         pass
 
-# --- 2. UI SETUP (Loft Style) ---
-st.set_page_config(page_title="Guardian Balanced Notify", layout="wide")
+# --- 2. UI SETUP ---
+st.set_page_config(page_title="Guardian Swing Styled", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
@@ -34,8 +33,6 @@ st.markdown("""
         text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
         font-weight: bold;
     }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 12px !important; }
-    [data-testid="stDataFrame"] td { font-size: 12px !important; text-align: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -44,8 +41,8 @@ set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-# --- 4. ENGINE LOGIC (Balanced & Stable) ---
-def analyze_guardian_balanced(ticker):
+# --- 4. ENGINE LOGIC ---
+def analyze_guardian_styled(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -67,91 +64,92 @@ def analyze_guardian_balanced(ticker):
         df['wt2'] = ta.sma(df['wt1'], length=4)
         df = df.dropna()
 
-        # Logic Flags
+        # Conditions
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
         
-        # 🟢 1. Deep Buy (WT < -50 + EMA 8)
-        df['deep_buy'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
-        
-        # 🟢 2. Standard Buy (WT < -45 + EMA 21 + Hull + Vol)
-        df['std_buy'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & \
-                        (df['Volume'] >= df['vma5'] * 1.2) & (df['Close'] > df['ema21'])
-        
-        # 🔴 3. Take Profit Sell (WT Red Cross > +48)
-        df['tp_sell'] = df['wt_cross_down'] & (df['wt1'] > 48)
+        # Logic - กี่แท่งก็ได้ ขอแค่สถานะครบ
+        df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
+        df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
+        df['sell_tp'] = df['wt_cross_down'] & (df['wt1'] > 48)
 
-        # ค้นหาสัญญาณล่าสุด (Window Period)
-        all_signals = df[df['deep_buy'] | df['std_buy'] | df['tp_sell']].copy()
-        if not all_signals.empty:
-            last_sig = all_signals.iloc[-1]
+        all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_tp']].copy()
+        if not all_sig.empty:
+            last_sig = all_sig.iloc[-1]
             
-            # กำหนดประเภทสัญญาณ
-            if last_sig['deep_buy']: sig_type = "🚀 DEEP BUY"
-            elif last_sig['std_buy']: sig_type = "🚀 STD BUY"
-            else: sig_type = "⚠️ SELL (TP)"
+            # การตั้งชื่อสัญญาณ
+            if last_sig['buy_deep']: sig_label = "Deep Buy"
+            elif last_sig['buy_std']: sig_label = "Buy"
+            else: sig_label = "Sell"
             
             tz = pytz.timezone('Asia/Bangkok')
             sig_time = last_sig.name.astimezone(tz)
             
-            # ดึงข้อมูลราคา
-            curr_price = float(df['Close'].iloc[-1])
-            idx = df.index.get_loc(last_sig.name)
-            prev_close = float(df['Close'].iloc[idx-1]) if idx > 0 else curr_price
-            pct_chg = ((curr_price - prev_close) / prev_close) * 100
-            
             if sig_time > datetime.now(tz) - timedelta(days=60):
+                curr_price = float(df['Close'].iloc[-1])
+                idx = df.index.get_loc(last_sig.name)
+                prev_close = float(df['Close'].iloc[idx-1]) if idx > 0 else curr_price
+                pct_chg = ((curr_price - prev_close) / prev_close) * 100
+                
                 return {
                     "Ticker": ticker.replace('.BK', ''),
                     "Prev": prev_close,
                     "Price": curr_price,
                     "%Chg": pct_chg,
-                    "Signal": sig_type,
+                    "Signal": sig_label,
                     "Time/Date": sig_time.strftime("%H:%M %d/%m"),
-                    "raw_time": sig_time,
-                    "WT_Lvl": float(last_sig['wt1'])
+                    "raw_time": sig_time
                 }
     except: pass
     return None
 
-# --- 5. RUNTIME & DASHBOARD ---
-st.subheader("🛡️ Guardian Swing Balanced (3-Signal Edition)")
+# --- 5. DASHBOARD & NOTIFY ---
+st.subheader("🛡️ Guardian Balanced (Styled UI)")
 
-if 'alert_cache' not in st.session_state:
-    st.session_state.alert_cache = {}
+if 'notified_set' not in st.session_state:
+    st.session_state.notified_set = set()
 
-if st.button("🔄 Manual Refresh", use_container_width=True):
-    st.session_state.alert_cache.clear()
+if st.button("🔄 Refresh Market", use_container_width=True):
+    st.session_state.notified_set.clear()
     st.rerun()
 
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Sync: {datetime.now(tz).strftime("%H:%M:%S")} | Mode: 3-Signal Balanced</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Mode: Balanced UI v3.5</div>', unsafe_allow_html=True)
     
     results = []
-    bar = st.progress(0, text="Scanning Market...")
     total = len(full_scan_list)
+    bar = st.progress(0, text="Checking Signals...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_balanced(t)
+        res = analyze_guardian_styled(t)
         if res:
             results.append(res)
-            # Notification Logic
-            alert_key = f"{res['Ticker']}_{res['Signal']}_{res['Time/Date']}"
-            if alert_key not in st.session_state.alert_cache:
-                msg = f"\n🛡️ Guardian {res['Signal']}\nStock: {res['Ticker']}\nPrice: {res['Price']:.2f}\nWT: {res['WT_Lvl']:.1f}\nTime: {res['Time/Date']}"
+            # Notification logic
+            nid = f"{res['Ticker']}_{res['Signal']}_{res['Time/Date']}"
+            if nid not in st.session_state.notified_set:
+                icon = "🚀" if "Buy" in res['Signal'] else "⚠️"
+                msg = f"\n{icon} Guardian {res['Signal']}\nStock: {res['Ticker']}\nPrice: {res['Price']:.2f}\nTime: {res['Time/Date']}"
                 send_line_notify(msg)
-                st.session_state.alert_cache[alert_key] = True
+                st.session_state.notified_set.add(nid)
         bar.progress((i + 1) / total)
     bar.empty()
 
     if results:
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
-        styled = df.drop(columns=['raw_time', 'WT_Lvl']).style.format({
+        
+        # ปรับจูนสีตามคำสั่งคุณมิลค์
+        def signal_style(val):
+            if val == "Buy": return 'color: #10b981; font-weight: bold;' # เขียวเข้ม
+            if val == "Deep Buy": return 'color: #4fd1c5; font-weight: bold;' # เขียวจาง (Teal)
+            if val == "Sell": return 'color: #ef4444; font-weight: bold;' # แดง
+            return ''
+
+        styled = df.drop(columns=['raw_time']).style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).map(lambda x: 'color: #10b981; font-weight: bold;' if "BUY" in str(x) else 'color: #ef4444; font-weight: bold;', subset=['Signal']
+        }).applymap(signal_style, subset=['Signal']
         ).map(lambda x: 'color: #10b981;' if x > 0 else 'color: #ef4444;', subset=['%Chg'])
         
         st.dataframe(styled, column_config={
@@ -163,8 +161,8 @@ def dashboard():
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
         }, use_container_width=True, height=700, hide_index=True)
     else:
-        st.info("🔎 No Balanced Signals Found")
+        st.info("🔎 No signals matching current criteria.")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Balanced)")
+st.caption("Por Piang Electric Plus Co., Ltd. | Styled Release")
