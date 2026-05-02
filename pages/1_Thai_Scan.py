@@ -5,24 +5,9 @@ import numpy as np
 import pandas_ta as ta
 from datetime import datetime, timedelta
 import pytz
-import requests
 
-# --- 1. LINE NOTIFY CONFIG ---
-LINE_TOKEN = "ใส่_TOKEN_ของคุณมิลค์ตรงนี้"
-
-def send_line_notify(message):
-    if LINE_TOKEN == "ใส่_TOKEN_ของคุณมิลค์ตรงนี้":
-        return
-    url = 'https://notify-api.line.me/api/notify'
-    headers = {'Authorization': f'Bearer {LINE_TOKEN}'}
-    data = {'message': message}
-    try:
-        requests.post(url, headers=headers, data=data)
-    except:
-        pass
-
-# --- 2. UI SETUP ---
-st.set_page_config(page_title="Guardian Swing Styled", layout="wide")
+# --- 1. UI SETUP ---
+st.set_page_config(page_title="Guardian Swing Dashboard", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
@@ -36,13 +21,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. TICKERS ---
+# --- 2. TICKERS ---
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-# --- 4. ENGINE LOGIC ---
-def analyze_guardian_styled(ticker):
+# --- 3. CORE ENGINE ---
+def analyze_guardian_no_notify(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -103,42 +88,32 @@ def analyze_guardian_styled(ticker):
     except: pass
     return None
 
-# --- 5. DASHBOARD & NOTIFY ---
-st.subheader("🛡️ Guardian Balanced (Styled UI)")
-
-if 'notified_set' not in st.session_state:
-    st.session_state.notified_set = set()
+# --- 4. DASHBOARD RUNTIME ---
+st.subheader("🛡️ Guardian Balanced (Dashboard Only)")
 
 if st.button("🔄 Refresh Market", use_container_width=True):
-    st.session_state.notified_set.clear()
     st.rerun()
 
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Mode: Balanced UI v3.5</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Looking back 60 Days</div>', unsafe_allow_html=True)
     
     results = []
     total = len(full_scan_list)
-    bar = st.progress(0, text="Checking Signals...")
+    bar = st.progress(0, text="กำลังสแกนหาจังหวะเทรด...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_styled(t)
+        res = analyze_guardian_no_notify(t)
         if res:
             results.append(res)
-            nid = f"{res['Ticker']}_{res['Signal']}_{res['Time/Date']}"
-            if nid not in st.session_state.notified_set:
-                icon = "🚀" if "Buy" in res['Signal'] else "⚠️"
-                msg = f"\n{icon} Guardian {res['Signal']}\nStock: {res['Ticker']}\nPrice: {res['Price']:.2f}\nTime: {res['Time/Date']}"
-                send_line_notify(msg)
-                st.session_state.notified_set.add(nid)
         bar.progress((i + 1) / total)
     bar.empty()
 
     if results:
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         
-        # ฟังก์ชันกำหนดสี (เปลี่ยนจาก applymap เป็น map)
+        # สีตามเงื่อนไข (Buy = เขียวเข้ม, Deep Buy = เขียวจาง, Sell = แดง)
         def signal_style(val):
             if val == "Buy": return 'color: #10b981; font-weight: bold;' 
             if val == "Deep Buy": return 'color: #4fd1c5; font-weight: bold;' 
@@ -147,7 +122,7 @@ def dashboard():
 
         styled = df.drop(columns=['raw_time']).style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).map(signal_style, subset=['Signal'] # แก้ไขจาก .applymap เป็น .map
+        }).map(signal_style, subset=['Signal']
         ).map(lambda x: 'color: #10b981;' if x > 0 else 'color: #ef4444;', subset=['%Chg'])
         
         st.dataframe(styled, column_config={
@@ -159,8 +134,8 @@ def dashboard():
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
         }, use_container_width=True, height=700, hide_index=True)
     else:
-        st.info("🔎 No signals matching current criteria.")
+        st.info("🔎 ไม่พบสัญญาณในขณะนี้")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Styled Release")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (No-Line)")
