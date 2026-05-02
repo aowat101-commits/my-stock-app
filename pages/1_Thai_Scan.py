@@ -3,33 +3,28 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import pandas_ta as ta
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft
-st.set_page_config(page_title="Guardian Swing: Flexible Mode", layout="wide")
+# 1. Page Configuration & Style
+st.set_page_config(page_title="Debug Mode: Signal Hunter", layout="wide")
 
 st.markdown("""
     <style>
-    [data-testid="stStatusWidget"] {display: none !important;}
-    [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
-    .main { background-color: #0f172a; }
-    .time-status {
-        background-color: #1e293b; color: #38bdf8; padding: 12px; border-radius: 8px;
-        text-align: center; font-size: 14px; margin-bottom: 15px; border: 1px solid #334155;
-        font-weight: bold;
+    .reportview-container { background: #0f172a; }
+    .stStatusWidget {display: none !important;}
+    .debug-log {
+        background-color: #1e293b; color: #94a3b8; padding: 10px; 
+        border-radius: 5px; font-family: monospace; font-size: 11px;
+        height: 150px; overflow-y: auto; border: 1px solid #334155; margin-bottom: 20px;
     }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 12px !important; }
-    [data-testid="stDataFrame"] td { font-size: 13px !important; text-align: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น (SET100 + Extra Growth/MAI)
-set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
-extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
-full_scan_list = list(set(set100 + extra_growth))
+# 2. Ticker List (คัดเฉพาะตัวหลักเพื่อความชัวร์ในการ Test)
+test_list = ['ADVANC.BK', 'AOT.BK', 'CPALL.BK', 'DELTA.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK', 'GULF.BK', 'HANA.BK', 'KCE.BK', 'JTS.BK', 'DITTO.BK', 'COCOCO.BK', 'MASTER.BK']
 
-# 3. ฟังก์ชันคำนวณ HMA และ WaveTrend
+# 3. Indicator Functions
 def get_hma(series, length):
     def wma(data, period):
         weights = np.arange(1, period + 1)
@@ -38,97 +33,70 @@ def get_hma(series, length):
     raw_hma = 2 * wma(series, half_length) - wma(series, length)
     return wma(raw_hma, sqrt_length)
 
-def get_wavetrend(df, n1=10, n2=21):
+def get_wavetrend(df):
     ap = (df['High'] + df['Low'] + df['Close']) / 3
-    esa = ta.ema(ap, length=n1)
-    d = ta.ema(abs(ap - esa), length=n1)
+    esa = ta.ema(ap, length=10)
+    d = ta.ema(abs(ap - esa), length=10)
     ci = (ap - esa) / (0.015 * d)
-    tci = ta.ema(ci, length=n2)
-    wt1 = tci
+    wt1 = ta.ema(ci, length=21)
     wt2 = ta.sma(wt1, length=4)
     return wt1, wt2
 
-# 4. ฟังก์ชันวิเคราะห์ Logic (Flexible Mode)
-def analyze_flexible(ticker):
+# 4. Scanner Logic
+def scan_debug(ticker):
     try:
-        df = yf.download(ticker, period="90d", interval="1h", progress=False)
-        if len(df) < 50: return None
+        # ใช้ข้อมูล 7 วัน (รายชั่วโมง) เพื่อความรวดเร็วในการ Debug
+        df = yf.download(ticker, period="7d", interval="1h", progress=False)
+        if df.empty: return "No Data"
 
-        tz = pytz.timezone('Asia/Bangkok')
-        df['ema21'] = ta.ema(df['Close'], length=21)
-        df['hma24'] = get_hma(df['Close'], 24)
-        df['vma5'] = ta.sma(df['Volume'], length=5)
+        df['hma'] = get_hma(df['Close'], 24)
         wt1, wt2 = get_wavetrend(df)
         df['wt1'], df['wt2'] = wt1, wt2
-
-        # สร้างเงื่อนไขแบบยืดหยุ่น
-        df['trend_up'] = df['hma24'] > df['hma24'].shift(1)
-        df['above_ema'] = df['Close'] > df['ema21']
-        df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
-        df['vol_ok'] = df['Volume'] >= df['vma5'] # ขอแค่เท่ากับค่าเฉลี่ย
         
-        # เงื่อนไขใหม่: Trend ขาขึ้น + เพิ่งตัดขึ้น (ไม่จำกัดโซน)
-        df['buy_signal'] = (df['above_ema']) & (df['trend_up']) & (df['wt_cross_up']) & (df['vol_ok'])
+        # เงื่อนไข: Hull เขียว + WT ตัดขึ้น (ไม่จำกัดโซน)
+        df['hull_up'] = df['hma'] > df['hma'].shift(1)
+        df['wt_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         
-        cutoff = datetime.now(tz) - timedelta(days=60)
-        signals = df[df['buy_signal']].copy()
+        signals = df[df['hull_up'] & df['wt_cross']].copy()
         
         if not signals.empty:
             last_sig = signals.iloc[-1]
-            sig_time = last_sig.name.astimezone(tz)
-            
-            if sig_time > cutoff:
-                return {
-                    "Ticker": ticker.replace('.BK', ''),
-                    "Price": last_sig['Close'],
-                    "Status": "✅ Bullish Cross",
-                    "Date": sig_time.strftime("%d/%m %H:%M"),
-                    "WT Level": round(last_sig['wt1'], 2),
-                    "Vol Ratio": f"{round(last_sig['Volume'] / last_sig['vma5'], 2)}x",
-                    "raw_time": sig_time
-                }
-    except: return None
-    return None
+            return {
+                "Ticker": ticker,
+                "Price": last_sig['Close'],
+                "Time": last_sig.name.strftime("%d/%m %H:%M"),
+                "WT1": round(last_sig['wt1'], 2)
+            }
+        return "No Signal"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
-# 5. UI Dashboard
-st.subheader("🛰️ Guardian Swing: Flexible Deep Scan (60D)")
+# 5. Dashboard UI
+st.subheader("🛠️ Debug Scanner: Finding Any Signal")
 
-if st.button("🔄 Start Flexible Scan", use_container_width=True):
-    st.rerun()
-
-@st.fragment(run_every="10m")
-def flexible_runtime():
-    tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Sync: {datetime.now(tz).strftime("%H:%M:%S")} | Mode: Flexible (Bullish Cross Any Zone)</div>', unsafe_allow_html=True)
-    
+if st.button("🚀 Start Debug Scan", use_container_width=True):
+    log_area = st.empty()
     results = []
-    bar = st.progress(0, text="กำลังสแกนหาจุดเริ่มงัดย้อนหลัง 2 เดือน...")
     
-    total = len(full_scan_list)
-    for i, t in enumerate(full_scan_list):
-        res = analyze_flexible(t)
-        if res: results.append(res)
-        bar.progress((i + 1) / total)
-    bar.empty()
-
+    # ส่วนของ Log เพื่อดูว่าระบบกำลังทำอะไร
+    debug_content = "🔍 Starting Debug Process...\n"
+    
+    for t in test_list:
+        debug_content += f"Scanning {t}... "
+        res = scan_debug(t)
+        
+        if isinstance(res, dict):
+            results.append(res)
+            debug_content += "✅ FOUND SIGNAL\n"
+        else:
+            debug_content += f"❌ {res}\n"
+            
+        log_area.markdown(f'<div class="debug-log">{debug_content}</div>', unsafe_allow_html=True)
+    
     if results:
-        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
-        st.dataframe(
-            df.drop(columns=['raw_time']).style.format({"Price": "{:,.2f}"})
-            .applymap(lambda x: 'color: #38bdf8; font-weight: bold;', subset=['Status']),
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", width=80),
-                "Price": st.column_config.NumberColumn("Price", width=80),
-                "Status": st.column_config.TextColumn("Signal", width=120),
-                "Date": st.column_config.TextColumn("Date/Time", width=110),
-                "WT Level": st.column_config.NumberColumn("WT Level", width=80),
-                "Vol Ratio": st.column_config.TextColumn("Vol Force", width=80),
-            },
-            use_container_width=True, height=650, hide_index=True
-        )
+        st.success(f"พบหุ้นที่มีสัญญาณทั้งหมด {len(results)} ตัว")
+        st.dataframe(pd.DataFrame(results), use_container_width=True)
     else:
-        st.info("🔎 ไม่พบหุ้นที่เข้าเงื่อนไขแม้จะปรับแบบยืดหยุ่นแล้ว (ลองเช็คการเชื่อมต่อ Yahoo Finance ครับ)")
+        st.warning("ไม่พบสัญญาณใดๆ ในหุ้นทดสอบ 14 ตัวนี้")
 
-flexible_runtime()
-st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | System Testing Mode")
+st.info("โหมดนี้ใช้เพื่อเช็คว่าระบบดึงข้อมูลจาก Yahoo ได้ปกติหรือไม่ โดยใช้หุ้นตัวอย่างเพียงไม่กี่ตัว")
