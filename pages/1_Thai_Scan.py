@@ -6,7 +6,7 @@ import pandas_ta as ta
 from datetime import datetime, timedelta
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ Loft (เหมือนเดิม)
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft
 st.set_page_config(page_title="The Guardian Swing", layout="wide")
 
 st.markdown("""
@@ -19,8 +19,8 @@ st.markdown("""
         text-align: center; font-size: 14px; margin-bottom: 15px; border: 1px solid #334155;
         font-weight: bold;
     }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 12px !important; }
-    [data-testid="stDataFrame"] td { font-size: 12px !important; text-align: center !important; }
+    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 14px !important; }
+    [data-testid="stDataFrame"] td { font-size: 14px !important; text-align: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -29,39 +29,33 @@ set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-# 3. ฟังก์ชันวิเคราะห์ (Deep Scan 60D + Multi-index Fix)
-def analyze_guardian_v3_final(ticker):
+# 3. ฟังก์ชันวิเคราะห์ (แกนหลักระบบเดิม)
+def analyze_guardian_final(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
-        
-        # แก้ปัญหา Multi-index
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-            
         if df.empty or len(df) < 50: return None
         df = df.dropna()
 
-        # คำนวณ Indicators
         df['hma'] = ta.hma(df['Close'], length=24)
         df['ema21'] = ta.ema(df['Close'], length=21)
         df['vma5'] = ta.sma(df['Volume'], length=5)
         
-        # WaveTrend
         ap = (df['High'] + df['Low'] + df['Close']) / 3
         esa = ta.ema(ap, length=10)
         d = ta.ema(abs(ap - esa), length=10)
         ci = (ap - esa) / (0.015 * d)
         df['wt1'] = ta.ema(ci, length=21)
         df['wt2'] = ta.sma(df['wt1'], length=4)
-        
         df = df.dropna()
 
-        # เงื่อนไขการสแกน (The Guardian Swing Logic)
+        # Logic
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         df['wt_cross'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['vol_ok'] = df['Volume'] >= (df['vma5'] * 1.2)
         
-        # BUY: Hull เขียว + WT ตัดขึ้น (< -45) + วอลุ่มเข้า + อยู่บน EMA 21
+        # BUY: Hull เขียว + WT ตัดขึ้น (< -45) + วอลุ่มเข้า + ยืนเหนือ EMA 21
         df['buy_signal'] = df['hull_up'] & df['wt_cross'] & (df['wt1'] < -45) & df['vol_ok'] & (df['Close'] > df['ema21'])
         
         signals = df[df['buy_signal']].copy()
@@ -70,39 +64,34 @@ def analyze_guardian_v3_final(ticker):
             tz = pytz.timezone('Asia/Bangkok')
             sig_time = last_sig.name.astimezone(tz)
             
-            # กรองย้อนหลัง 60 วัน
             if sig_time > datetime.now(tz) - timedelta(days=60):
                 return {
                     "Ticker": ticker.replace('.BK', ''),
                     "Price": float(last_sig['Close']),
                     "Signal": "🚀 BUY",
                     "Time": sig_time.strftime("%d/%m %H:%M"),
-                    "WT": round(float(last_sig['wt1']), 2),
-                    "Vol_Force": f"{round(float(last_sig['Volume']/last_sig['vma5']), 2)}x",
                     "raw_time": sig_time
                 }
     except: pass
     return None
 
 # 4. ส่วนแสดงผล Dashboard
-st.subheader("🛡️ Guardian Swing: The Final Dashboard")
+st.subheader("🛡️ Guardian Swing: Clean Dashboard")
 
-# ปุ่ม Refresh
 if st.button("🔄 Force Refresh Scan Now", use_container_width=True):
     st.rerun()
 
-# Dashboard Runtime (Auto update ทุก 10 นาที)
 @st.fragment(run_every="10m")
 def dashboard_runtime():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: The Guardian Swing (v3.1)</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: The Guardian Swing</div>', unsafe_allow_html=True)
     
     results = []
     bar = st.progress(0, text="กำลังสแกนหาจุดซื้อคุณภาพย้อนหลัง 60 วัน...")
     
     total = len(full_scan_list)
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_v3_final(t)
+        res = analyze_guardian_final(t)
         if res: results.append(res)
         bar.progress((i + 1) / total)
     bar.empty()
@@ -110,19 +99,14 @@ def dashboard_runtime():
     if results:
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
-        def style_signal(row):
-            return ['color: #10b981; font-weight: bold;'] * len(row)
-
         st.dataframe(
-            df.drop(columns=['raw_time']).style.apply(style_signal, axis=1)
-            .format({"Price": "{:,.2f}"}),
+            df.drop(columns=['raw_time']).style.format({"Price": "{:,.2f}"})
+            .applymap(lambda x: 'color: #10b981; font-weight: bold;', subset=['Signal']),
             column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", width=80),
-                "Price": st.column_config.NumberColumn("Price", width=70),
-                "Signal": st.column_config.TextColumn("Signal", width=80),
-                "Time": st.column_config.TextColumn("Date/Time", width=100),
-                "WT": st.column_config.NumberColumn("WT", width=60),
-                "Vol_Force": st.column_config.TextColumn("Vol Force", width=80),
+                "Ticker": st.column_config.TextColumn("Ticker", width=100),
+                "Price": st.column_config.NumberColumn("Price", width=100),
+                "Signal": st.column_config.TextColumn("Signal", width=100),
+                "Time": st.column_config.TextColumn("Date/Time", width=150),
             },
             use_container_width=True, height=650, hide_index=True
         )
