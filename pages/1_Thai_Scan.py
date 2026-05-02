@@ -7,123 +7,98 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pytz
 
-# --- 1. ตั้งค่าสไตล์ Loft และ CSS สำหรับ Mobile Pop-up ---
+# --- 1. สไตล์ Loft สำหรับ Mobile Full-Screen ---
 st.set_page_config(page_title="Guardian Alpha Mobile", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
-    .time-status { background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px; text-align: center; font-size: 12px; margin-bottom: 15px; border: 1px solid #334155; }
-    [data-testid="stDataFrame"] td { font-size: 12px !important; }
-    .floating-popup { border: 1px solid #334155; border-radius: 12px; padding: 10px; background-color: #0f172a; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .time-status { background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px; text-align: center; font-size: 12px; margin-bottom: 10px; border: 1px solid #334155; }
+    /* ปรับแต่งตารางให้ดู Loft และอ่านง่ายบนมือถือ */
+    [data-testid="stDataFrame"] td { font-size: 12px !important; height: 40px !important; }
+    /* ส่วนของ Pop-up เต็มจอ */
+    .full-screen-popup {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: #0f172a; z-index: 9999; overflow-y: auto; padding: 15px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ฟังก์ชันคำนวณ Technical (HMA 30 + WT_LB + RR) ---
-def calculate_all_metrics(df, ticker):
-    if len(df) < 60: return None
-    tz = pytz.timezone('Asia/Bangkok')
-    
-    # Technical Indicators
-    df['ema8'] = ta.ema(df['Close'], length=8)
-    df['ema20'] = ta.ema(df['Close'], length=20)
-    # HMA 30
-    weights = np.arange(1, 31)
-    df['hma'] = df['Close'].rolling(30).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    
-    # WaveTrend
-    ap = (df['High'] + df['Low'] + df['Close']) / 3
-    esa = ta.ema(ap, length=9)
-    d = ta.ema(abs(ap - esa), length=9)
-    ci = (ap - esa) / (0.015 * d)
-    df['wt1'] = ta.ema(ci, length=12)
-    df['wt2'] = ta.sma(df['wt1'], length=4)
-    df['vma5'] = df['Volume'].rolling(window=5).mean()
+# --- 2. ฟังก์ชันจำลองข่าวและ Bid/Offer สำหรับ Test UI ---
+def get_mock_news(ticker):
+    return f"📌 **สรุปประเด็นสำคัญ ({ticker}):** คาดการณ์กำไรไตรมาสล่าสุดโต 15% จากการขยายสาขาใหม่ และมีแรงซื้อเก็งกำไรในกลุ่มหุ้นขนาดเล็ก (mai) อย่างต่อเนื่อง"
 
-    # ตรวจสอบย้อนหลัง 10 วัน (ประมาณ 40-50 แท่งใน TF 1H) เพื่อหาจุดสัญญาณ
-    found_signals = []
-    for i in range(1, 50):
-        curr = df.iloc[-i]
-        prev = df.iloc[-(i+1)]
-        
-        val_m = (curr['Close'] * curr['Volume']) / 1_000_000
-        # เงื่อนไข: Vol > 10M + EMA + HMA Up + WT Cross Up
-        if (val_m > 10 and curr['Close'] > curr['ema8'] and 
-            curr['wt1'] > curr['wt2'] and prev['wt1'] <= prev['wt2'] and 
-            curr['hma'] > prev['hma']):
-            
-            target = curr['Close'] * 1.05
-            risk = curr['Close'] - curr['ema20']
-            rr = (target - curr['Close']) / risk if risk > 0 else 0
-            
-            found_signals.append({
-                "Ticker": ticker.replace('.BK', ''),
-                "ราคาที่ตัด": curr['Close'],
-                "Signal": "🚀 ซื้อ",
-                "R:R": round(rr, 2),
-                "Vol(M)": round(val_m, 1),
-                "เวลา": curr.name.astimezone(tz).strftime("%H:%M"),
-                "วันที่": curr.name.astimezone(tz).strftime("%d/%y"),
-                "raw_time": curr.name,
-                "hist": df.tail(60)
-            })
-            break # เอาสัญญาณล่าสุดตัวเดียว
-    return found_signals[0] if found_signals else None
+def get_mock_bid_offer():
+    data = {
+        'Bid_Vol': ['1.2M', '500K', '800K', '2.1M', '1.5M'],
+        'Bid_Price': ['10.20', '10.10', '10.00', '9.95', '9.90'],
+        'Off_Price': ['10.30', '10.40', '10.50', '10.60', '10.70'],
+        'Off_Vol': ['400K', '1.1M', '900K', '3.2M', '1.8M']
+    }
+    return pd.DataFrame(data)
 
-# --- 3. ส่วนการแสดงผลและปุ่มสแกน ---
-st.subheader("🛰️ Market Intelligence: Mobile Alpha")
+# --- 3. ฟังก์ชันคำนวณและสแกน (ย้อนหลัง 10 วัน) ---
+@st.cache_data(ttl=600)
+def scan_signals(tickers):
+    results = []
+    # ในการเทส UI เราจะจำลองข้อมูลให้ครบ 30 บรรทัด
+    for i, t in enumerate(tickers):
+        # จำลองข้อมูลย้อนหลัง 30 ตัว เรียงตามเวลาล่าสุด
+        results.append({
+            "Ticker": t.replace('.BK', ''),
+            "ราคา": 10.0 + (i * 0.1),
+            "Signal": "🚀 ซื้อ",
+            "R:R": round(1.5 + (i * 0.1), 2),
+            "Vol(M)": round(12.5 + i, 1),
+            "เวลา": (datetime.now() - timedelta(minutes=i*15)).strftime("%H:%M"),
+            "raw_time": datetime.now() - timedelta(minutes=i*15)
+        })
+    return results
 
-if st.button("🔍 START SCAN (SET100 + sSET/MAI)", use_container_width=True):
+# --- 4. ส่วน Dashboard หลัก ---
+st.subheader("🛰️ Market Intelligence: 30 Recent Signals")
+
+if st.button("🔍 START SCAN NOW", use_container_width=True):
     st.rerun()
 
-# รายชื่อหุ้นสแกน (ตัวอย่างครอบคลุมกลุ่มที่คุณสนใจ)
-full_list = ['ADVANC.BK', 'CPALL.BK', 'WHA.BK', 'DELTA.BK', 'AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'BE8.BK', 'BBIK.BK', 'MASTER.BK']
+# รายชื่อหุ้นตัวอย่างสำหรับเทส UI 30 บรรทัด
+test_tickers = ['AU', 'SPA', 'TKN', 'XO', 'DITTO', 'BE8', 'BBIK', 'MASTER', 'SABINA', 'WHA'] * 3
+results = scan_signals(test_tickers)
 
-@st.fragment(run_every="10m")
-def mobile_runtime():
-    tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
+if results:
+    df_display = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
     
-    results = []
-    progress = st.progress(0, text="สแกนหาจังหวะย้อนหลัง 10 วัน...")
-    
-    for i, t in enumerate(full_list):
-        try:
-            hist = yf.Ticker(t).history(period="20d", interval="1h")
-            res = calculate_all_metrics(hist, t)
-            if res: results.append(res)
-        except: continue
-        progress.progress((i + 1) / len(full_list))
-    progress.empty()
+    # ตารางหลัก 30 บรรทัด
+    st.write("💡 *Double-tap (Select) Ticker เพื่อเปิดหน้าต่างเต็มจอ*")
+    selected_ticker = st.selectbox("เลือก Ticker เพื่อดูรายละเอียดเต็มจอ (จำลองการ Double Click)", 
+                                    [""] + list(df_display['Ticker'].unique()))
 
-    if results:
-        # แสดง 30 ตัวล่าสุดที่เข้าเงื่อนไข (เพื่อเป็นตัวอย่างตามคำขอ)
-        df_display = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
-        
-        st.dataframe(
-            df_display.drop(columns=['raw_time', 'hist']).style.apply(lambda x: ["color: #10b981"] * len(x), axis=1)
-            .format({"ราคาที่ตัด": "{:,.2f}"}),
-            use_container_width=True, hide_index=True
-        )
+    st.dataframe(
+        df_display.drop(columns=['raw_time']).style.apply(lambda x: ["color: #10b981"] * len(x), axis=1)
+        .format({"ราคา": "{:,.2f}"}),
+        use_container_width=True, hide_index=True, height=600
+    )
 
-        # --- 🚩 ป๊อปอัพลอยตัว (Mobile Popup Simulation) ---
-        st.write("---")
-        selected = st.selectbox("🎯 แตะเลือกหุ้นเพื่อเปิดกราฟลอยตัว (Full-Screen Pop)", df_display['Ticker'])
-        
+    # --- 5. ระบบ Pop-up เต็มจอ (เมื่อมีการเลือกหุ้น) ---
+    if selected_ticker != "":
         with st.container():
-            st.markdown('<div class="floating-popup">', unsafe_allow_html=True)
-            row = df_display[df_display['Ticker'] == selected].iloc[0]
+            st.markdown('<div class="full-screen-popup">', unsafe_allow_html=True)
+            if st.button("❌ ปิดหน้าต่างนี้", use_container_width=True):
+                st.rerun()
             
-            fig = go.Figure(data=[go.Candlestick(
-                x=row['hist'].index, open=row['hist']['Open'], 
-                high=row['hist']['High'], low=row['hist']['Low'], close=row['hist']['Close']
-            )])
-            fig.update_layout(height=350, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.header(f"📈 {selected_ticker} - Tactical View")
             
-            c1, c2, c3 = st.columns(3)
-            c1.metric("R:R Ratio", row['R:R'])
-            c2.metric("Value", f"{row['Vol(M)']}M")
-            c3.metric("Entry Time", row['เวลา'])
+            # กราฟเทคนิคขนาดใหญ่
+            fig = go.Figure(data=[go.Candlestick(x=[1,2,3,4,5], open=[10,11,10,12,11], 
+                                                high=[12,13,12,14,13], low=[9,10,9,11,10], close=[11,10,12,11,12])])
+            fig.update_layout(height=400, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0))
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # ข้อมูลพื้นฐานและสรุปข่าว
+            st.subheader("📄 สรุปประเด็นสำคัญ")
+            st.info(get_mock_news(selected_ticker))
+            
+            # ปุ่มแยกสำหรับดู Bid/Offer
+            with st.expander("📊 ดูตาราง Bid / Offer (Order Book)"):
+                st.table(get_mock_bid_offer())
+            
             st.markdown('</div>', unsafe_allow_html=True)
-
-mobile_runtime()
