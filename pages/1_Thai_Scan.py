@@ -21,13 +21,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. TICKERS ---
+# --- 2. TICKERS (SET100 + Extra Growth) ---
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-# --- 3. CORE ENGINE ---
-def analyze_guardian_no_notify(ticker):
+# --- 3. CORE ENGINE (Balanced & Accurate) ---
+def analyze_guardian_red_sell(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -49,7 +49,7 @@ def analyze_guardian_no_notify(ticker):
         df['wt2'] = ta.sma(df['wt1'], length=4)
         df = df.dropna()
 
-        # Conditions
+        # Logic Conditions (กี่แท่งก็ได้ ขอแค่สถานะครบองค์ประกอบ)
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
@@ -57,15 +57,15 @@ def analyze_guardian_no_notify(ticker):
         # Signals
         df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
         df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
-        df['sell_tp'] = df['wt_cross_down'] & (df['wt1'] > 48)
+        df['sell_p'] = df['wt_cross_down'] & (df['wt1'] > 48)
 
-        all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_tp']].copy()
+        all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_p']].copy()
         if not all_sig.empty:
             last_sig = all_sig.iloc[-1]
             
             if last_sig['buy_deep']: sig_label = "Deep Buy"
             elif last_sig['buy_std']: sig_label = "Buy"
-            else: sig_label = "Sell"
+            else: sig_label = "P-Sell"
             
             tz = pytz.timezone('Asia/Bangkok')
             sig_time = last_sig.name.astimezone(tz)
@@ -89,22 +89,22 @@ def analyze_guardian_no_notify(ticker):
     return None
 
 # --- 4. DASHBOARD RUNTIME ---
-st.subheader("🛡️ Guardian Balanced (Dashboard Only)")
+st.subheader("🛡️ Guardian Swing (P-Sell Red Mode)")
 
-if st.button("🔄 Refresh Market", use_container_width=True):
+if st.button("🔄 Refresh Market Data", use_container_width=True):
     st.rerun()
 
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Looking back 60 Days</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Balanced Multi-Signal</div>', unsafe_allow_html=True)
     
     results = []
     total = len(full_scan_list)
-    bar = st.progress(0, text="กำลังสแกนหาจังหวะเทรด...")
+    bar = st.progress(0, text="กำลังวิเคราะห์สถานะหุ้นรายตัว...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_no_notify(t)
+        res = analyze_guardian_red_sell(t)
         if res:
             results.append(res)
         bar.progress((i + 1) / total)
@@ -113,11 +113,11 @@ def dashboard():
     if results:
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         
-        # สีตามเงื่อนไข (Buy = เขียวเข้ม, Deep Buy = เขียวจาง, Sell = แดง)
+        # ปรับแต่งสี Signal (P-Sell เปลี่ยนเป็นสีแดงตามสั่ง)
         def signal_style(val):
-            if val == "Buy": return 'color: #10b981; font-weight: bold;' 
-            if val == "Deep Buy": return 'color: #4fd1c5; font-weight: bold;' 
-            if val == "Sell": return 'color: #ef4444; font-weight: bold;' 
+            if val == "Buy": return 'color: #10b981; font-weight: bold;' # เขียวเข้ม
+            if val == "Deep Buy": return 'color: #4fd1c5; font-weight: bold;' # เขียว Teal จาง
+            if val == "P-Sell": return 'color: #ef4444; font-weight: bold;' # แดง
             return ''
 
         styled = df.drop(columns=['raw_time']).style.format({
@@ -134,8 +134,8 @@ def dashboard():
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
         }, use_container_width=True, height=700, hide_index=True)
     else:
-        st.info("🔎 ไม่พบสัญญาณในขณะนี้")
+        st.info("🔎 ไม่พบสัญญาณตามเงื่อนไขที่กำหนด")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (No-Line)")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (P-Sell Red)")
