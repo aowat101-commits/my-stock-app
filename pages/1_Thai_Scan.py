@@ -7,34 +7,38 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pytz
 
-# --- 1. ปรับแต่ง UI ให้เป็น Ultra-Slim และล็อกการ Sort ทุกช่องทาง ---
-st.set_page_config(page_title="Guardian Mobile", layout="wide")
+# --- 1. ปรับแต่ง UI ให้ล็อกการ Sort แบบถาวรและเหมาะสมกับหน้าจอมือถือ ---
+st.set_page_config(page_title="Guardian Alpha Mobile", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
-    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { 
-        font-size: 10.5px !important; padding: 2px !important;
-    }
     
-    /* สั่งซ่อนปุ่ม Sort และไอคอนตัวกรองที่หัวตารางแบบถาวร */
+    /* ล็อกหัวตารางไม่ให้คลิกเพื่อ Sort และซ่อนไอคอนทุกอย่างที่หัวตาราง */
+    [data-testid="stTableDataHeaderCell"] {
+        pointer-events: none !important;
+        cursor: default !important;
+    }
     button[title="Sort column"], .st-emotion-cache-1pxm6y3, [data-testid="stHeaderActionElements"] {
         display: none !important;
     }
     
-    /* ป้องกันการคลิกที่หัวตาราง */
-    [data-testid="stTableDataHeaderCell"] { pointer-events: none !important; }
-
+    /* ปรับแต่งฟอนต์ตารางให้กระชับสำหรับมือถือ */
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { 
+        font-size: 10.5px !important; padding: 2px !important;
+    }
     .stDataFrame { height: 420px; }
+
+    /* ระบบ Pop-up เต็มจอ */
     .mobile-overlay {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background-color: #0f172a; z-index: 100000; overflow-y: auto; padding: 10px;
+        background-color: #0f172a; z-index: 100000; overflow-y: auto; padding: 15px;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. ฟังก์ชันจำลองข้อมูล (Summary & B/O) ---
 def get_mock_summary_brief(ticker):
-    return f"📌 **{ticker} สรุป:** ราคางัดตัวขึ้นพร้อม Vol. หนาแน่น มีสัญญาณสะสมในหุ้นกลุ่ม mai รับโปรเจกต์ใหม่ไตรมาส 2"
+    return f"📌 **{ticker} สรุป:** ราคางัดตัวขึ้นพร้อมวอลุ่มหนาแน่น มีสัญญาณสะสมชัดเจนในกลุ่ม mai รับโปรเจกต์ใหม่ไตรมาส 2"
 
 def get_mock_bo_slim():
     return pd.DataFrame({
@@ -49,7 +53,8 @@ def get_slim_test_20():
     tickers = ['AU', 'SPA', 'TKN', 'XO', 'DITTO', 'BE8', 'BBIK', 'MASTER', 'SABINA', 'WHA', 
                'SAPPE', 'SISB', 'SNNP', 'ICHI', 'KAMART', 'COCOCO', 'KLINIQ', 'PLANB', 'MC', 'CHG']
     results = []
-    now = datetime.now(pytz.timezone('Asia/Bangkok'))
+    # ใช้เวลาปัจจุบันจาก Summary: 2026-05-02 13:45:59
+    now = datetime(2026, 5, 2, 13, 45, 59, tzinfo=pytz.timezone('Asia/Bangkok'))
     for i, t in enumerate(tickers):
         prev_c = 12.0 + i
         signal_type = "🚀 BUY" if i % 2 == 0 else "🔻 SELL"
@@ -66,12 +71,14 @@ def get_slim_test_20():
             "Date": (now - timedelta(minutes=i*15)).strftime("%d/%m/%y"),
             "raw_t": now - timedelta(minutes=i*15)
         })
-    # บังคับเรียงตามเวลาล่าสุดเสมอ
+    # บังคับเรียงตามเวลาและวันที่ล่าสุดเท่านั่นเพื่อป้องกันการสับสน
     return pd.DataFrame(results).sort_values(by="raw_t", ascending=False)
 
-# --- 4. ฟังก์ชันกำหนดสีตามเงื่อนไข ---
-def style_specific_columns(row):
+# --- 4. ฟังก์ชันกำหนดสีตามเงื่อนไขที่ระบุ ---
+def style_dynamic_columns(row):
+    # สีตามสัญญาณ (สำหรับ Col 1, 2, 5, 6, 7)
     sig_color = '#10b981' if "BUY" in str(row['Signal']) else '#ef4444' if "SELL" in str(row['Signal']) else '#ffffff'
+    # สีตามสถานะราคาจริง (สำหรับ Col 3, 4)
     price_status_color = '#10b981' if row['Chg%'] > 0 else '#ef4444' if row['Chg%'] < 0 else '#ffffff'
     
     styles = []
@@ -83,7 +90,7 @@ def style_specific_columns(row):
     return styles
 
 # --- 5. หน้าจอหลัก ---
-st.subheader("🛰️ Guardian: Mobile Alpha (Sort Locked)")
+st.subheader("🛰️ Guardian: Mobile Alpha (Strict Sort Lock)")
 
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
@@ -91,13 +98,13 @@ if st.button("🔄 REFRESH SCAN", use_container_width=True):
 df_slim = get_slim_test_20()
 selected = st.selectbox("🎯 Tap to View Details", ["--- Select Ticker ---"] + list(df_slim['Ticker']))
 
-# แสดงตารางแบบล็อกทุกอย่าง (No Sort, No Edit)
+# แสดงตารางแบบล็อกหัวตารางถาวร (Disabled & CSS Locked)
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
         "Price": "{:.2f}",
         "Chg%": "{:.2f}"
-    }).apply(style_specific_columns, axis=1),
+    }).apply(style_dynamic_columns, axis=1),
     use_container_width=True, 
     hide_index=True,
     column_config={col: st.column_config.Column(disabled=True) for col in df_slim.columns}
@@ -107,16 +114,16 @@ st.dataframe(
 if selected != "--- Select Ticker ---":
     with st.container():
         st.markdown('<div class="mobile-overlay">', unsafe_allow_html=True)
-        if st.button("❌ CLOSE", use_container_width=True):
+        if st.button("❌ CLOSE ANALYSIS", use_container_width=True):
             st.rerun()
         
-        st.markdown(f"### 📈 {selected}")
+        st.markdown(f"### 📈 {selected} Deep Analysis")
         fig = go.Figure(data=[go.Candlestick(x=[1,2,3,4,5], open=[10,11,10,12,11], 
                                             high=[12,13,12,14,13], low=[9,10,9,11,10], close=[11,10,12,11,12])])
-        fig.update_layout(height=300, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False)
+        fig.update_layout(height=350, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
         st.info(get_mock_summary_brief(selected))
-        if st.button("📊 View Bid / Offer", use_container_width=True):
+        if st.button("📊 View Bid / Offer Details", use_container_width=True):
             st.table(get_mock_bo_slim())
         st.markdown('</div>', unsafe_allow_html=True)
