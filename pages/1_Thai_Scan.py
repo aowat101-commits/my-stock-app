@@ -2,109 +2,125 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# 1. ตั้งค่าหน้าจอและสไตล์ (คงเดิม)
-st.set_page_config(page_title="Guardian Intelligence", layout="wide")
+# 1. ตั้งค่าหน้าจอและสไตล์ Loft
+st.set_page_config(page_title="Market Intelligence Dashboard", layout="wide")
 
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .time-status {
-        background-color: #1e293b; color: #fbbf24; padding: 10px; border-radius: 6px;
+        background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px;
         text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
     }
     [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
-    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; }
+    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; font-weight: normal !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. รายชื่อหุ้น (ใช้ลิสต์ที่คุณมิลค์ให้มา)
-set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'CPALL.BK', 'DELTA.BK', 'GULF.BK', 'KBANK.BK', 'PTT.BK', 'SCB.BK'] # ... (ย่อเพื่อประหยัดพื้นที่)
-extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'XO.BK']
+# 2. รายชื่อหุ้นแบบจัดเต็ม (SET100 + sSET/MAI ตัวเด่น)
+set100 = [
+    'AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK',
+    'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK',
+    'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK',
+    'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK',
+    'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK',
+    'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK',
+    'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK',
+    'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK',
+    'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK',
+    'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK',
+    'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK'
+]
+
+extra_growth = [
+    'TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 
+    'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'MASTER.BK', 'KLINIQ.BK', 'WARRIX.BK', 
+    'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK'
+]
+
 full_scan_list = list(set(set100 + extra_growth))
 
-# 3. ฟังก์ชันคำนวณ WaveTrend (ตามสูตรคอมโบ)
-def get_wt(df):
-    ap = (df['High'] + df['Low'] + df['Close']) / 3
-    esa = ta.ema(ap, length=10)
-    d = ta.ema(abs(ap - esa), length=10)
-    ci = (ap - esa) / (0.015 * d)
-    wt1 = ta.ema(ci, length=21)
-    wt2 = ta.sma(wt1, length=4)
-    return wt1, wt2
+# 3. ฟังก์ชันคำนวณ HMA 30
+def get_hma(series, length):
+    def wma(data, period):
+        weights = np.arange(1, period + 1)
+        return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
+    raw_hma = 2 * wma(series, half_length) - wma(series, length)
+    return wma(raw_hma, sqrt_length)
 
-# 4. ฟังก์ชันสแกนด้วยเงื่อนไข The Guardian Swing
-def scan_guardian(df, ticker):
-    if len(df) < 60: return None
+# 4. ฟังก์ชันค้นหาจุดเปลี่ยนสีล่าสุด
+def get_last_signal(df, ticker):
+    if len(df) < 35: return None
+    tz = pytz.timezone('Asia/Bangkok')
+    df['hma'] = get_hma(df['Close'], 30)
+    df['trend'] = np.where(df['hma'] > df['hma'].shift(1), "UP", "DOWN")
+    df['is_switch'] = df['trend'] != df['trend'].shift(1)
     
-    # คำนวณอินดิเคเตอร์
-    df['ema8'] = ta.ema(df['Close'], length=8)
-    df['ema20'] = ta.ema(df['Close'], length=20)
-    df['hull'] = ta.hma(df['Close'], length=55)
-    df['wt1'], df['wt2'] = get_wt(df)
-    df['vma5'] = ta.sma(df['Volume'], length=5)
-    
-    curr = df.iloc[-1]
-    prev = df.iloc[-2]
-    
-    # เงื่อนไข Buy: WT ตัดขึ้น < -53 + ราคาเหนือ EMA + Hull เขียว + Vol 1.5x
-    wt_cross = (prev['wt1'] < prev['wt2']) and (curr['wt1'] >= curr['wt2'])
-    is_buy = wt_cross and (curr['wt1'] < -53) and \
-             (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20']) and \
-             (curr['hull'] > prev['hull']) and (curr['Volume'] > (curr['vma5'] * 1.5))
-             
-    # เงื่อนไข Sell: WT ตัดลง > 53 หรือ หลุด EMA20 หรือ Hull แดง
-    is_sell = (curr['wt1'] > 53 and prev['wt1'] > prev['wt2'] and curr['wt1'] <= curr['wt2']) or \
-              (curr['Close'] < curr['ema20']) or (curr['hull'] < prev['hull'])
-    
-    if is_buy or is_sell:
-        tz = pytz.timezone('Asia/Bangkok')
-        actual_time = curr.name.astimezone(tz)
+    switches = df[df['is_switch'] == True].copy()
+    if not switches.empty:
+        last_sig = switches.iloc[-1]
+        actual_time = last_sig.name.astimezone(tz)
         return {
             "Ticker": ticker.replace('.BK', ''),
-            "Price": round(float(curr['Close']), 2),
-            "Signal": "🚀 BUY" if is_buy else "🔻 SELL",
-            "WT": round(float(curr['wt1']), 2),
-            "Vol_Ratio": round(float(curr['Volume']/curr['vma5']), 2),
+            "ราคาที่ตัด": last_sig['Close'], # ส่งเป็นตัวเลขเพื่อนำไป Format ในตาราง
+            "Signal": "🚀 ซื้อ" if last_sig['trend'] == "UP" else "🔻 ขาย",
             "เวลา": actual_time.strftime("%H:%M:%S"),
+            "วันที่": actual_time.strftime("%d/%m/%y"),
             "raw_time": actual_time
         }
     return None
 
-# 5. Dashboard Runtime (Fragment 10 นาที)
+# 5. ส่วนหัวและปุ่มรีเฟรช
+st.subheader("🛰️ Market Intelligence: Top 30 Active Signals")
+
+if st.button("🔄 Force Refresh Scan", use_container_width=True):
+    st.rerun()
+
+# 6. Dashboard อัปเดตออโต้ทุก 10 นาที
 @st.fragment(run_every="10m")
 def dashboard_runtime():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: The Guardian Swing</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | สแกนหุ้น SET100 + sSET + MAI</div>', unsafe_allow_html=True)
     
     results = []
-    bar = st.progress(0, text="Guardian กำลังสแกนหาจังหวะที่เป๊ะที่สุด...")
+    bar = st.progress(0, text="กำลังสแกนหาจังหวะเปลี่ยนสีล่าสุด...")
     
+    total = len(full_scan_list)
     for i, t in enumerate(full_scan_list):
         try:
-            hist = yf.download(t, period="60d", interval="1h", progress=False)
+            stock = yf.Ticker(t)
+            hist = stock.history(period="10d", interval="1h")
             if not hist.empty:
-                res = scan_guardian(hist, t)
+                res = get_last_signal(hist, t)
                 if res: results.append(res)
         except: continue
-        bar.progress((i + 1) / len(full_scan_list))
+        bar.progress((i + 1) / total)
     
     bar.empty()
 
     if results:
+        # เรียงตามความสดใหม่และคัดเฉพาะ 30 ตัวล่าสุด
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(30)
         
         def style_row(row):
-            color = '#10b981' if "BUY" in row['Signal'] else '#ef4444'
+            color = '#10b981' if "ซื้อ" in row['Signal'] else '#ef4444'
             return [f'color: {color};'] * len(row)
 
         st.dataframe(
             df.drop(columns=['raw_time']).style.apply(style_row, axis=1)
-            .format({"Price": "{:,.2f}", "WT": "{:,.2f}", "Vol_Ratio": "{:,.2f}x"}),
-            use_container_width=True, height=600, hide_index=True
+            .format({"ราคาที่ตัด": "{:,.2f}"}), # กำหนดทศนิยม 2 ตำแหน่ง (0.00) ตรงนี้
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", width=70),
+                "ราคาที่ตัด": st.column_config.NumberColumn("ราคา", width=65, format="%.2f"), # บังคับ Format ใน Column Config ด้วย
+                "Signal": st.column_config.TextColumn("Signal", width=70),
+                "เวลา": st.column_config.TextColumn("เวลาจริง", width=75),
+                "วันที่": st.column_config.TextColumn("วันที่", width=65),
+            },
+            use_container_width=True, height=650, hide_index=True
         )
 
 dashboard_runtime()
