@@ -41,8 +41,8 @@ def calculate_wavetrend(df, ch_len=9, avg_len=12):
     wt2 = ta.sma(wt1, length=4)
     return wt1, wt2
 
-# --- 3. ฟังก์ชันสแกนหา 10 ตัวล่าสุดที่เข้าเงื่อนไข ---
-def get_last_signal(df, ticker):
+# --- 3. ฟังก์ชันสแกนหาตัวที่เข้าเงื่อนไข (เช็คย้อนหลัง 10 วัน) ---
+def get_guardian_signal(df, ticker):
     if len(df) < 60: return None
     tz = pytz.timezone('Asia/Bangkok')
     
@@ -52,47 +52,50 @@ def get_last_signal(df, ticker):
     df['wt1'], df['wt2'] = calculate_wavetrend(df, 9, 12)
     df['vma5'] = df['Volume'].rolling(window=5).mean()
     
-    curr = df.iloc[-1]
-    prev = df.iloc[-2]
-    
-    # 🚩 เงื่อนไข: Value > 10M และ Vol > 1.5x
-    daily_value = curr['Close'] * curr['Volume']
-    vol_confirm = (daily_value > 10_000_000) and (curr['Volume'] > curr['vma5'] * 1.5)
-    
-    # เช็คสัญญาณจุดตัด (ย้อนหลัง 1-3 แท่งเพื่อให้เจอ 10 ตัว)
-    hma_up = curr['hma'] > prev['hma']
-    wt_cross_up = (prev['wt1'] < prev['wt2']) and (curr['wt1'] > curr['wt2'])
-    above_ema = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
+    # วนลูปเช็คย้อนหลังเพื่อหาจุดสัญญาณล่าสุดที่เข้าเงื่อนไข
+    for i in range(1, min(len(df), 40)): # เช็คย้อนหลังประมาณ 40 แท่ง (10 วันทำการใน TF 1H)
+        curr = df.iloc[-i]
+        prev = df.iloc[-(i+1)]
+        
+        daily_value = curr['Close'] * curr['Volume']
+        vol_confirm = (daily_value > 10_000_000) and (curr['Volume'] > curr['vma5'] * 1.5)
+        
+        hma_up = curr['hma'] > prev['hma']
+        wt_cross_up = (prev['wt1'] < prev['wt2']) and (curr['wt1'] > curr['wt2'])
+        above_ema = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
 
-    # คำนวณ R:R
-    target = curr['Close'] * 1.05
-    stop_loss = curr['ema20']
-    risk = curr['Close'] - stop_loss
-    rr_ratio = (target - curr['Close']) / risk if risk > 0 else 0
-
-    if hma_up and wt_cross_up and above_ema and vol_confirm:
-        actual_time = df.index[-1].astimezone(tz)
-        return {
-            "Ticker": ticker.replace('.BK', ''),
-            "ราคา": curr['Close'],
-            "Signal": "🚀 ซื้อ",
-            "R:R": round(rr_ratio, 2),
-            "Vol(M)": round(daily_value / 1_000_000, 1),
-            "เวลา": actual_time.strftime("%H:%M:%S"),
-            "วันที่": actual_time.strftime("%d/%m/%y"),
-            "raw_time": actual_time,
-            "hist": df.tail(30)
-        }
+        if hma_up and wt_cross_up and above_ema and vol_confirm:
+            target = curr['Close'] * 1.05
+            stop_loss = curr['ema20']
+            risk = curr['Close'] - stop_loss
+            rr_ratio = (target - curr['Close']) / risk if risk > 0 else 0
+            
+            actual_time = curr.name.astimezone(tz)
+            return {
+                "Ticker": ticker.replace('.BK', ''),
+                "ราคาที่ตัด": curr['Close'],
+                "Signal": "🚀 ซื้อ",
+                "R:R": round(rr_ratio, 2),
+                "Vol(M)": round(daily_value / 1_000_000, 1),
+                "เวลา": actual_time.strftime("%H:%M:%S"),
+                "วันที่": actual_time.strftime("%d/%m/%y"),
+                "raw_time": actual_time,
+                "hist": df.tail(50)
+            }
     return None
 
-# --- 4. การจัดการรายชื่อหุ้น (Dynamic List) ---
-# ในส่วนนี้คุณสามารถใส่รายชื่อ SET100 + sSET/MAI ทั้งหมดที่คุณมีได้เลยครับ
+# --- 4. รายชื่อหุ้น (SET100 + sSET/MAI) ---
 full_scan_list = [
     'ADVANC.BK', 'CPALL.BK', 'AOT.BK', 'WHA.BK', 'DELTA.BK', 'PTT.BK', 'BDMS.BK', 'GULF.BK',
-    'AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'DITTO.BK', 'BE8.BK', 'BBIK.BK', 'MASTER.BK'
-] # ตัวอย่างบางส่วน
+    'AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'DITTO.BK', 'BE8.BK', 'BBIK.BK', 'MASTER.BK',
+    'SAPPE.BK', 'SISB.BK', 'SNNP.BK', 'ICHI.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK'
+]
 
-st.subheader("🛰️ Market Intelligence: Top 10 Active Signals")
+st.subheader("🛰️ Market Intelligence: Top 10 Recent Signals (Last 10 Days)")
+
+# ปุ่มสแกนหน้าจอ
+if st.button("🔍 Start Scanning All Markets", use_container_width=True):
+    st.rerun()
 
 @st.fragment(run_every="10m")
 def dashboard_runtime():
@@ -100,32 +103,39 @@ def dashboard_runtime():
     st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | SET100 + sSET + MAI</div>', unsafe_allow_html=True)
     
     results = []
-    for t in full_scan_list:
+    progress_bar = st.progress(0, text="กำลังสแกนหาจังหวะต้นน้ำ...")
+    
+    for i, t in enumerate(full_scan_list):
         try:
-            hist = yf.Ticker(t).history(period="10d", interval="1h")
-            res = get_last_signal(hist, t)
+            hist = yf.Ticker(t).history(period="20d", interval="1h") # ดึงข้อมูลเผื่อย้อนหลัง 10 วัน
+            res = get_guardian_signal(hist, t)
             if res: results.append(res)
         except: continue
+        progress_bar.progress((i + 1) / len(full_scan_list))
+    
+    progress_bar.empty()
     
     if results:
-        # คัดเฉพาะ 10 ตัวล่าสุด
+        # คัดเฉพาะ 10 ตัวล่าสุดที่เกิดสัญญาณ
         df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(10)
         
         st.dataframe(
             df.drop(columns=['raw_time', 'hist']).style.apply(lambda x: ["color: #10b981"] * len(x), axis=1)
-            .format({"ราคา": "{:,.2f}"}),
+            .format({"ราคาที่ตัด": "{:,.2f}"}),
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคา": st.column_config.NumberColumn("ราคา", width=65, format="%.2f"),
+                "ราคาที่ตัด": st.column_config.NumberColumn("ราคา", width=65, format="%.2f"),
                 "Signal": st.column_config.TextColumn("Signal", width=75),
                 "R:R": st.column_config.NumberColumn("R:R", width=50),
                 "Vol(M)": st.column_config.NumberColumn("Vol(M)", width=60),
+                "เวลา": st.column_config.TextColumn("เวลา", width=75),
+                "วันที่": st.column_config.TextColumn("วันที่", width=65),
             },
             use_container_width=True, hide_index=True
         )
 
-        # 🚩 กราฟ Interactive (Interactive Chart)
-        selected_ticker = st.selectbox("🔍 เลือกหุ้นเพื่อดูกราฟ Interactive", df['Ticker'])
+        # กราฟ Interactive
+        selected_ticker = st.selectbox("🔍 เลือกหุ้นเพื่อดูรายละเอียดกราฟ Interactive", df['Ticker'])
         selected_row = df[df['Ticker'] == selected_ticker].iloc[0]
         
         fig = go.Figure(data=[go.Candlestick(x=selected_row['hist'].index,
