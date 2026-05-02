@@ -27,7 +27,7 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_v3_5_prev_fixed(ticker):
+def analyze_guardian_v3_7(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -49,7 +49,7 @@ def analyze_guardian_v3_5_prev_fixed(ticker):
         df['wt2'] = ta.sma(df['wt1'], length=4)
         df = df.dropna()
 
-        # Signals
+        # Signal Logic
         df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
@@ -61,9 +61,7 @@ def analyze_guardian_v3_5_prev_fixed(ticker):
         all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_p']].copy()
         if not all_sig.empty:
             last_sig = all_sig.iloc[-1]
-            if last_sig['buy_deep']: sig_label = "▲ Deep Buy"
-            elif last_sig['buy_std']: sig_label = "🚀 Buy"
-            else: sig_label = "⚠️ P-Sell"
+            sig_label = "▲ Deep Buy" if last_sig['buy_deep'] else ("🚀 Buy" if last_sig['buy_std'] else "⚠️ P-Sell")
             
             tz = pytz.timezone('Asia/Bangkok')
             sig_time = last_sig.name.astimezone(tz)
@@ -75,24 +73,21 @@ def analyze_guardian_v3_5_prev_fixed(ticker):
                 prev_close = float(df['Close'].iloc[idx-1]) if idx > 0 else curr_price
                 prev_prev_close = float(df['Close'].iloc[idx-2]) if idx > 1 else prev_close
                 
-                pct_chg = ((curr_price - prev_close) / prev_close) * 100
-                prev_diff = prev_close - prev_prev_close # ตรวจสอบสีของราคาปิดก่อนหน้า
-                
                 return {
                     "Ticker": ticker.replace('.BK', ''),
                     "Prev": prev_close,
                     "Price": curr_price,
-                    "%Chg": pct_chg,
+                    "%Chg": ((curr_price - prev_close) / prev_close) * 100,
                     "Signal": sig_label,
                     "Time/Date": sig_time.strftime("%H:%M %d/%m"),
                     "raw_time": sig_time,
-                    "prev_diff": prev_diff
+                    "prev_diff": prev_close - prev_prev_close 
                 }
     except: pass
     return None
 
 # --- 4. DASHBOARD RUNTIME ---
-st.subheader("🛡️ Guardian Balanced Dashboard")
+st.subheader("🛡️ Guardian Balanced Dashboard (v3.7)")
 
 if st.button("🔄 Refresh Market", use_container_width=True):
     st.rerun()
@@ -100,56 +95,45 @@ if st.button("🔄 Refresh Market", use_container_width=True):
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Final Prev Color Logic</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Independent Color Verification</div>', unsafe_allow_html=True)
     
     results = []
-    total = len(full_scan_list)
-    bar = st.progress(0, text="กำลังวิเคราะห์ข้อมูลตารางสี...")
-    
-    for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_v3_5_prev_fixed(t)
-        if res:
-            results.append(res)
-        bar.progress((i + 1) / total)
-    bar.empty()
+    for t in full_scan_list:
+        res = analyze_guardian_v3_7(t)
+        if res: results.append(res)
 
     if results:
-        df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
-        df_display = df.drop(columns=['raw_time', 'prev_diff']).reset_index(drop=True)
+        df_master = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
+        df_display = df_master.drop(columns=['raw_time', 'prev_diff']).reset_index(drop=True)
 
-        # 1. สี Ticker, Signal, Time/Date ตามสัญญาณ
-        def apply_signal_colors(row):
-            sig = row['Signal']
-            color = '#4fd1c5' if "▲ Deep Buy" in sig else ('#10b981' if "🚀 Buy" in sig else '#ef4444')
-            return [f'color: {color}' if col in ['Ticker', 'Signal', 'Time/Date'] else '' for col in df_display.columns]
-
-        # 2. จัดการสีช่อง 2 (Prev) และ 3, 4 (Price, %Chg)
-        def apply_dynamic_styles(idx):
-            row_data = df.iloc[idx]
-            pct = row_data['%Chg']
-            prev_d = row_data['prev_diff']
+        def apply_independent_styles(row):
+            ticker = row['Ticker']
+            m_row = df_master[df_master['Ticker'] == ticker].iloc[0]
             
-            # ช่อง 3-4: +เขียว, -แดง, 0ขาว/ดำ
-            price_color = 'color: #10b981;' if pct > 0 else ('color: #ef4444;' if pct < 0 else '')
+            # 1. สี SIGNAL (Ticker, Signal, Time)
+            sig = m_row['Signal']
+            sig_c = '#4fd1c5' if "▲" in sig else ('#10b981' if "🚀" in sig else '#ef4444')
             
-            # ช่อง 2: ตามสีของราคาปิดก่อนหน้า (สูงกว่าเขียว, ต่ำกว่าแดง, เท่ากันขาว/ดำ)
-            if prev_d > 0: prev_color = 'color: #10b981;'
-            elif prev_d < 0: prev_color = 'color: #ef4444;'
-            else: prev_color = '' # Adaptive
+            # 2. สี PREV (Prev) - แยกอิสระ
+            p_diff = m_row['prev_diff']
+            prev_c = 'color: #10b981;' if p_diff > 0 else ('color: #ef4444;' if p_diff < 0 else '')
             
-            styles = []
-            for col in df_display.columns:
-                if col in ['Price', '%Chg']: styles.append(price_color)
-                elif col == 'Prev': styles.append(prev_color)
-                else: styles.append('')
-            return styles
+            # 3. สี PRICE (Price, %Chg) - แยกอิสระ
+            pct = m_row['%Chg']
+            price_c = 'color: #10b981;' if pct > 0 else ('color: #ef4444;' if pct < 0 else '')
+            
+            return [
+                f'color: {sig_c}', # Ticker
+                prev_c,            # Prev
+                price_c,           # Price
+                price_c,           # %Chg
+                f'color: {sig_c}', # Signal
+                f'color: {sig_c}'  # Time/Date
+            ]
 
         styled = df_display.style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).apply(apply_signal_colors, axis=1)
-
-        for i in range(len(df_display)):
-            styled.apply(lambda x: apply_dynamic_styles(i), axis=1, subset=pd.IndexSlice[i, :])
+        }).apply(apply_independent_styles, axis=1)
 
         st.dataframe(styled, column_config={
             "Ticker": st.column_config.TextColumn("Ticker", width=75),
@@ -164,4 +148,4 @@ def dashboard():
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Locked Adaptive Colors)")
+st.caption("Por Piang Electric Plus Co., Ltd. | Verified Independent Color Release")
