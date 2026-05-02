@@ -8,10 +8,10 @@ import pytz
 import requests
 
 # --- 1. LINE NOTIFY CONFIG ---
-LINE_TOKEN = "YOUR_LINE_NOTIFY_TOKEN"
+LINE_TOKEN = "ใส่_TOKEN_ของคุณมิลค์ตรงนี้"
 
 def send_line_notify(message):
-    if LINE_TOKEN == "YOUR_LINE_NOTIFY_TOKEN":
+    if LINE_TOKEN == "ใส่_TOKEN_ของคุณมิลค์ตรงนี้":
         return
     url = 'https://notify-api.line.me/api/notify'
     headers = {'Authorization': f'Bearer {LINE_TOKEN}'}
@@ -69,7 +69,7 @@ def analyze_guardian_styled(ticker):
         df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
         
-        # Logic - กี่แท่งก็ได้ ขอแค่สถานะครบ
+        # Signals
         df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
         df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
         df['sell_tp'] = df['wt_cross_down'] & (df['wt1'] > 48)
@@ -78,7 +78,6 @@ def analyze_guardian_styled(ticker):
         if not all_sig.empty:
             last_sig = all_sig.iloc[-1]
             
-            # การตั้งชื่อสัญญาณ
             if last_sig['buy_deep']: sig_label = "Deep Buy"
             elif last_sig['buy_std']: sig_label = "Buy"
             else: sig_label = "Sell"
@@ -127,7 +126,6 @@ def dashboard():
         res = analyze_guardian_styled(t)
         if res:
             results.append(res)
-            # Notification logic
             nid = f"{res['Ticker']}_{res['Signal']}_{res['Time/Date']}"
             if nid not in st.session_state.notified_set:
                 icon = "🚀" if "Buy" in res['Signal'] else "⚠️"
@@ -140,16 +138,16 @@ def dashboard():
     if results:
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         
-        # ปรับจูนสีตามคำสั่งคุณมิลค์
+        # ฟังก์ชันกำหนดสี (เปลี่ยนจาก applymap เป็น map)
         def signal_style(val):
-            if val == "Buy": return 'color: #10b981; font-weight: bold;' # เขียวเข้ม
-            if val == "Deep Buy": return 'color: #4fd1c5; font-weight: bold;' # เขียวจาง (Teal)
-            if val == "Sell": return 'color: #ef4444; font-weight: bold;' # แดง
+            if val == "Buy": return 'color: #10b981; font-weight: bold;' 
+            if val == "Deep Buy": return 'color: #4fd1c5; font-weight: bold;' 
+            if val == "Sell": return 'color: #ef4444; font-weight: bold;' 
             return ''
 
         styled = df.drop(columns=['raw_time']).style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).applymap(signal_style, subset=['Signal']
+        }).map(signal_style, subset=['Signal'] # แก้ไขจาก .applymap เป็น .map
         ).map(lambda x: 'color: #10b981;' if x > 0 else 'color: #ef4444;', subset=['%Chg'])
         
         st.dataframe(styled, column_config={
