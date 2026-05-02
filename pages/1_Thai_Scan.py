@@ -7,13 +7,13 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pytz
 
-# --- 1. สไตล์ Loft สำหรับ Mobile (รองรับการแตะค้างผ่าน CSS/JS จำลอง) ---
+# --- 1. สไตล์ Loft สำหรับ Mobile (เน้นความกระชับของตาราง) ---
 st.set_page_config(page_title="Guardian Alpha Mobile", layout="wide")
 st.markdown("""
     <style>
     [data-testid="stStatusWidget"] {display: none !important;}
     .time-status { background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px; text-align: center; font-size: 12px; margin-bottom: 10px; border: 1px solid #334155; }
-    [data-testid="stDataFrame"] td { font-size: 13px !important; cursor: pointer; }
+    [data-testid="stDataFrame"] td { font-size: 12px !important; }
     
     /* หน้าต่าง Pop-up เต็มจอ */
     .full-screen-popup {
@@ -23,30 +23,35 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ฟังก์ชันจำลองข้อมูล (News Summary & Bid/Offer) ---
+# --- 2. ฟังก์ชันจำลองข้อมูล (News & B/O) ---
 def get_news_summary(ticker):
-    return f"📌 **สรุปประเด็น {ticker}:** ราคากำลังทดสอบแนวต้านสำคัญพร้อมวอลุ่มหนาแน่น มีแรงซื้อเก็งกำไรรับข่าวโครงการใหม่ในไตรมาส 2"
+    return f"📌 **สรุปประเด็น {ticker}:** ราคางัดตัวขึ้นพร้อมวอลุ่มหนาแน่น มีแรงซื้อเก็งกำไรรับข่าวโครงการใหม่ในไตรมาส 2"
 
 def get_bid_offer_table():
-    data = {'Bid_Vol': ['1.5M', '800K', '2.1M'], 'Price': ['10.5', '10.4', '10.3'], 'Off_Vol': ['900K', '1.2M', '3.5M']}
+    data = {'Bid_Vol': ['1.5M', '800K', '2.1M'], 'Price': ['10.50', '10.45', '10.40'], 'Off_Vol': ['900K', '1.2M', '3.5M']}
     return pd.DataFrame(data)
 
 # --- 3. ฟังก์ชันดึงข้อมูลย้อนหลัง 20 ตัว (Test UI) ---
 @st.cache_data
-def get_test_signals():
-    # จำลองหุ้น 20 ตัวที่เข้าเงื่อนไขย้อนหลัง (Value > 10M, HMA/WT Up)
+def get_test_signals_v2():
     tickers = ['AU', 'SPA', 'TKN', 'XO', 'DITTO', 'BE8', 'BBIK', 'MASTER', 'SABINA', 'WHA', 
                'SAPPE', 'SISB', 'SNNP', 'ICHI', 'KAMART', 'COCOCO', 'KLINIQ', 'PLANB', 'MC', 'CHG']
     results = []
+    now = datetime.now()
     for i, t in enumerate(tickers):
+        close_prev = 10.0 + i
+        price_now = close_prev * (1 + (np.random.uniform(-0.02, 0.05)))
+        change_pct = ((price_now - close_prev) / close_prev) * 100
+        
         results.append({
             "Ticker": t,
-            "ราคา": round(12.5 + i, 2),
-            "Signal": "🚀 BUY",
-            "R:R": round(1.8 + (i * 0.1), 2),
-            "Vol(M)": round(15.0 + i, 1),
-            "เวลา": (datetime.now() - timedelta(minutes=i*20)).strftime("%H:%M"),
-            "raw_time": datetime.now() - timedelta(minutes=i*20)
+            "ราคาปิดวันก่อนหน้า": round(close_prev, 2),
+            "ราคา": round(price_now, 2),
+            "%เปลี่ยนแปลง": round(change_pct, 2),
+            "Signal": "🚀 ซื้อ",
+            "เวลา": (now - timedelta(minutes=i*20)).strftime("%H:%M"),
+            "วันที่": (now - timedelta(minutes=i*20)).strftime("%d/%m/%y"),
+            "raw_time": now - timedelta(minutes=i*20)
         })
     return pd.DataFrame(results)
 
@@ -56,13 +61,19 @@ st.subheader("🛰️ Intelligence Dashboard (20 Recent Signals)")
 if st.button("🔍 START SCAN (SET100 + sSET/MAI)", use_container_width=True):
     st.rerun()
 
-df_test = get_test_signals()
+df_test = get_test_signals_v2()
 
-# ระบบเลือกหุ้นเพื่อเปิด Pop-up (จำลองการแตะค้าง)
+# ระบบเลือกหุ้นเพื่อเปิด Pop-up (ใช้ Selectbox แทนการแตะค้างเพื่อความชัวร์บน Mobile)
 selected_ticker = st.selectbox("🎯 เลือก Ticker เพื่อเปิดหน้าต่างวิเคราะห์เต็มจอ", ["--- เลือกหุ้น ---"] + list(df_test['Ticker']))
 
+# แสดงตารางตามลำดับและรูปแบบที่ต้องการ
 st.dataframe(
-    df_test.drop(columns=['raw_time']).style.apply(lambda x: ["color: #10b981"] * len(x), axis=1),
+    df_test.drop(columns=['raw_time']).style.apply(lambda x: ["color: #10b981"] * len(x), axis=1)
+    .format({
+        "ราคาปิดวันก่อนหน้า": "{:.2f}",
+        "ราคา": "{:.2f}",
+        "%เปลี่ยนแปลง": "{:.2f}"
+    }),
     use_container_width=True, hide_index=True, height=500
 )
 
