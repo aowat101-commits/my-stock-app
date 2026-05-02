@@ -27,7 +27,7 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_adaptive(ticker):
+def analyze_guardian_final_v3_5(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -100,14 +100,14 @@ if st.button("🔄 Refresh Market", use_container_width=True):
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Adaptive Theme Support</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Final Color Mapping</div>', unsafe_allow_html=True)
     
     results = []
     total = len(full_scan_list)
-    bar = st.progress(0, text="วิเคราะห์สัญญาณ...")
+    bar = st.progress(0, text="กำลังสแกนสัญญาณเทคนิค...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_adaptive(t)
+        res = analyze_guardian_final_v3_5(t)
         if res:
             results.append(res)
         bar.progress((i + 1) / total)
@@ -117,44 +117,39 @@ def dashboard():
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         df_display = df.drop(columns=['raw_time', 'prev_diff']).reset_index(drop=True)
 
-        # 1. สี Ticker, Signal, Time/Date (ตาม Signal)
-        def apply_signal_styles(row):
+        # 1. จัดการสี Ticker, Signal, Time/Date (ตาม Signal)
+        def apply_signal_colors(row):
             sig = row['Signal']
             color = '#4fd1c5' if "▲ Deep Buy" in sig else ('#10b981' if "🚀 Buy" in sig else '#ef4444')
             return [f'color: {color}' if col in ['Ticker', 'Signal', 'Time/Date'] else '' for col in df_display.columns]
 
-        # 2. สี Prev, Price, %Chg (ตามความเป็นจริง + รองรับ Adaptive Theme เมื่อราคาเท่าเดิม)
-        def apply_adaptive_price_styles(idx):
+        # 2. จัดการสีช่อง 2 (Prev) และช่อง 3-4 (Price, %Chg)
+        def apply_dynamic_styles(idx):
             row_data = df.iloc[idx]
             pct = row_data['%Chg']
             prev_d = row_data['prev_diff']
             
-            # สีช่อง 3-4 (Price, %Chg)
-            if pct > 0: price_color = 'color: #10b981;'
-            elif pct < 0: price_color = 'color: #ef4444;'
-            else: price_color = '' # ปล่อยว่างเพื่อให้ระบบเลือก ขาว/ดำ ตามธีมหน้าจออัตโนมัติ
+            # ช่อง 3-4 กลับไปใช้ตรรกะเดิม (บวกเขียว/ลบแดงเสมอ)
+            price_color = 'color: #10b981;' if pct > 0 else ('color: #ef4444;' if pct < 0 else '')
             
-            # สีช่อง 2 (Prev)
+            # ช่อง 2 (Prev) ใช้ตรรกะ adaptive (บวกเขียว/ลบแดง/เท่าเดิม=สีเครื่อง)
             if prev_d > 0: prev_color = 'color: #10b981;'
             elif prev_d < 0: prev_color = 'color: #ef4444;'
-            else: prev_color = '' # ปล่อยว่างเพื่อให้ระบบเลือก ขาว/ดำ ตามธีมหน้าจออัตโนมัติ
+            else: prev_color = '' # เท่าเดิม = สีมาตรฐานระบบ
             
             styles = []
             for col in df_display.columns:
-                if col == 'Price' or col == '%Chg':
-                    styles.append(price_color)
-                elif col == 'Prev':
-                    styles.append(prev_color)
-                else:
-                    styles.append('')
+                if col in ['Price', '%Chg']: styles.append(price_color)
+                elif col == 'Prev': styles.append(prev_color)
+                else: styles.append('')
             return styles
 
         styled = df_display.style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).apply(apply_signal_styles, axis=1)
+        }).apply(apply_signal_colors, axis=1)
 
         for i in range(len(df_display)):
-            styled.apply(lambda x: apply_adaptive_price_styles(i), axis=1, subset=pd.IndexSlice[i, :])
+            styled.apply(lambda x: apply_dynamic_styles(i), axis=1, subset=pd.IndexSlice[i, :])
 
         st.dataframe(styled, column_config={
             "Ticker": st.column_config.TextColumn("Ticker", width=75),
@@ -169,4 +164,4 @@ def dashboard():
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Adaptive Theme)")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Final Color Fixed)")
