@@ -27,7 +27,7 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_dynamic(ticker):
+def analyze_guardian_stable(ticker):
     try:
         df = yf.download(ticker, period="90d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex):
@@ -52,7 +52,7 @@ def analyze_guardian_dynamic(ticker):
         df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
         df['hull_up'] = df['hma'] > df['hma'].shift(1)
         
-        # Signal Logic
+        # Signal Conditions
         df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
         df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
         df['sell_p'] = df['wt_cross_down'] & (df['wt1'] > 48)
@@ -87,7 +87,7 @@ def analyze_guardian_dynamic(ticker):
     return None
 
 # --- 4. DASHBOARD RUNTIME ---
-st.subheader("🛡️ Guardian Balanced (Dynamic Colors)")
+st.subheader("🛡️ Guardian Balanced Dashboard")
 
 if st.button("🔄 Refresh Market", use_container_width=True):
     st.rerun()
@@ -95,45 +95,47 @@ if st.button("🔄 Refresh Market", use_container_width=True):
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Dynamic Signal Colors</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Dynamic Stable UI</div>', unsafe_allow_html=True)
     
     results = []
     total = len(full_scan_list)
-    bar = st.progress(0, text="วิเคราะห์สัญญาณเทคนิค...")
+    bar = st.progress(0, text="กำลังประมวลผลข้อมูลตลาด...")
     
     for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_dynamic(t)
+        res = analyze_guardian_stable(t)
         if res:
             results.append(res)
         bar.progress((i + 1) / total)
     bar.empty()
 
     if results:
+        # เตรียมข้อมูล DataFrame และตัด raw_time ออกก่อนทำ Styling
         df = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
-        
-        # 1. ฟังก์ชันเปลี่ยนสีตาม Signal (สำหรับ Ticker, Signal, Time/Date)
-        def color_by_signal(row):
+        df_display = df.drop(columns=['raw_time']).reset_index(drop=True)
+
+        # ฟังก์ชันกำหนดสีตาม Signal
+        def apply_signal_colors(row):
             sig = row['Signal']
-            if "▲ Deep Buy" in sig: color = '#4fd1c5' # เขียวจาง
-            elif "🚀 Buy" in sig: color = '#10b981'   # เขียวเข้ม
-            elif "⚠️ P-Sell" in sig: color = '#ef4444' # แดง
+            if "▲ Deep Buy" in sig: color = '#4fd1c5'
+            elif "🚀 Buy" in sig: color = '#10b981'
+            elif "⚠️ P-Sell" in sig: color = '#ef4444'
             else: color = ''
             
-            return [f'color: {color}' if col in ['Ticker', 'Signal', 'Time/Date'] else '' for col in df.columns]
+            # ส่งคืนรูปแบบสีให้คอลัมน์ Ticker, Signal, Time/Date
+            styles = []
+            for col in df_display.columns:
+                if col in ['Ticker', 'Signal', 'Time/Date']:
+                    styles.append(f'color: {color}')
+                else:
+                    styles.append('')
+            return styles
 
-        # 2. ฟังก์ชันเปลี่ยนสีตามราคาจริง (สำหรับ Prev, Price, %Chg)
-        def color_by_price(val):
-            if isinstance(val, (int, float)):
-                # สำหรับ %Chg หรือเทียบราคาปัจจุบันกับราคาปิดก่อนหน้า
-                return 'color: #10b981;' if val > 0 else 'color: #ef4444;'
-            return ''
-
-        # การแสดงผลแบบ Styled
-        styled = df.drop(columns=['raw_time']).style.format({
+        # การทำ Styling
+        styled = df_display.style.format({
             "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).apply(color_by_signal, axis=1 # เปลี่ยนสี Ticker, Signal, Time ตามประเภทสัญญาณ
-        ).map(color_by_price, subset=['Price', '%Chg'] # เปลี่ยนสีตามความเป็นจริงของราคา
-        ).map(lambda x: 'color: #94a3b8;', subset=['Prev']) # ราคาปิดก่อนหน้าใช้สีเทาเพื่อความสะอาดตา
+        }).apply(apply_signal_colors, axis=1
+        ).map(lambda x: 'color: #10b981;' if isinstance(x, (int, float)) and x > 0 else ('color: #ef4444;' if isinstance(x, (int, float)) and x < 0 else ''), subset=['Price', '%Chg']
+        ).map(lambda x: 'color: #94a3b8;', subset=['Prev'])
 
         st.dataframe(styled, column_config={
             "Ticker": st.column_config.TextColumn("Ticker", width=75),
@@ -144,8 +146,8 @@ def dashboard():
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
         }, use_container_width=True, height=700, hide_index=True)
     else:
-        st.info("🔎 ไม่พบสัญญาณใหม่")
+        st.info("🔎 ไม่พบสัญญาณใหม่ในขณะนี้")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Dynamic)")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v3.5 (Fix Value Error)")
