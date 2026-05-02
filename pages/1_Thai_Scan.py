@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pytz
 
-# --- 1. ปรับแต่ง UI ให้เป็น Ultra-Slim สำหรับ Mobile ---
+# --- 1. ปรับแต่ง UI ให้เป็น Ultra-Slim และล็อกการ Sort ทุกช่องทาง ---
 st.set_page_config(page_title="Guardian Mobile", layout="wide")
 st.markdown("""
     <style>
@@ -15,9 +15,15 @@ st.markdown("""
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th { 
         font-size: 10.5px !important; padding: 2px !important;
     }
-    /* ปิดการแสดงผลปุ่ม Sort ที่หัวตารางเพื่อป้องกันความสับสน */
-    button[title="Sort column"] { display: none !important; }
     
+    /* สั่งซ่อนปุ่ม Sort และไอคอนตัวกรองที่หัวตารางแบบถาวร */
+    button[title="Sort column"], .st-emotion-cache-1pxm6y3, [data-testid="stHeaderActionElements"] {
+        display: none !important;
+    }
+    
+    /* ป้องกันการคลิกที่หัวตาราง */
+    [data-testid="stTableDataHeaderCell"] { pointer-events: none !important; }
+
     .stDataFrame { height: 420px; }
     .mobile-overlay {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -37,7 +43,7 @@ def get_mock_bo_slim():
         'Off_V': ['400K', '1.1M']
     })
 
-# --- 3. ฟังก์ชันดึงหุ้นย้อนหลัง 20 ตัว (Test UI) ---
+# --- 3. ฟังก์ชันดึงหุ้นย้อนหลัง 20 ตัว (เรียงตามเวลาล่าสุด) ---
 @st.cache_data
 def get_slim_test_20():
     tickers = ['AU', 'SPA', 'TKN', 'XO', 'DITTO', 'BE8', 'BBIK', 'MASTER', 'SABINA', 'WHA', 
@@ -60,14 +66,12 @@ def get_slim_test_20():
             "Date": (now - timedelta(minutes=i*15)).strftime("%d/%m/%y"),
             "raw_t": now - timedelta(minutes=i*15)
         })
-    # เรียงตามเวลาล่าสุดจากบนลงล่างเสมอ
+    # บังคับเรียงตามเวลาล่าสุดเสมอ
     return pd.DataFrame(results).sort_values(by="raw_t", ascending=False)
 
-# --- 4. ฟังก์ชันกำหนดสีตามเงื่อนไข (Advanced Row Style) ---
+# --- 4. ฟังก์ชันกำหนดสีตามเงื่อนไข ---
 def style_specific_columns(row):
-    # สีตามสัญญาณ (สำหรับ Ticker, Prev, Signal, Time, Date)
     sig_color = '#10b981' if "BUY" in str(row['Signal']) else '#ef4444' if "SELL" in str(row['Signal']) else '#ffffff'
-    # สีตามสถานะราคาจริง (สำหรับ Price, Chg%)
     price_status_color = '#10b981' if row['Chg%'] > 0 else '#ef4444' if row['Chg%'] < 0 else '#ffffff'
     
     styles = []
@@ -78,8 +82,8 @@ def style_specific_columns(row):
             styles.append(f'color: {sig_color}')
     return styles
 
-# --- 5. หน้าจอหลัก (Main Interface) ---
-st.subheader("🛰️ Guardian: Mobile Alpha (Static Sort & Latest First)")
+# --- 5. หน้าจอหลัก ---
+st.subheader("🛰️ Guardian: Mobile Alpha (Sort Locked)")
 
 if st.button("🔄 REFRESH SCAN", use_container_width=True):
     st.rerun()
@@ -87,7 +91,7 @@ if st.button("🔄 REFRESH SCAN", use_container_width=True):
 df_slim = get_slim_test_20()
 selected = st.selectbox("🎯 Tap to View Details", ["--- Select Ticker ---"] + list(df_slim['Ticker']))
 
-# แสดงตารางแบบ Sort ไม่ได้ และเรียงตามเวลาล่าสุด
+# แสดงตารางแบบล็อกทุกอย่าง (No Sort, No Edit)
 st.dataframe(
     df_slim.drop(columns=['raw_t']).style.format({
         "Prev": "{:.2f}",
@@ -96,11 +100,7 @@ st.dataframe(
     }).apply(style_specific_columns, axis=1),
     use_container_width=True, 
     hide_index=True,
-    column_config={
-        "Ticker": st.column_config.TextColumn("Ticker", disabled=True), # ปิดการแก้ไขและการ Sort ทางอ้อม
-        "Price": st.column_config.NumberColumn("Price", disabled=True),
-        "Chg%": st.column_config.NumberColumn("Chg%", disabled=True)
-    }
+    column_config={col: st.column_config.Column(disabled=True) for col in df_slim.columns}
 )
 
 # --- 6. Pop-up วิเคราะห์เต็มจอ ---
