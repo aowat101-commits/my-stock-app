@@ -7,141 +7,128 @@ import plotly.graph_objects as go
 from datetime import datetime
 import pytz
 
-# --- 1. ตั้งค่าหน้าจอและสไตล์ Loft แบบเดิม (Strictly Original) ---
-st.set_page_config(page_title="Market Intelligence Dashboard", layout="wide")
+# --- 1. ตั้งค่าหน้าจอและ CSS สำหรับ Mobile Floating Popup ---
+st.set_page_config(page_title="Guardian Alpha Mobile", layout="wide")
 
 st.markdown("""
     <style>
-    [data-testid="stStatusWidget"] {display: none !important;}
-    .time-status {
-        background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px;
-        text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
+    /* สไตล์ Loft และการปรับแต่งตารางสำหรับมือถือ */
+    .time-status { background-color: #1e293b; color: #10b981; padding: 10px; border-radius: 6px; text-align: center; font-size: 12px; }
+    
+    /* บังคับให้ตารางอ่านง่ายขึ้นบนจอเล็ก */
+    [data-testid="stDataFrame"] td { font-size: 12px !important; }
+
+    /* สร้าง Effect เหมือนป๊อปอัพลอยตัว (ใช้ Expander หรือ Container จำลอง) */
+    .floating-card {
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 15px;
+        background-color: #0f172a;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        margin-top: 10px;
     }
-    [data-testid="stDataFrame"] th { background-color: #1e293b !important; color: #94a3b8 !important; text-align: center !important; font-size: 11px !important; }
-    [data-testid="stDataFrame"] td { font-size: 11px !important; text-align: center !important; font-weight: normal !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ฟังก์ชันคำนวณ Technical (คงเดิม) ---
-def get_hma(series, length=30):
-    def wma(data, period):
-        weights = np.arange(1, period + 1)
-        return data.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
-    half_length, sqrt_length = int(length / 2), int(np.sqrt(length))
-    raw_hma = 2 * wma(series, half_length) - wma(series, length)
-    return wma(raw_hma, sqrt_length)
-
-def calculate_wavetrend(df, ch_len=9, avg_len=12):
-    ap = (df['High'] + df['Low'] + df['Close']) / 3
-    esa = ta.ema(ap, length=ch_len)
-    d = ta.ema(abs(ap - esa), length=ch_len)
-    ci = (ap - esa) / (0.015 * d)
-    tci = ta.ema(ci, length=avg_len)
-    wt1 = tci
-    wt2 = ta.sma(wt1, length=4)
-    return wt1, wt2
-
-# --- 3. ฟังก์ชันสแกนหาตัวที่เข้าเงื่อนไข (เช็คย้อนหลัง 10 วัน) ---
-def get_guardian_signal(df, ticker):
+# --- 2. ฟังก์ชันคำนวณ (EMA, HMA, WT, Vol 10M+) ---
+def get_guardian_logic(df, ticker):
     if len(df) < 60: return None
     tz = pytz.timezone('Asia/Bangkok')
     
+    # คำนวณ Indicators
     df['ema8'] = ta.ema(df['Close'], length=8)
     df['ema20'] = ta.ema(df['Close'], length=20)
-    df['hma'] = get_hma(df['Close'], 30)
-    df['wt1'], df['wt2'] = calculate_wavetrend(df, 9, 12)
-    df['vma5'] = df['Volume'].rolling(window=5).mean()
+    # HMA 30 ตามต้นฉบับ
+    weights = np.arange(1, 31)
+    df['hma'] = df['Close'].rolling(30).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True) 
     
-    # วนลูปเช็คย้อนหลังเพื่อหาจุดสัญญาณล่าสุดที่เข้าเงื่อนไข
-    for i in range(1, min(len(df), 40)): # เช็คย้อนหลังประมาณ 40 แท่ง (10 วันทำการใน TF 1H)
-        curr = df.iloc[-i]
-        prev = df.iloc[-(i+1)]
+    # WaveTrend 9, 12
+    ap = (df['High'] + df['Low'] + df['Close']) / 3
+    esa = ta.ema(ap, length=9)
+    d = ta.ema(abs(ap - esa), length=9)
+    ci = (ap - esa) / (0.015 * d)
+    wt1 = ta.ema(ci, length=12)
+    wt2 = ta.sma(wt1, length=4)
+    
+    # เช็คย้อนหลัง 10 วัน (ประมาณ 40 แท่งใน TF 1H)
+    for i in range(1, 41):
+        curr, prev = df.iloc[-i], df.iloc[-(i+1)]
+        daily_val = curr['Close'] * curr['Volume']
         
-        daily_value = curr['Close'] * curr['Volume']
-        vol_confirm = (daily_value > 10_000_000) and (curr['Volume'] > curr['vma5'] * 1.5)
-        
-        hma_up = curr['hma'] > prev['hma']
-        wt_cross_up = (prev['wt1'] < prev['wt2']) and (curr['wt1'] > curr['wt2'])
-        above_ema = (curr['Close'] > curr['ema8']) and (curr['Close'] > curr['ema20'])
-
-        if hma_up and wt_cross_up and above_ema and vol_confirm:
-            target = curr['Close'] * 1.05
-            stop_loss = curr['ema20']
-            risk = curr['Close'] - stop_loss
-            rr_ratio = (target - curr['Close']) / risk if risk > 0 else 0
+        # เงื่อนไข: Vol > 10M และสอดคล้องกับ EMA/HMA/WT
+        if (daily_val > 10_000_000 and curr['Close'] > curr['ema8'] and 
+            curr['wt1'] > wt2.iloc[-i] and curr['hma'] > prev['hma']):
             
-            actual_time = curr.name.astimezone(tz)
+            # คำนยณ R:R (Target 5% / Stop EMA 20)
+            rr = (curr['Close'] * 0.05) / (curr['Close'] - curr['ema20']) if curr['Close'] > curr['ema20'] else 0
+            
             return {
                 "Ticker": ticker.replace('.BK', ''),
-                "ราคาที่ตัด": curr['Close'],
-                "Signal": "🚀 ซื้อ",
-                "R:R": round(rr_ratio, 2),
-                "Vol(M)": round(daily_value / 1_000_000, 1),
-                "เวลา": actual_time.strftime("%H:%M:%S"),
-                "วันที่": actual_time.strftime("%d/%m/%y"),
-                "raw_time": actual_time,
-                "hist": df.tail(50)
+                "Price": curr['Close'],
+                "Signal": "🚀 BUY",
+                "RR": round(rr, 2),
+                "VolM": round(daily_val / 1_000_000, 1),
+                "Time": curr.name.astimezone(tz).strftime("%d/%m %H:%M"),
+                "hist": df.tail(48)
             }
     return None
 
-# --- 4. รายชื่อหุ้น (SET100 + sSET/MAI) ---
-full_scan_list = [
-    'ADVANC.BK', 'CPALL.BK', 'AOT.BK', 'WHA.BK', 'DELTA.BK', 'PTT.BK', 'BDMS.BK', 'GULF.BK',
-    'AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK', 'DITTO.BK', 'BE8.BK', 'BBIK.BK', 'MASTER.BK',
-    'SAPPE.BK', 'SISB.BK', 'SNNP.BK', 'ICHI.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK'
-]
+# --- 3. ส่วนการทำงานหน้าจอ (Layout สำหรับมือถือ) ---
+st.subheader("🛰️ Guardian Intelligence: Mobile")
 
-st.subheader("🛰️ Market Intelligence: Top 10 Recent Signals (Last 10 Days)")
-
-# ปุ่มสแกนหน้าจอ
-if st.button("🔍 Start Scanning All Markets", use_container_width=True):
+if st.button("🔍 SCAN NOW (SET100 + sSET/MAI)", use_container_width=True):
     st.rerun()
 
-@st.fragment(run_every="10m")
-def dashboard_runtime():
-    tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 Last Update: {datetime.now(tz).strftime("%H:%M:%S")} | SET100 + sSET + MAI</div>', unsafe_allow_html=True)
+# รายชื่อหุ้น (ชุดเดิมที่คุณต้องการสแกน)
+full_list = ['ADVANC.BK', 'CPALL.BK', 'WHA.BK', 'AU.BK', 'SABINA.BK', 'SPA.BK', 'TKN.BK', 'XO.BK'] 
+
+results = []
+bar = st.progress(0)
+for i, t in enumerate(full_list):
+    try:
+        hist = yf.Ticker(t).history(period="15d", interval="1h")
+        res = get_guardian_logic(hist, t)
+        if res: results.append(res)
+    except: continue
+    bar.progress((i + 1) / len(full_list))
+bar.empty()
+
+if results:
+    df = pd.DataFrame(results).sort_values(by="Time", ascending=False).head(10)
     
-    results = []
-    progress_bar = st.progress(0, text="กำลังสแกนหาจังหวะต้นน้ำ...")
+    # แสดงตารางแบบย่อสำหรับมือถือ
+    st.dataframe(
+        df[['Ticker', 'Price', 'Signal', 'RR', 'VolM', 'Time']],
+        column_config={
+            "RR": st.column_config.NumberColumn("R:R", format="%.1f"),
+            "VolM": "Vol(M)"
+        },
+        use_container_width=True, hide_index=True
+    )
+
+    # --- 🚩 ระบบป๊อปอัพลอยตัว (Floating Popup Simulation) ---
+    st.write("---")
+    selected = st.selectbox("🎯 แตะเลือกหุ้นเพื่อเปิดกราฟลอยตัว (Full-Screen Pop)", df['Ticker'])
     
-    for i, t in enumerate(full_scan_list):
-        try:
-            hist = yf.Ticker(t).history(period="20d", interval="1h") # ดึงข้อมูลเผื่อย้อนหลัง 10 วัน
-            res = get_guardian_signal(hist, t)
-            if res: results.append(res)
-        except: continue
-        progress_bar.progress((i + 1) / len(full_scan_list))
-    
-    progress_bar.empty()
-    
-    if results:
-        # คัดเฉพาะ 10 ตัวล่าสุดที่เกิดสัญญาณ
-        df = pd.DataFrame(results).sort_values(by="raw_time", ascending=False).head(10)
+    with st.container():
+        st.markdown('<div class="floating-card">', unsafe_allow_html=True)
+        row = df[df['Ticker'] == selected].iloc[0]
         
-        st.dataframe(
-            df.drop(columns=['raw_time', 'hist']).style.apply(lambda x: ["color: #10b981"] * len(x), axis=1)
-            .format({"ราคาที่ตัด": "{:,.2f}"}),
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", width=70),
-                "ราคาที่ตัด": st.column_config.NumberColumn("ราคา", width=65, format="%.2f"),
-                "Signal": st.column_config.TextColumn("Signal", width=75),
-                "R:R": st.column_config.NumberColumn("R:R", width=50),
-                "Vol(M)": st.column_config.NumberColumn("Vol(M)", width=60),
-                "เวลา": st.column_config.TextColumn("เวลา", width=75),
-                "วันที่": st.column_config.TextColumn("วันที่", width=65),
-            },
-            use_container_width=True, hide_index=True
+        # กราฟ Interactive ที่เลื่อนดูได้ (เหมาะกับนิ้วมือ)
+        fig = go.Figure(data=[go.Candlestick(
+            x=row['hist'].index, open=row['hist']['Open'], 
+            high=row['hist']['High'], low=row['hist']['Low'], close=row['hist']['Close']
+        )])
+        fig.update_layout(
+            height=350, template="plotly_dark", 
+            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis_rangeslider_visible=False # ปิด slider เพื่อเพิ่มพื้นที่บนมือถือ
         )
-
-        # กราฟ Interactive
-        selected_ticker = st.selectbox("🔍 เลือกหุ้นเพื่อดูรายละเอียดกราฟ Interactive", df['Ticker'])
-        selected_row = df[df['Ticker'] == selected_ticker].iloc[0]
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        fig = go.Figure(data=[go.Candlestick(x=selected_row['hist'].index,
-                                open=selected_row['hist']['Open'], high=selected_row['hist']['High'],
-                                low=selected_row['hist']['Low'], close=selected_row['hist']['Close'])])
-        fig.update_layout(height=400, template="plotly_dark", margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig, use_container_width=True)
-
-dashboard_runtime()
+        # ข้อมูลสรุปท้ายป๊อปอัพ
+        c1, c2 = st.columns(2)
+        c1.metric("Risk:Reward", f"1 : {row['RR']}")
+        c2.metric("Volume (24h)", f"{row['VolM']}M")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
