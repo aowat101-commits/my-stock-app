@@ -7,24 +7,44 @@ from datetime import datetime, timedelta
 import pytz
 
 # --- 1. UI SETUP ---
-st.set_page_config(page_title="Guardian Dashboard", layout="wide")
+st.set_page_config(page_title="Guardian Dashboard", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
     <style>
+    /* ซ่อน Header มาตรฐานเพื่อให้หน้าจอกว้างขึ้น */
     [data-testid="stStatusWidget"] {display: none !important;}
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
+    
+    /* บังคับให้ปุ่มลูกศร Sidebar (Toggle) แสดงผลเสมอแม้ใน PC */
+    [data-testid="stSidebarCollapsedControl"] {
+        display: block !important;
+        color: #10b981 !important;
+        background-color: rgba(30, 41, 59, 0.7);
+        border-radius: 0 8px 8px 0;
+    }
+    
     .main { background-color: #0f172a; }
-    /* ปรับแต่ง Sidebar */
     [data-testid="stSidebar"] { background-color: #1e293b; }
+    
     .time-status {
         background-color: #1e293b; color: #10b981; padding: 12px; border-radius: 8px;
         text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
         font-weight: bold;
     }
-    /* ปรับหัวข้อให้อยู่กึ่งกลาง */
+    
     .center-header {
         text-align: center;
         color: white;
         padding: 10px 0px;
+        font-weight: bold;
+    }
+    
+    /* แก้ไขการแสดงผลรูปธงชาติบน Windows PC */
+    .flag-icon {
+        display: inline-block;
+        width: 32px;
+        height: auto;
+        vertical-align: middle;
+        margin-right: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -38,7 +58,7 @@ with st.sidebar:
         st.rerun()
     st.caption("Por Piang Electric Plus Co., Ltd.")
 
-# --- 3. TICKERS & ENGINE (คงเดิมจาก v4.6) ---
+# --- 3. TICKERS & ENGINE (คงเดิม v4.6/v4.7) ---
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
@@ -79,12 +99,19 @@ def analyze_guardian_v4_2_core(ticker):
 
 # --- 4. DISPLAY LOGIC ---
 if app_page == "Thai Scan":
-    # หัวข้อกึ่งกลางและธงชาติไทย
-    st.markdown('<h2 class="center-header">🇹🇭 Thai scan</h2>', unsafe_allow_html=True)
+    # หัวข้อกึ่งกลาง พร้อมใช้รูปภาพธงชาติเพื่อให้แสดงผลได้ทุกอุปกรณ์ (PC/Mobile)
+    st.markdown("""
+        <div class="center-header">
+            <h2>
+                <img src="https://flagcdn.com/w40/th.png" class="flag-icon">
+                Thai scan
+            </h2>
+        </div>
+        """, unsafe_allow_html=True)
     
     tz = pytz.timezone('Asia/Bangkok')
-    # ปรับข้อความสถานะเป็น Guardian V4.7
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V4.7</div>', unsafe_allow_html=True)
+    # แสดงเวอร์ชันปัจจุบัน V4.8
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V4.8</div>', unsafe_allow_html=True)
     
     results = []
     bar = st.progress(0, text="กำลังสแกนหุ้น...")
@@ -116,4 +143,4 @@ else:
     st.info("หน้านี้พร้อมใช้งานสำหรับการสลับหน้าผ่าน Sidebar ครับ")
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v4.7")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v4.8")
