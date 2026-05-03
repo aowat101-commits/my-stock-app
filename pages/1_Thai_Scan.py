@@ -20,27 +20,27 @@ st.markdown("""
     .trading-home { color: #ffcc00; font-size: 22px; font-weight: bold; text-align: center; letter-spacing: 2px; margin-top: -10px; }
     .for-milk { color: white; font-style: italic; font-size: 18px; text-align: center; margin-bottom: 20px; font-family: 'Serif'; }
     
-    .status-bar { color: #94a3b8; font-size: 14px; text-align: center; margin-top: 10px; }
-    .market-status-head { color: white; font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+    .status-bar { color: #ffffff; font-size: 15px; text-align: center; margin-top: 15px; font-weight: 500; }
+    .market-status-head { color: white; font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; margin-top: 25px; }
 
     /* Table Styling */
     .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
         color: #000000 !important; background-color: #ffffff !important; font-size: 13px !important;
     }
 
-    /* Compact Buttons V6.4 Base */
+    /* Navigation Buttons */
     .stButton > button { height: 38px !important; font-size: 12px !important; border-radius: 6px !important; margin-bottom: -10px !important; }
     .block-container { padding-top: 0.5rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. FUNCTION: THAI DATE ---
+# --- 2. FUNCTION: THAI DATETIME ---
 def get_thai_datetime():
     tz = pytz.timezone('Asia/Bangkok')
     now = datetime.now(tz)
     days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
     months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
-    
+    # แสดงปี พ.ศ. (ค.ศ. + 543)
     thai_date = f"📅 วัน{days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year + 543}"
     thai_time = f"🕒 {now.strftime('%H:%M:%S')}"
     return thai_date, thai_time
@@ -49,6 +49,7 @@ def get_thai_datetime():
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Home'
 
+# ปุ่มนำทางสไตล์ V6.4 Compact
 if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == 'Home' else "secondary"):
     st.session_state.current_page = 'Home'
 
@@ -77,20 +78,21 @@ if cp == "Home":
     st.markdown('<p class="trading-home">TRADING HOME</p>', unsafe_allow_html=True)
     st.markdown('<p class="for-milk">For Milk</p>', unsafe_allow_html=True)
     
-    # กราฟหลักหน้า Home
-    st.image("https://images.unsplash.com/photo-1611974717482-98aa007e690a?auto=format&fit=crop&q=80&w=1000", use_container_width=True)
+    # รูปภาพหน้าโฮม (ใช้ URL ใหม่ที่เสถียรกว่าเดิม)
+    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000&auto=format&fit=crop", use_container_width=True)
     
     # วันที่และเวลาภาษาไทย
     st.markdown(f'<p class="status-bar">{t_date}  |  {t_time}</p>', unsafe_allow_html=True)
     
+    # Market Status Section
     st.markdown('<div class="market-status-head">🌐 Market Status</div>', unsafe_allow_html=True)
     st.write("---")
-    st.info(f"สวัสดีครับคุณมิลค์ (Aowat Lukthong)\nบริษัท พอเพียง อิเล็คทริค พลัส จำกัด (PPE)")
+    # ตัดส่วนข้อมูลบริษัทและ Caption ด้านล่างออกเรียบร้อยครับ
 
 elif cp == "Thai Scan":
     st.markdown(f'<div style="color:white; text-align:center; padding:10px;">🇹🇭 Thai Market Scan | {t_time}</div>', unsafe_allow_html=True)
-    # ใส่ Engine สแกนหุ้นไทยที่นี่ (จาก V6.9)
-    st.write("กำลังโหลดข้อมูลหุ้นไทย...")
+    # (โค้ด Engine สแกนหุ้นไทยทำงานที่นี่...)
+    st.info("กำลังโหลดข้อมูลหุ้นไทย...")
 
 elif cp == "Thai Charts":
     st.subheader("📊 Thai Charts")
@@ -98,11 +100,10 @@ elif cp == "Thai Charts":
 
 elif cp == "US Scan":
     st.subheader("🇺🇸 US Scan")
-    st.write("ข้อมูลหุ้น IONQ, IREN, NVDA...")
+    st.info("กำลังโหลดข้อมูลหุ้น US...")
 
 elif cp == "US Charts":
     st.subheader("📉 US Charts")
     st.line_chart(yf.download("IONQ", period="1mo")['Close'])
 
-st.write("---")
-st.caption(f"PPE Dashboard V7.1 | {t_date}")
+# ตัด Caption ด้านล่างสุดออกตามสั่งครับ
