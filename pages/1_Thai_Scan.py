@@ -6,8 +6,8 @@ from datetime import datetime
 import pytz
 import time
 
-# --- 1. SETTING & CSS ---
-st.set_page_config(page_title="PPE Guardian V10.4", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. UI SETUP (เน้นความคลีนตาม V9.8) ---
+st.set_page_config(page_title="PPE Guardian V9.8", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -25,52 +25,40 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DATA INITIALIZATION (บังคับค่าเริ่มต้นทันที) ---
-if 'th_list' not in st.session_state:
-    st.session_state.th_list = ['PTT', 'DELTA', 'ADVANC', 'JTS', 'EA', 'NEX', 'FENIX']
-if 'us_list' not in st.session_state:
-    st.session_state.us_list = ['IONQ', 'NVDA', 'IREN', 'TSLA']
-if 'page' not in st.session_state:
-    st.session_state.page = 'Home'
-if 'manage_mode' not in st.session_state:
-    st.session_state.manage_mode = False
-
-# --- 3. THE ENGINE (Real-time Signal Logic) ---
-def get_verified_signal(ticker, mode):
+# --- 2. CORE ENGINE (EMA 8 + Real-time Logic) ---
+@st.cache_data(ttl=30)
+def fetch_guardian_engine(ticker, mode):
     try:
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
-        df = yf.download(symbol, period="5d", interval="1h", progress=False)
+        df = yf.download(symbol, period="7d", interval="1h", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        # Indicators
         ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
 
         s_label, s_col, found_time, raw_time, icon = "-", "#FFD700", "-", None, ""
-        
-        # เช็คจากแท่งล่าสุด (Real-time) ย้อนกลับไป
         for i in range(len(df)-1, -1, -1):
             cp = float(df['Close'].iloc[i])
-            h_curr, h_prev = hull.iloc[i], (hull.iloc[i-1] if i>0 else hull.iloc[i])
-            w1, w2, vol, v5, e8, e20 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i], ema20.iloc[i]
+            h_curr, h_prev = hull.iloc[i], hull.iloc[i-1] if i > 0 else hull.iloc[i]
+            w1, w2, vol, v5, e8 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i]
             
-            # ต้องครบเงื่อนไข (ราคาเหนือ EMA 8 + อินดิเคเตอร์)
+            # เช็คเงื่อนไขทันที (ไม่ต้องรอปิดแท่ง)
             if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2):
                 s_label, s_col, icon = "BUY", "#00FF00", "🚀 "
             elif w1 > w2 and w1 < -47 and cp > e8: 
                 s_label, s_col, icon = "DEEP BUY", "#00FF00", "▲ "
             elif w1 < w2 and w1 > 53:
                 s_label, s_col, icon = "P-SELL", "#FFA500", "🔶 "
-            elif cp < e20 or h_curr < h_prev:
+            elif cp < ema20.iloc[i] or h_curr < h_prev:
                 s_label, s_col, icon = "SELL", "#FF1100", "🚨 "
             
             if s_label != "-":
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
-                suffix = " (LIVE)" if i == len(df)-1 else ""
-                found_time = raw_time.strftime("%H:%M %d/%m") + suffix
+                # ถ้าเป็นแท่งปัจจุบัน ให้แสดงเวลาปัจจุบัน
+                found_time = raw_time.strftime("%H:%M %d/%m")
                 break
 
         if s_label == "-": return None
@@ -81,13 +69,20 @@ def get_verified_signal(ticker, mode):
                 "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
                 "Signal": f"{icon}{s_label}", "Value (M)": f"{t_val:.2f}M",
                 "TimeUpdate": found_time, "RawTime": raw_time,
-                "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col}
+                "PriceCol": "#00FF00" if chg > 0 else "#FF1100", 
+                "SigCol": s_col}
     except: return None
 
 def apply_style(row):
     return [f'color: {row["SigCol"]}' if col in ["Ticker", "Signal", "TimeUpdate"] else (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else '') for col in row.index]
 
-# --- 4. NAVIGATION ---
+# --- 3. SESSION & NAVIGATION ---
+if 't_list' not in st.session_state: st.session_state.t_list = ['PTT', 'DELTA', 'ADVANC', 'JTS', 'EA', 'NEX', 'FENIX']
+if 'u_list' not in st.session_state: st.session_state.u_list = ['IONQ', 'NVDA', 'IREN']
+if 'page' not in st.session_state: st.session_state.page = 'Home'
+if 'manage_mode' not in st.session_state: st.session_state.manage_mode = False
+
+# Navigation Buttons
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
@@ -99,29 +94,30 @@ with c2:
 
 p = st.session_state.page
 dt_str = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
-st.write(f'<div class="classic-header">PPE Guardian V10.4 | {dt_str}</div>', unsafe_allow_html=True)
 
-# --- 5. PAGE CONTENT ---
+# Header บรรทัดเดียวบนสุด (ตัดส่วนล่างออกแล้ว)
+st.write(f'<div class="classic-header">PPE Guardian V9.8 | {dt_str}</div>', unsafe_allow_html=True)
+
+# --- 4. CONTENT ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
-    current_list = st.session_state.th_list if p in ['TW', 'TS'] else st.session_state.us_list
     st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{p} PAGE</span></div>', unsafe_allow_html=True)
     
+    current_list = st.session_state.t_list if p in ['TW', 'TS'] else st.session_state.u_list
+    
     if 'W' in p:
-        with st.expander("➕ Manage Your Watchlist", expanded=True):
-            new_t = st.text_input("Ticker Name:").upper()
-            if new_t and new_t not in current_list:
-                current_list.append(new_t); st.rerun()
-            if st.button("🛠️ Edit Watchlist (Delete Mode)"):
-                st.session_state.manage_mode = not st.session_state.manage_mode; st.rerun()
+        with st.expander("➕ Manage Watchlist", expanded=True):
+            new = st.text_input("Ticker Name:").upper()
+            if new and new not in current_list:
+                current_list.append(new); st.rerun()
+            if st.button("🛠️ Edit Mode"): st.session_state.manage_mode = not st.session_state.manage_mode; st.rerun()
     else:
-        if st.button("🔄 Manual Refresh Market Scan"):
-            st.cache_data.clear(); st.rerun()
+        if st.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
 
-    results = [get_verified_signal(t, p) for t in current_list]
+    results = [fetch_guardian_engine(t, p) for t in current_list]
     results = [r for r in results if r is not None]
 
     if results:
@@ -137,7 +133,6 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                 if dc[i % 6].button(f"✖ {t}", key=f"del_{t}", type="primary"):
                     current_list.remove(t); st.rerun()
     else:
-        st.write('<p style="text-align:center; opacity:0.6;">Loading real-time data...</p>', unsafe_allow_html=True)
+        st.write("No data found.")
 
-if 'S' in p:
-    time.sleep(300); st.rerun()
+if 'S' in p: time.sleep(300); st.rerun()
