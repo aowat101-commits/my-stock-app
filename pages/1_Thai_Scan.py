@@ -4,13 +4,10 @@ import pandas as pd
 import pandas_ta as ta
 from datetime import datetime
 import pytz
-from streamlit_autorefresh import st_autorefresh
+import time
 
 # --- 1. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V8.7", layout="wide", initial_sidebar_state="collapsed")
-
-# อัปเดตหน้าจออัตโนมัติทุก 5 นาที (300,000 มิลลิวินาที)
-st_autorefresh(interval=5 * 60 * 1000, key="datarefresh")
+st.set_page_config(page_title="PPE Guardian V8.9", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -23,12 +20,12 @@ st.markdown("""
     .stDataFrame [data-testid="stTable"] { background-color: #000000 !important; }
     .stDataFrame th { color: #FFD700 !important; background-color: #000000 !important; border: 0.1px solid #334155 !important; }
     .stDataFrame [data-testid="stTable"] td { font-size: 13px !important; color: #FFD700 !important; border: 0.1px solid #334155 !important; }
-    .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 12px !important; }
+    .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 14px !important; font-weight: 600 !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ENGINE (1H Signal Hunter) ---
+# --- 2. CORE ENGINE (1H Signal Lookback) ---
 @st.cache_data(ttl=60)
 def fetch_guardian_1h(ticker, mode):
     try:
@@ -61,23 +58,21 @@ def fetch_guardian_1h(ticker, mode):
                 found_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok')).strftime("%H:%M %d/%m"); break
 
         c_cp, c_pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
-        chg = c_cp - c_pp
-        t_val = (c_cp * float(df['Volume'].iloc[-1])) / 1_000_000
-        
-        col6 = f"{t_val:.2f}M" if 'W' in mode else s_label
+        chg, t_val = c_cp - c_pp, (c_cp * float(df['Volume'].iloc[-1])) / 1_000_000
+        col6_val = f"{t_val:.2f}M" if 'W' in mode else s_label
         v_col = "#6b7280" if 'W' in mode else s_col
         if 'W' in mode:
             if t_val > 100: v_col = "#A855F7"
             elif t_val >= 10: v_col = "#06B6D4"
 
         return [ticker.upper(), f"{c_pp:.2f}", f"{c_cp:.2f}", f"{chg:+.2f}", f"{(chg/c_pp)*100:.2f}%", 
-                col6, found_time, "#00FF00" if chg > 0 else "#FF1100", v_col, s_col]
+                col6_val, found_time, "#00FF00" if chg > 0 else "#FF1100", v_col, s_col]
     except: return None
 
 def apply_style(row):
     return ['', '', f'color: {row.iloc[-3]}', f'color: {row.iloc[-3]}', f'color: {row.iloc[-3]}', f'color: {row.iloc[-2]}', f'color: {row.iloc[-1]}', '', '', '']
 
-# --- 3. SESSION & NAV ---
+# --- 3. SESSION & FULL NAME NAVIGATION ---
 if 't_list' not in st.session_state: st.session_state.t_list = ['PTT', 'DELTA', 'ADVANC', 'TFG', 'ALT']
 if 'u_list' not in st.session_state: st.session_state.u_list = ['IONQ', 'NVDA', 'IREN']
 if 'page' not in st.session_state: st.session_state.page = 'Home'
@@ -93,23 +88,24 @@ with c2:
 
 # --- 4. CONTENT ---
 p = st.session_state.page
-dt_label = f"📅 {datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%d/%m/%Y | %H:%M:%S')}"
+dt_label = f"📅 {datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')}"
 
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<p style="text-align:center; color:#FFD700;">{dt_label} (Auto-Scan 5m)</p>', unsafe_allow_html=True)
+    st.write(f'<p style="text-align:center; color:#FFD700;">{dt_label}</p>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     col6_name = "Value (M)" if 'W' in p else "Signal"
-    st.write(f'<div style="text-align:center;"><span style="color:#FFD700; font-size:20px; font-weight:800;">{p} (TF: 1H)</span></div>', unsafe_allow_html=True)
+    # คืนค่าชื่อหัวข้อเต็มพร้อมธงชาติ
+    full_title = {"TW":"🇹🇭 Thai Watchlist", "TS":"🇹🇭 Thai Market Scan", "UW":"🇺🇸 US Watchlist", "US":"🇺🇸 US Market Scan"}[p]
+    st.write(f'<div style="text-align:center;"><span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title} (TF: 1H)</span></div>', unsafe_allow_html=True)
     
-    # หน้า WATCHLIST เท่านั้นที่มีปุ่มจัดการหุ้น
     if 'W' in p:
-        with st.expander("➕ Manage List (Watchlist Only)", expanded=True):
+        with st.expander("➕ Manage Your Watchlist", expanded=True):
             cin, cbtn = st.columns([3, 1])
             with cin:
-                new = st.text_input("Add Stock:", key=f"in_{p}").upper()
+                new = st.text_input("Add Stock (e.g. GUNKUL):", key=f"in_{p}").upper()
                 if new:
                     target = st.session_state.t_list if 'T' in p else st.session_state.u_list
                     if new not in target: target.append(new); st.rerun()
@@ -120,7 +116,6 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                     else: st.session_state.u_list = []
                     st.rerun()
     else:
-        # หน้า SCAN ไม่มีที่เพิ่มหุ้น มีแค่ปุ่มรีเฟรชด่วน
         if st.button("🔄 Manual Refresh Scan"): st.cache_data.clear()
 
     d_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
@@ -129,3 +124,7 @@ elif p in ['TW', 'UW', 'TS', 'US']:
     if res:
         df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update", "PC", "VC", "TC"])
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update"))
+
+# ส่วนของระบบ Auto Refresh 5 นาที (300 วินาที)
+time.sleep(300) 
+st.rerun()
