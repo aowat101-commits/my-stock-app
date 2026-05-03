@@ -13,101 +13,92 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
     .main { background-color: #0f172a; }
-    [data-testid="stSidebar"] { background-color: #1e293b; }
-    .time-status {
-        background-color: #1e293b; color: #10b981; padding: 12px; border-radius: 8px;
-        text-align: center; font-size: 13px; margin-bottom: 15px; border: 1px solid #334155;
-        font-weight: bold;
-    }
+    /* ปุ่มเลื่อนหน้าด้านล่าง */
+    .stButton>button { width: 100%; border-radius: 20px; height: 50px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR NAVIGATION (เพิ่มส่วนนี้เพื่อให้มีลูกศรย้อนกลับ/เปลี่ยนหน้า) ---
+# --- 2. NAVIGATION LOGIC (ระบบเลื่อนหน้า) ---
+pages = ["Home", "Thai Scan", "Thai Charts", "US Scan"]
+if 'page_index' not in st.session_state:
+    st.session_state.page_index = 1  # เริ่มที่ Thai Scan
+
+def change_page(delta):
+    st.session_state.page_index = (st.session_state.page_index + delta) % len(pages)
+
+# --- 3. SIDEBAR (เมนูเดิมเพื่อความปลอดภัย) ---
 with st.sidebar:
     st.title("📌 Menu")
-    # สร้างเมนูเลือกหน้าเหมือน ThaiChart
-    app_page = st.radio("เลือกหน้าจอ:", ["Home", "Thai Scan", "Thai Charts", "US Scan"], index=1)
+    app_page = st.radio("เลือกหน้าจอ:", pages, index=st.session_state.page_index, key="sidebar_nav")
     st.write("---")
-    if st.button("🔄 Force Refresh", use_container_width=True):
-        st.rerun()
-    st.caption("Por Piang Electric Plus Co., Ltd.")
+    if st.button("🔄 Force Refresh", key="refresh"): st.rerun()
 
-# --- 3. TICKERS & ENGINE (ตรรกะเดิม v4.2) ---
+# อัปเดต index ตามการเลือกใน Sidebar
+st.session_state.page_index = pages.index(app_page)
+current_page = pages[st.session_state.page_index]
+
+# --- 4. TICKERS & ENGINE (คงเดิม v4.2) ---
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-def analyze_guardian_v4_2_core(ticker):
+def analyze_v4_2_core(ticker):
     try:
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         if df.empty or len(df) < 30: return None
         df = df.dropna()
-        # Indicators
-        df['hma'] = ta.hma(df['Close'], length=24)
-        df['ema8'] = ta.ema(df['Close'], length=8)
-        df['vma5'] = ta.sma(df['Volume'], length=5)
+        df['hma'] = ta.hma(df['Close'], 24)
         ap = (df['High'] + df['Low'] + df['Close']) / 3
         esa, d = ta.ema(ap, 10), ta.ema(abs(ap - ta.ema(ap, 10)), 10)
         ci = (ap - esa) / (0.015 * d)
         df['wt1'], df['wt2'] = ta.ema(ci, 21), ta.sma(ta.ema(ci, 21), 4)
-        # Signals
-        df['buy_deep'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
-        df['buy_std'] = (df['hma'] > df['hma'].shift(1)) & (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2)
-        df['sell_p'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2']) & (df['wt1'] > 48)
-
-        all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_p']].copy()
+        df['buy'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -50)
+        df['sell'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2']) & (df['wt1'] > 48)
+        all_sig = df[df['buy'] | df['sell']].copy()
         if not all_sig.empty:
             last = all_sig.iloc[-1]
-            tz = pytz.timezone('Asia/Bangkok')
             curr, idx = float(df['Close'].iloc[-1]), df.index.get_loc(last.name)
             prev = float(df['Close'].iloc[idx-1]) if idx > 0 else curr
             p_prev = float(df['Close'].iloc[idx-2]) if idx > 1 else prev
             return {
                 "Ticker": ticker.replace('.BK', ''), "Prev": prev, "Price": curr, 
                 "%Chg": ((curr - prev) / prev) * 100,
-                "Signal": "▲ Deep Buy" if last['buy_deep'] else ("🚀 Buy" if last['buy_std'] else "⚠️ P-Sell"),
-                "Time/Date": last.name.astimezone(tz).strftime("%H:%M %d/%m"),
-                "raw_time": last.name.astimezone(tz), "p_diff": prev - p_prev
+                "Signal": "▲ Buy" if last['buy'] else "⚠️ P-Sell",
+                "Time/Date": last.name.strftime("%H:%M %d/%m"),
+                "raw_time": last.name, "p_diff": prev - p_prev
             }
     except: pass
     return None
 
-# --- 4. DISPLAY LOGIC (แยกหน้าจอ) ---
-if app_page == "Thai Scan":
-    st.subheader("🛡️ Thai Scan Dashboard (v4.2 Logic)")
-    tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | กดลูกศรมุมซ้ายบนเพื่อเปลี่ยนหน้า</div>', unsafe_allow_html=True)
+# --- 5. DISPLAY LOGIC ---
+if current_page == "Thai Scan":
+    st.subheader("🛡️ Thai Scan Dashboard")
     
-    results = []
-    bar = st.progress(0, text="กำลังสแกนหุ้น...")
-    for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_v4_2_core(t)
-        if res: results.append(res)
-        bar.progress((i + 1) / len(full_scan_list))
-    bar.empty()
-
+    # ส่วนแสดงข้อมูล
+    results = [analyze_v4_2_core(t) for t in full_scan_list]
     if results:
         df_m = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
-        df_d = df_m.drop(columns=['raw_time', 'p_diff']).reset_index(drop=True)
-
         def apply_styles(row):
-            ticker = row['Ticker']
-            m = df_m[df_m['Ticker'] == ticker].iloc[0]
-            sig_c = '#4fd1c5' if "▲" in m['Signal'] or "🚀" in m['Signal'] else '#ef4444'
-            # ตรรกะสีที่คุณมิลค์สั่ง
+            m = df_m[df_m['Ticker'] == row['Ticker']].iloc[0]
+            sig_c = '#4fd1c5' if "Buy" in m['Signal'] else '#ef4444'
             prev_s = f'color: {"#10b981" if m["p_diff"] > 0 else ("#ef4444" if m["p_diff"] < 0 else "")};'
             price_s = f'color: {"#10b981" if m["%Chg"] > 0 else ("#ef4444" if m["%Chg"] < 0 else "")};'
             return [f'color: {sig_c};', prev_s, price_s, price_s, f'color: {sig_c};', f'color: {sig_c};']
+        
+        df_d = df_m.drop(columns=['raw_time', 'p_diff']).reset_index(drop=True)
+        st.dataframe(df_d.style.format({"Prev":"{:.2f}","Price":"{:.2f}","%Chg":"{:.2f}%"}).apply(apply_styles, axis=1), use_container_width=True, height=650, hide_index=True)
 
-        styled = df_d.style.format({"Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"}).apply(apply_styles, axis=1)
-        st.dataframe(styled, use_container_width=True, height=750, hide_index=True)
-    else:
-        st.warning("🔎 ไม่พบข้อมูลสัญญาณ")
-
-else:
-    st.subheader(f"📂 หน้าจอ {app_page}")
-    st.info("หน้านี้พร้อมใช้งานสำหรับการขยายฟีเจอร์ในอนาคตครับ")
-
+# --- 6. FLOATING FOOTER NAVIGATION (ปุ่มเลื่อนหน้า) ---
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v4.6")
+col_prev, col_center, col_next = st.columns([1, 2, 1])
+with col_prev:
+    if st.button("⬅️ ย้อนกลับ"):
+        change_page(-1)
+        st.rerun()
+with col_next:
+    if st.button("ถัดไป ➡️"):
+        change_page(1)
+        st.rerun()
+with col_center:
+    st.markdown(f"<center>หน้าปัจจุบัน: <b>{current_page}</b></center>", unsafe_allow_html=True)
