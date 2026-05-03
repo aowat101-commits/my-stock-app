@@ -6,8 +6,8 @@ from datetime import datetime
 import pytz
 import time
 
-# --- 1. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V8.9", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. UI SETUP & ORIGINAL STYLE ---
+st.set_page_config(page_title="PPE Guardian V9.0", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -25,11 +25,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE ENGINE (1H Signal Lookback) ---
+# --- 2. CORE ENGINE ---
 @st.cache_data(ttl=60)
-def fetch_guardian_1h(ticker, mode):
+def fetch_guardian_engine(ticker, mode):
     try:
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
+        # ดึงข้อมูล 1H เพื่อหาจุดเกิดสัญญาณจริง
         df = yf.download(symbol, period="7d", interval="1h", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
@@ -72,7 +73,7 @@ def fetch_guardian_1h(ticker, mode):
 def apply_style(row):
     return ['', '', f'color: {row.iloc[-3]}', f'color: {row.iloc[-3]}', f'color: {row.iloc[-3]}', f'color: {row.iloc[-2]}', f'color: {row.iloc[-1]}', '', '', '']
 
-# --- 3. SESSION & FULL NAME NAVIGATION ---
+# --- 3. SESSION & ORIGINAL NAVIGATION ---
 if 't_list' not in st.session_state: st.session_state.t_list = ['PTT', 'DELTA', 'ADVANC', 'TFG', 'ALT']
 if 'u_list' not in st.session_state: st.session_state.u_list = ['IONQ', 'NVDA', 'IREN']
 if 'page' not in st.session_state: st.session_state.page = 'Home'
@@ -97,15 +98,15 @@ if p == 'Home':
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     col6_name = "Value (M)" if 'W' in p else "Signal"
-    # คืนค่าชื่อหัวข้อเต็มพร้อมธงชาติ
-    full_title = {"TW":"🇹🇭 Thai Watchlist", "TS":"🇹🇭 Thai Market Scan", "UW":"🇺🇸 US Watchlist", "US":"🇺🇸 US Market Scan"}[p]
-    st.write(f'<div style="text-align:center;"><span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title} (TF: 1H)</span></div>', unsafe_allow_html=True)
+    # คืนค่าชื่อหัวข้อเดิม ไม่มีวงเล็บ
+    full_title = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
+    st.write(f'<div style="text-align:center;"><span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title}</span></div>', unsafe_allow_html=True)
     
     if 'W' in p:
         with st.expander("➕ Manage Your Watchlist", expanded=True):
             cin, cbtn = st.columns([3, 1])
             with cin:
-                new = st.text_input("Add Stock (e.g. GUNKUL):", key=f"in_{p}").upper()
+                new = st.text_input("Add Stock:", key=f"in_{p}").upper()
                 if new:
                     target = st.session_state.t_list if 'T' in p else st.session_state.u_list
                     if new not in target: target.append(new); st.rerun()
@@ -119,12 +120,12 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         if st.button("🔄 Manual Refresh Scan"): st.cache_data.clear()
 
     d_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
-    res = [fetch_guardian_1h(t, p) for t in d_list if fetch_guardian_1h(t, p)]
+    res = [fetch_guardian_engine(t, p) for t in d_list if fetch_guardian_engine(t, p)]
     
     if res:
         df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update", "PC", "VC", "TC"])
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update"))
 
-# ส่วนของระบบ Auto Refresh 5 นาที (300 วินาที)
+# ระบบ Auto Refresh 5 นาที
 time.sleep(300) 
 st.rerun()
