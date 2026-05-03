@@ -27,12 +27,11 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_v3_7(ticker):
+def analyze_guardian_v4(ticker):
     try:
-        df = yf.download(ticker, period="90d", interval="1h", progress=False)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        if df.empty or len(df) < 50: return None
+        df = yf.download(ticker, period="60d", interval="1h", progress=False)
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        if df.empty or len(df) < 40: return None
         df = df.dropna()
 
         # Indicators
@@ -42,110 +41,85 @@ def analyze_guardian_v3_7(ticker):
         df['vma5'] = ta.sma(df['Volume'], length=5)
         
         ap = (df['High'] + df['Low'] + df['Close']) / 3
-        esa = ta.ema(ap, length=10)
-        d = ta.ema(abs(ap - esa), length=10)
+        esa, d = ta.ema(ap, 10), ta.ema(abs(ap - ta.ema(ap, 10)), 10)
         ci = (ap - esa) / (0.015 * d)
-        df['wt1'] = ta.ema(ci, length=21)
-        df['wt2'] = ta.sma(df['wt1'], length=4)
-        df = df.dropna()
+        df['wt1'], df['wt2'] = ta.ema(ci, 21), ta.sma(ta.ema(ci, 21), 4)
 
-        # Signal Logic
-        df['wt_cross_up'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2'])
-        df['wt_cross_down'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2'])
-        df['hull_up'] = df['hma'] > df['hma'].shift(1)
-        
-        df['buy_deep'] = df['wt_cross_up'] & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
-        df['buy_std'] = df['hull_up'] & df['wt_cross_up'] & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
-        df['sell_p'] = df['wt_cross_down'] & (df['wt1'] > 48)
+        # Signals
+        df['buy_deep'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
+        df['buy_std'] = (df['hma'] > df['hma'].shift(1)) & (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2) & (df['Close'] > df['ema21'])
+        df['sell_p'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2']) & (df['wt1'] > 48)
 
         all_sig = df[df['buy_deep'] | df['buy_std'] | df['sell_p']].copy()
         if not all_sig.empty:
-            last_sig = all_sig.iloc[-1]
-            sig_label = "▲ Deep Buy" if last_sig['buy_deep'] else ("🚀 Buy" if last_sig['buy_std'] else "⚠️ P-Sell")
-            
+            last = all_sig.iloc[-1]
             tz = pytz.timezone('Asia/Bangkok')
-            sig_time = last_sig.name.astimezone(tz)
+            sig_time = last.name.astimezone(tz)
             
             if sig_time > datetime.now(tz) - timedelta(days=60):
-                curr_price = float(df['Close'].iloc[-1])
-                idx = df.index.get_loc(last_sig.name)
-                
-                prev_close = float(df['Close'].iloc[idx-1]) if idx > 0 else curr_price
-                prev_prev_close = float(df['Close'].iloc[idx-2]) if idx > 1 else prev_close
+                curr, idx = float(df['Close'].iloc[-1]), df.index.get_loc(last.name)
+                prev = float(df['Close'].iloc[idx-1]) if idx > 0 else curr
+                p_prev = float(df['Close'].iloc[idx-2]) if idx > 1 else prev
                 
                 return {
                     "Ticker": ticker.replace('.BK', ''),
-                    "Prev": prev_close,
-                    "Price": curr_price,
-                    "%Chg": ((curr_price - prev_close) / prev_close) * 100,
-                    "Signal": sig_label,
+                    "Prev": prev, "Price": curr, 
+                    "%Chg": ((curr - prev) / prev) * 100,
+                    "Signal": "▲ Deep Buy" if last['buy_deep'] else ("🚀 Buy" if last['buy_std'] else "⚠️ P-Sell"),
                     "Time/Date": sig_time.strftime("%H:%M %d/%m"),
-                    "raw_time": sig_time,
-                    "prev_diff": prev_close - prev_prev_close 
+                    "raw_time": sig_time, "p_diff": prev - p_prev
                 }
     except: pass
     return None
 
-# --- 4. DASHBOARD RUNTIME ---
-st.subheader("🛡️ Guardian Balanced Dashboard (v3.7)")
+# --- 4. DASHBOARD ---
+st.subheader("🛡️ Guardian Balanced Dashboard (v4.0)")
 
-if st.button("🔄 Refresh Market", use_container_width=True):
-    st.rerun()
+if st.button("🔄 Refresh Market", use_container_width=True): st.rerun()
 
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Strategy: Independent Color Verification</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Mode: Clean Structure v4.0</div>', unsafe_allow_html=True)
     
-    results = []
-    for t in full_scan_list:
-        res = analyze_guardian_v3_7(t)
-        if res: results.append(res)
-
+    results = [res for t in full_scan_list if (res := analyze_guardian_v4(t))]
+    
     if results:
         df_master = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
-        df_display = df_master.drop(columns=['raw_time', 'prev_diff']).reset_index(drop=True)
+        df_display = df_master.drop(columns=['raw_time', 'p_diff']).reset_index(drop=True)
 
-        def apply_independent_styles(row):
+        # 🎯 ฟังก์ชันทำสีแยกอิสระ (Isolate Colors)
+        def get_row_styles(row):
             ticker = row['Ticker']
-            m_row = df_master[df_master['Ticker'] == ticker].iloc[0]
+            m = df_master[df_master['Ticker'] == ticker].iloc[0]
             
-            # 1. สี SIGNAL (Ticker, Signal, Time)
-            sig = m_row['Signal']
-            sig_c = '#4fd1c5' if "▲" in sig else ('#10b981' if "🚀" in sig else '#ef4444')
+            # 1. สี Signal Groups
+            sig = m['Signal']
+            s_c = '#4fd1c5' if "▲" in sig else ('#10b981' if "🚀" in sig else '#ef4444')
             
-            # 2. สี PREV (Prev) - แยกอิสระ
-            p_diff = m_row['prev_diff']
-            prev_c = 'color: #10b981;' if p_diff > 0 else ('color: #ef4444;' if p_diff < 0 else '')
+            # 2. สี Prev (ช่อง 2)
+            p_val = m['p_diff']
+            prev_style = f'color: {"#10b981" if p_val > 0 else ("#ef4444" if p_val < 0 else "")};'
             
-            # 3. สี PRICE (Price, %Chg) - แยกอิสระ
-            pct = m_row['%Chg']
-            price_c = 'color: #10b981;' if pct > 0 else ('color: #ef4444;' if pct < 0 else '')
+            # 3. สี Price & %Chg (ช่อง 3, 4)
+            pct = m['%Chg']
+            price_style = f'color: {"#10b981" if pct > 0 else ("#ef4444" if pct < 0 else "")};'
             
-            return [
-                f'color: {sig_c}', # Ticker
-                prev_c,            # Prev
-                price_c,           # Price
-                price_c,           # %Chg
-                f'color: {sig_c}', # Signal
-                f'color: {sig_c}'  # Time/Date
-            ]
+            return [f'color: {s_c};', prev_style, price_style, price_style, f'color: {s_c};', f'color: {s_c};']
 
-        styled = df_display.style.format({
-            "Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"
-        }).apply(apply_independent_styles, axis=1)
+        styled = df_display.style.format({"Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"}) \
+                 .apply(get_row_styles, axis=1)
 
-        st.dataframe(styled, column_config={
+        st.dataframe(styled, use_container_width=True, height=700, hide_index=True, column_config={
             "Ticker": st.column_config.TextColumn("Ticker", width=75),
-            "Prev": st.column_config.NumberColumn("Prev", width=60),
-            "Price": st.column_config.NumberColumn("Price", width=60),
-            "%Chg": st.column_config.TextColumn("%Chg", width=65),
-            "Signal": st.column_config.TextColumn("Signal", width=105),
+            "Prev": st.column_config.NumberColumn("Prev", width=65),
+            "Price": st.column_config.NumberColumn("Price", width=65),
+            "%Chg": st.column_config.TextColumn("%Chg", width=70),
+            "Signal": st.column_config.TextColumn("Signal", width=110),
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
-        }, use_container_width=True, height=700, hide_index=True)
-    else:
-        st.info("🔎 ไม่พบสัญญาณใหม่")
+        })
+    else: st.info("🔎 ไม่พบสัญญาณ")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Verified Independent Color Release")
+st.caption("Por Piang Electric Plus Co., Ltd. | Fresh Start v4.0")
