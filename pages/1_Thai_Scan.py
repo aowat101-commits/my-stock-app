@@ -13,19 +13,25 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-    .stApp { background-color: #0f172a; }
 
-    /* ปรับตัวหนังสือบนตารางและ Expander ให้เป็นสีขาวชัดเจน */
-    .stMarkdown h3, .stMarkdown p, .stMarkdown span, label { color: #ffffff !important; }
-    .stExpander details summary p { color: #ffffff !important; font-weight: 500; }
+    /* ปรับหัวข้อให้อยู่ตรงกลางจอ */
+    .centered-title {
+        text-align: center !important;
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    /* ปรับแต่งตัวหนังสือให้เปลี่ยนสีตาม Theme อัตโนมัติ (Dynamic Color) */
+    .stMarkdown h3, .stMarkdown p, .stMarkdown span, label {
+        color: inherit !important;
+    }
     
-    .welcome-title { color: white !important; font-size: 38px; font-weight: 800; text-align: center; letter-spacing: 8px; margin-top: 15px; }
+    .welcome-title { font-size: 38px; font-weight: 800; text-align: center; letter-spacing: 8px; margin-top: 15px; }
     .trading-home { color: #ffcc00 !important; font-size: 32px; font-weight: 800; text-align: center; letter-spacing: 3px; margin-bottom: 25px; }
 
-    /* ตาราง: ตัวอักษรปกติ พื้นขาว */
+    /* ตาราง: ให้สีพื้นหลังโปร่งแสงและตัวหนังสือเปลี่ยนตาม Theme */
     .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
         font-size: 14px !important; font-weight: 400 !important;
-        background-color: #ffffff !important;
     }
 
     .stButton > button { height: 42px !important; font-size: 13px !important; border-radius: 8px !important; margin-bottom: -5px !important; }
@@ -54,16 +60,16 @@ def fetch_wallet_data(ticker):
         chg_val = curr - prev
         chg_pct = (chg_val / prev) * 100
         
-        rsi = ta.rsi(df['Close'], length=14)
-        current_rsi = float(rsi.iloc[-1]) if not rsi.empty else 0
+        rsi_val = ta.rsi(df['Close'], length=14)
+        curr_rsi = float(rsi_val.iloc[-1]) if not rsi_val.empty else 0
         
-        # กฎสีช่อง 1, 3, 4, 5 (Ticker, Price, Chg, %Chg)
-        main_color = "#008000" if chg_val > 0 else "#cc0000"
-        if chg_val == 0: main_color = "#000000" # เป็น 0 ให้เป็นสีดำ
+        # กฎสีช่อง 1, 3, 4, 5: เขียว/แดง ตามราคาปัจจุบัน
+        main_c = "#00c805" if chg_val > 0 else "#ff1100"
+        if chg_val == 0: main_c = "inherit" # เปลี่ยนตามพื้นหลัง
 
-        # กฎสีช่อง 2 (Prev)
-        prev_color = "#008000" if prev > prev_prev else "#cc0000"
-        if prev == prev_prev: prev_color = "#000000" # เป็น 0 ให้เป็นสีดำ
+        # กฎสีช่อง 2 (Prev): เขียว/แดง ตามวันก่อนหน้า
+        prev_c = "#00c805" if prev > prev_prev else "#ff1100"
+        if prev == prev_prev: prev_c = "inherit" # เปลี่ยนตามพื้นหลัง
 
         return {
             "Ticker": ticker.replace('.BK', ''),
@@ -71,18 +77,18 @@ def fetch_wallet_data(ticker):
             "Price": f"{curr:.2f}",
             "Chg": f"{chg_val:+.2f}",
             "%Chg": f"{chg_pct:.2f}%",
-            "RSI(14)": f"{current_rsi:.2f}",
-            "_main_color": main_color,
-            "_prev_color": prev_color
+            "RSI(14)": f"{curr_rsi:.2f}",
+            "_mc": main_c, "_pc": prev_c
         }
     except: return None
 
-def apply_wallet_style(row):
-    mc = f'color: {row["_main_color"]}'
-    pc = f'color: {row["_prev_color"]}'
-    return [mc, pc, mc, mc, mc, 'color: #000000', '', ''] # ช่อง 1,3,4,5 สีเดียวกัน / ช่อง 2 สีแยก / RSI สีดำ
+def apply_style(row):
+    # กำหนดสีตามเงื่อนไข (inherit จะปรับตาม PC/มือถือ อัตโนมัติ)
+    mc = f'color: {row["_mc"]}'
+    pc = f'color: {row["_pc"]}'
+    return [mc, pc, mc, mc, mc, 'color: inherit', '', '']
 
-# --- 3. SESSION STATE & NAVIGATION ---
+# --- 3. SESSION & NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT.BK', 'DELTA.BK']
 if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA']
@@ -102,7 +108,7 @@ with c2:
     if st.button("🇺🇸 US Market Scan", use_container_width=True, type="primary" if st.session_state.page == 'US Scan' else "secondary"):
         st.session_state.page = 'US Scan'
 
-# --- 4. PAGE CONTENT ---
+# --- 4. PAGE ROUTING ---
 t_date, t_time = get_thai_datetime()
 p = st.session_state.page
 
@@ -110,13 +116,15 @@ if p == 'Home':
     st.markdown('<p class="welcome-title">WELCOME</p>', unsafe_allow_html=True)
     st.markdown('<p class="trading-home">TRADING HOME</p>', unsafe_allow_html=True)
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.markdown(f'<p class="status-bar">{t_date}  |  {t_time}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="text-align:center;">{t_date}  |  {t_time}</p>', unsafe_allow_html=True)
 
 elif "Watchlist" in p:
-    st.markdown(f"### {'🇹🇭 Thai' if 'Thai' in p else '🇺🇸 US'} Watchlist")
+    m_label = "🇹🇭 Thai Watchlist" if "Thai" in p else "🇺🇸 US Watchlist"
+    st.markdown(f'<h3 class="centered-title">{m_label}</h3>', unsafe_allow_html=True)
+    st.markdown(f'<p style="text-align:center;">{t_time}</p>', unsafe_allow_html=True)
     
-    with st.expander("➕ เพิ่ม/ลด หุ้นในลิสต์ (ตัวหนังสือสีขาวมองเห็นชัดเจน)"):
-        opts = ['ADVANC.BK', 'AOT.BK', 'CPALL.BK', 'DELTA.BK', 'PTT.BK', 'SCB.BK', 'HANA.BK', 'KCE.BK', 'JMART.BK', 'JMT.BK'] if "Thai" in p else ['IONQ', 'NVDA', 'IREN', 'TSLA', 'SMX', 'ONDS']
+    with st.expander("➕ จัดการลิสต์หุ้น"):
+        opts = ['ADVANC.BK', 'AOT.BK', 'CPALL.BK', 'DELTA.BK', 'PTT.BK', 'SCB.BK'] if "Thai" in p else ['IONQ', 'NVDA', 'IREN', 'TSLA']
         if "Thai" in p:
             st.session_state.t_watch = st.multiselect("เลือกหุ้นไทย:", opts, default=st.session_state.t_watch)
         else:
@@ -124,15 +132,16 @@ elif "Watchlist" in p:
 
     clist = st.session_state.t_watch if "Thai" in p else st.session_state.u_watch
     if clist:
-        results = [fetch_wallet_data(t) for t in clist]
-        df = pd.DataFrame([r for r in results if r])
+        df = pd.DataFrame([fetch_wallet_data(t) for t in clist if fetch_wallet_data(t)])
         if not df.empty:
-            st.dataframe(df.style.apply(apply_wallet_style, axis=1), use_container_width=True, hide_index=True, 
+            st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, 
                          column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", "RSI(14)"))
-    else: st.warning("กรุณาเพิ่มหุ้นในลิสต์")
 
 elif "Scan" in p:
-    st.markdown(f"### {'🇹🇭 Thai' if 'Thai' in p else '🇺🇸 US'} Market Scan")
-    st.info("กำลังโหลดผลการสแกน...")
+    m_label = "🇹🇭 Thai Market Scan" if "Thai" in p else "🇺🇸 US Market Scan"
+    st.markdown(f'<h3 class="centered-title">{m_label}</h3>', unsafe_allow_html=True)
+    st.markdown(f'<p style="text-align:center;">{t_time}</p>', unsafe_allow_html=True)
+    st.info("ระบบกำลังแสดงข้อมูลสแกนตามโครงสร้างเดิม...")
 
-st.markdown(f'<p style="text-align:center; color:#e2e8f0; margin-top:30px;">PPE Guardian V8.5 | {t_date}</p>', unsafe_allow_html=True)
+st.markdown("---")
+st.markdown(f'<p style="text-align:center; font-size:12px;">PPE Guardian V8.6 | {t_date}</p>', unsafe_allow_html=True)
