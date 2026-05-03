@@ -7,7 +7,7 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY HELPERS ---
+# --- 1. MEMORY HELPERS (จดจำรายชื่อหุ้นแม้รีเฟรชหน้าจอ) ---
 TH_FILE = "th_watchlist.txt"
 US_FILE = "us_watchlist.txt"
 
@@ -23,7 +23,7 @@ def save_list(file_path, data_list):
     with open(file_path, "w") as f: f.write(",".join(data_list))
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V9.9", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V10.0", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -42,41 +42,50 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE ---
-@st.cache_data(ttl=60)
+# --- 3. CORE ENGINE (Turbo Real-time & Complete Logic) ---
+@st.cache_data(ttl=30)
 def fetch_guardian_engine(ticker, mode):
     try:
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
-        df = yf.download(symbol, period="7d", interval="1h", progress=False)
+        df = yf.download(symbol, period="5d", interval="1h", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
+        # คำนวณ Indicators
         ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
 
         s_label, s_col, found_time, raw_time, icon = "-", "#FFD700", "-", None, ""
-        for i in range(len(df)-1, 0, -1):
-            cp, h_curr, h_prev = float(df['Close'].iloc[i]), hull.iloc[i], hull.iloc[i-1]
+        
+        # ตรวจสอบทุกเงื่อนไขแบบ Real-time (Check-and-Go)
+        for i in range(len(df)-1, -1, -1):
+            cp = float(df['Close'].iloc[i])
+            h_curr, h_prev = hull.iloc[i], hull.iloc[i-1] if i>0 else hull.iloc[i]
             w1, w2, vol, v5, e8 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i]
             
+            # --- CONDITION 1: BUY (EMA 8 + Hull + Volume) ---
             if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2):
                 s_label, s_col, icon = "BUY", "#00FF00", "🚀 "
-                raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
-                found_time = raw_time.strftime("%H:%M %d/%m"); break
+            
+            # --- CONDITION 2: DEEP BUY (Wave Trend + EMA 8 Confirm) ---
             elif w1 > w2 and w1 < -47 and cp > e8: 
                 s_label, s_col, icon = "DEEP BUY", "#00FF00", "▲ "
-                raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
-                found_time = raw_time.strftime("%H:%M %d/%m"); break
+            
+            # --- CONDITION 3: P-SELL (Overbought Zone) ---
             elif w1 < w2 and w1 > 53:
                 s_label, s_col, icon = "P-SELL", "#FFA500", "🔶 "
-                raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
-                found_time = raw_time.strftime("%H:%M %d/%m"); break
+            
+            # --- CONDITION 4: SELL (EMA 20 or Hull Down) ---
             elif cp < ema20.iloc[i] or h_curr < h_prev:
                 s_label, s_col, icon = "SELL", "#FF1100", "🚨 "
+            
+            if s_label != "-":
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
-                found_time = raw_time.strftime("%H:%M %d/%m"); break
+                suffix = " (LIVE)" if i == len(df)-1 else ""
+                found_time = raw_time.strftime("%H:%M %d/%m") + suffix
+                break
 
         if s_label == "-": return None
         c_cp, c_pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
@@ -101,13 +110,13 @@ def apply_style(row):
         else: colors.append('')
     return colors
 
-# --- 4. SESSION ---
+# --- 4. SESSION MANAGEMENT ---
 if 't_list' not in st.session_state: st.session_state.t_list = load_list(TH_FILE, ['PTT', 'DELTA', 'ADVANC'])
 if 'u_list' not in st.session_state: st.session_state.u_list = load_list(US_FILE, ['IONQ', 'NVDA', 'IREN'])
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'manage_mode' not in st.session_state: st.session_state.manage_mode = False
 
-# --- 5. NAVIGATION ---
+# --- 5. NAVIGATION (บรรทัดเดียว คลีนที่สุด) ---
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
@@ -119,7 +128,9 @@ with c2:
 
 p = st.session_state.page
 dt_str = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
-st.write(f'<div class="classic-header">PPE Guardian V9.9 | {dt_str}</div>', unsafe_allow_html=True)
+
+# Header บรรทัดเดียวบนสุดเท่านั้น
+st.write(f'<div class="classic-header">PPE Guardian V10.0 | {dt_str}</div>', unsafe_allow_html=True)
 
 # --- 6. CONTENT LOGIC ---
 if p == 'Home':
@@ -141,6 +152,7 @@ elif p in ['TW', 'UW', 'TS', 'US']:
             if st.button("🛠️ Edit Watchlist (Delete Mode)"):
                 st.session_state.manage_mode = not st.session_state.manage_mode; st.rerun()
     else:
+        # ปุ่ม Refresh สำหรับหน้า Scan
         if st.button("🔄 Manual Refresh Scan"): st.cache_data.clear(); st.rerun()
 
     d_l = st.session_state.t_list if 'T' in p else st.session_state.u_list
@@ -151,10 +163,11 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         df = pd.DataFrame(results)
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
         
-        # จัดคอลัมน์ตามหน้า
+        # คอลัมน์ที่ต้องการแสดง
         cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if 'W' in p else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
         
+        # ระบบลบรายตัว (แสดงเฉพาะเมื่อกด Edit)
         if 'W' in p and st.session_state.manage_mode:
             st.write("---")
             st.write("⚠️ **Delete Items:**")
@@ -165,5 +178,6 @@ elif p in ['TW', 'UW', 'TS', 'US']:
     else:
         st.write('<p style="text-align:center; opacity:0.6;">No data found.</p>', unsafe_allow_html=True)
 
+# Auto-refresh หน้า Scan ทุก 5 นาที
 if 'S' in p:
     time.sleep(300); st.rerun()
