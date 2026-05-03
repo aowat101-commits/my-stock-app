@@ -5,12 +5,12 @@ import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# --- 1. UI SETUP (บังคับล้างค่าสีเดิม) ---
+# --- 1. UI SETUP ---
 st.set_page_config(page_title="PPE Guardian V8.5", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    /* ล้างค่าสีพื้นฐานของ Streamlit */
+    /* บังคับสีตัวหนังสือให้เป็นสีเหลืองทอง */
     h1, h2, h3, p, span, label { color: #FFD700 !important; }
     
     .block-container { padding-top: 0rem !important; padding-bottom: 0rem !important; }
@@ -18,33 +18,30 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     .stApp { background-color: #0f172a; }
 
-    /* แก้ไขส่วนจัดการหุ้นที่สีมืด */
-    [data-testid="stExpander"] details summary p { 
-        color: #FFD700 !important; 
-        font-weight: 900 !important; 
-        font-size: 22px !important; 
-    }
-    
+    /* ปรับแต่งส่วนจัดการหุ้น */
+    [data-testid="stExpander"] details summary p { color: #FFD700 !important; font-weight: 700 !important; font-size: 16px !important; }
+    .stMultiSelect label p { color: #FFD700 !important; font-size: 14px !important; }
+
     /* ตาราง Dark Mode */
     .stDataFrame [data-testid="stTable"] { background-color: #000000 !important; }
     .stDataFrame th { color: #FFD700 !important; background-color: #000000 !important; border: 0.1px solid #334155 !important; }
     .stDataFrame [data-testid="stTable"] td { 
-        font-size: 14px !important; 
+        font-size: 13px !important; 
         background-color: #000000 !important; 
         color: #FFD700 !important; 
         border: 0.1px solid #334155 !important; 
     }
 
     /* ปุ่มเมนู */
-    .stButton > button { height: 38px !important; border-radius: 8px !important; width: 100%; font-size: 13px !important; margin-bottom: -10px !important; }
+    .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 12px !important; margin-bottom: -10px !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     
-    /* ปุ่มอัปเดตภาษาอังกฤษ */
+    /* ปุ่มอัปเดต */
     .update-btn > div > button { 
         background-color: #FFD700 !important; 
         color: #000000 !important; 
         font-weight: bold !important; 
-        height: 45px !important; 
+        height: 40px !important; 
     }
     </style>
     """, unsafe_allow_html=True)
@@ -56,6 +53,7 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
         df = yf.download(ticker, period="60d", interval="1d", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        
         cp, pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
         chg = cp - pp
         trade_val = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
@@ -69,6 +67,7 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
             d = ta.ema(abs(df['Close'] - esa), 9)
             ci = (df['Close'] - esa) / (0.015 * d)
             wt1, wt2 = ta.ema(ci, 12), ta.sma(ta.ema(ci, 12), 4)
+            
             if cp > ema8.iloc[-1] and hull.iloc[-1] > hull.iloc[-2] and df['Volume'].iloc[-1] > (vma5.iloc[-1] * 1.2):
                 sig, s_col = "✅ BUY", "#00FF00"
             elif wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -47:
@@ -113,10 +112,15 @@ dt_label = f"📅 {now.strftime('%d/%m/%Y')} | 🕒 {now.strftime('%H:%M:%S')}"
 # --- 4. CONTENT ---
 p = st.session_state.page
 if p == 'Home':
-    # ล็อกสีเหลืองทองแบบฝังลงใน HTML ลึกที่สุด
-    st.write(f'<div style="text-align:center; padding:20px;"><span style="color:#FFD700 !important; font-size:64px; font-weight:900; letter-spacing:12px; display:block; filter: drop-shadow(0px 0px 5px #000);">WELCOME</span><span style="color:#FFD700 !important; font-size:42px; font-weight:800; letter-spacing:4px; display:block; filter: drop-shadow(0px 0px 5px #000);">TRADING HOME</span></div>', unsafe_allow_html=True)
-    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<p style="text-align:center;"><span style="color:#FFD700 !important; font-size:22px; font-weight:600;">{dt_label}</span></p>', unsafe_allow_html=True)
+    # หัวข้อขนาดพอเหมาะ ไม่ล้น
+    st.write(f'<div style="text-align:center; padding:10px;"><span style="color:#FFD700 !important; font-size:32px; font-weight:900; letter-spacing:6px; display:block; filter: drop-shadow(0px 0px 3px #000);">WELCOME</span><span style="color:#FFD700 !important; font-size:20px; font-weight:800; letter-spacing:2px; display:block; filter: drop-shadow(0px 0px 3px #000);">TRADING HOME</span></div>', unsafe_allow_html=True)
+    
+    # ปรับขนาดรูปภาพให้เล็กลง (ใช้สัดส่วน 1:1.5:1 เพื่อให้รูปกลางไม่ใหญ่เกินไป)
+    col_space1, col_img, col_space2 = st.columns([1, 1.5, 1])
+    with col_img:
+        st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
+    
+    st.write(f'<p style="text-align:center;"><span style="color:#FFD700 !important; font-size:16px; font-weight:600;">{dt_label}</span></p>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     mode = 'Scan' if 'S' in p else 'Watchlist'
@@ -124,16 +128,17 @@ elif p in ['TW', 'UW', 'TS', 'US']:
     title_text = {"TW":"Thai Watchlist", "TS":"Thai Market Scan", "UW":"US Watchlist", "US":"US Market Scan"}[p]
     flag = "🇹🇭" if "T" in p else "🇺🇸"
     
-    st.write(f'<div style="text-align:center;"><span style="color:#FFD700 !important; font-size:38px; font-weight:900; filter: drop-shadow(0px 0px 5px #000);">{flag} {title_text}</span><br><span style="color:#FFD700 !important; font-size:18px;">{dt_label}</span></div>', unsafe_allow_html=True)
+    st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700 !important; font-size:22px; font-weight:900; filter: drop-shadow(0px 0px 3px #000);">{flag} {title_text}</span><br><span style="color:#FFD700 !important; font-size:14px;">{dt_label}</span></div>', unsafe_allow_html=True)
     
     if mode == 'Scan':
         st.markdown('<div class="update-btn">', unsafe_allow_html=True)
         if st.button("🔄 Update Market Data"): st.cache_data.clear()
         st.markdown('</div>', unsafe_allow_html=True)
-        t_list = ['PTT.BK', 'DELTA.BK', 'AOT.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN']
+        t_list = ['PTT.BK', 'DELTA.BK'] if p=="TS" else ['IONQ', 'NVDA']
     else:
         with st.expander("➕ Manage Your Watchlist"):
-            st.session_state.t_watch = st.multiselect("Select Stocks:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK'], default=st.session_state.t_watch) if p == 'TW' else st.multiselect("Select Stocks:", ['IONQ', 'NVDA', 'IREN'], default=st.session_state.u_watch)
+            if p == 'TW': st.session_state.t_watch = st.multiselect("Select Stocks:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK'], default=st.session_state.t_watch)
+            else: st.session_state.u_watch = st.multiselect("Select Stocks:", ['IONQ', 'NVDA', 'IREN'], default=st.session_state.u_watch)
         t_list = st.session_state.t_watch if p == 'TW' else st.session_state.u_watch
 
     res = [fetch_guardian_engine(t, mode) for t in t_list if fetch_guardian_engine(t, mode)]
@@ -141,4 +146,4 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)", "PC", "VC"])
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)"))
 
-st.write(f'<p style="text-align:center; margin-top:50px;"><span style="color:#FFD700 !important; opacity:0.7;">PPE Guardian V8.5 | Por Piang Electric Plus</span></p>', unsafe_allow_html=True)
+st.write(f'<p style="text-align:center; margin-top:20px;"><span style="color:#FFD700 !important; font-size:12px; opacity:0.7;">PPE Guardian V8.5 | Por Piang Electric Plus</span></p>', unsafe_allow_html=True)
