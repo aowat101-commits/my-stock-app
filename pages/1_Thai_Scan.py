@@ -17,7 +17,7 @@ st.markdown("""
     .stApp { background-color: #0f172a; }
     
     /* สไตล์สำหรับส่วนหัว Classic Blue */
-    .classic-header { color: #1E90FF !important; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    .classic-header { color: #1E90FF !important; font-size: 14px; font-weight: 600; margin-bottom: 10px; text-align: center; }
     
     .stTextInput > div > div > input { background-color: #1e293b !important; color: #FFD700 !important; border: 1px solid #FFD700 !important; }
     [data-testid="stExpander"] details summary p { color: #FFD700 !important; font-weight: 700 !important; font-size: 16px !important; }
@@ -47,7 +47,6 @@ def fetch_guardian_engine(ticker, mode):
         for i in range(len(df)-1, 0, -1):
             cp = float(df['Close'].iloc[i]); h_curr, h_prev = hull.iloc[i], hull.iloc[i-1]
             w1, w2 = wt1.iloc[i], wt2.iloc[i]; vol, v5 = df['Volume'].iloc[i], vma5.iloc[i]
-            
             if cp > ema8.iloc[i] and h_curr > h_prev and vol > (v5 * 1.2):
                 s_label, s_col = "✅ BUY", "#00FF00"
                 found_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok')).strftime("%H:%M %d/%m"); break
@@ -68,9 +67,7 @@ def fetch_guardian_engine(ticker, mode):
         if 'W' in mode:
             if t_val > 100: v_col = "#A855F7"
             elif t_val >= 10: v_col = "#06B6D4"
-
-        return [ticker.upper(), f"{c_pp:.2f}", f"{c_cp:.2f}", f"{chg:+.2f}", f"{(chg/c_pp)*100:.2f}%", 
-                col6_val, found_time, "#00FF00" if chg > 0 else "#FF1100", v_col, s_col]
+        return [ticker.upper(), f"{c_pp:.2f}", f"{c_cp:.2f}", f"{chg:+.2f}", f"{(chg/c_pp)*100:.2f}%", col6_val, found_time, "#00FF00" if chg > 0 else "#FF1100", v_col, s_col]
     except: return None
 
 def apply_style(row):
@@ -93,23 +90,22 @@ with c2:
 # --- 4. CONTENT ---
 p = st.session_state.page
 now_tz = datetime.now(pytz.timezone('Asia/Bangkok'))
+# เวลาขึ้นก่อนวันที่
 date_time_str = now_tz.strftime('%H:%M:%S | %d/%m/%Y')
 
 if p == 'Home':
-    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
-    cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<div style="text-align:center;"><p class="classic-header">PPE Guardian V9.0 | {date_time_str}</p></div>', unsafe_allow_html=True)
+    # คืนค่าหน้า TRADING HOME แบบสมบูรณ์
+    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:35px; font-weight:900; letter-spacing:2px;">TRADING HOME</span></div>', unsafe_allow_html=True)
+    cl, cm, cr = st.columns([1, 1.5, 1])
+    with cm: st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
+    st.write(f'<div class="classic-header">PPE Guardian V9.0 | {date_time_str}</div>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     col6_name = "Value (M)" if 'W' in p else "Signal"
     full_title = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
     
-    st.write(f"""
-        <div style="text-align:center; margin-bottom:15px;">
-            <span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title}</span><br>
-            <span class="classic-header">PPE Guardian V9.0 | {date_time_str}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    st.write(f'<div style="text-align:center; margin-bottom:15px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{full_title}</span></div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">PPE Guardian V9.0 | {date_time_str}</div>', unsafe_allow_html=True)
     
     if 'W' in p:
         with st.expander("➕ Manage Your Watchlist", expanded=True):
@@ -130,7 +126,6 @@ elif p in ['TW', 'UW', 'TS', 'US']:
 
     d_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
     res = [fetch_guardian_engine(t, p) for t in d_list if fetch_guardian_engine(t, p)]
-    
     if res:
         df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update", "PC", "VC", "TC"])
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update"))
