@@ -7,7 +7,7 @@ import pytz
 import time
 
 # --- 1. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V9.6", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V9.7", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -27,7 +27,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE ENGINE ---
+# --- 2. CORE ENGINE (Deep Buy + EMA 8 Confirm) ---
 @st.cache_data(ttl=60)
 def fetch_guardian_engine(ticker, mode):
     try:
@@ -51,7 +51,7 @@ def fetch_guardian_engine(ticker, mode):
                 s_label, s_col, icon = "BUY", "#00FF00", "🚀 "
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
                 found_time = raw_time.strftime("%H:%M %d/%m"); break
-            elif w1 > w2 and w1 < -47 and cp > e8_curr: # DEEP BUY + EMA 8 Confirm
+            elif w1 > w2 and w1 < -47 and cp > e8_curr:
                 s_label, s_col, icon = "DEEP BUY", "#00FF00", "▲ "
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
                 found_time = raw_time.strftime("%H:%M %d/%m"); break
@@ -92,6 +92,7 @@ def apply_style(row):
 if 't_list' not in st.session_state: st.session_state.t_list = ['PTT', 'DELTA', 'ADVANC', 'TFG', 'ALT']
 if 'u_list' not in st.session_state: st.session_state.u_list = ['IONQ', 'NVDA', 'IREN']
 if 'page' not in st.session_state: st.session_state.page = 'Home'
+if 'manage_mode' not in st.session_state: st.session_state.manage_mode = False
 
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
@@ -110,22 +111,26 @@ if p == 'Home':
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:30px; font-weight:900; letter-spacing:5px;">WELCOME</span></div>', unsafe_allow_html=True)
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:35px; font-weight:900; letter-spacing:2px;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<div class="classic-header">PPE Guardian V9.6 | {dt_str}</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">PPE Guardian V9.7 | {dt_str}</div>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     display_col_name = "Value (M)" if 'W' in p else "Signal"
     f_t = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
     st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{f_t}</span></div>', unsafe_allow_html=True)
-    st.write(f'<div class="classic-header">PPE Guardian V9.6 | {dt_str}</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">PPE Guardian V9.7 | {dt_str}</div>', unsafe_allow_html=True)
     
-    # ส่วนจัดการ Watchlist (เฉพาะหน้า TW/UW)
     if 'W' in p:
-        with st.expander("➕ Add Stock to Watchlist", expanded=True):
+        with st.expander("➕ Manage Your Watchlist", expanded=True):
             new = st.text_input("Ticker Name:").upper()
             if new:
                 curr_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
                 if new not in curr_list:
                     curr_list.append(new); st.rerun()
+            
+            # ปุ่มเปิด/ปิดโหมดลบหุ้น
+            if st.button("🛠️ Edit Watchlist (Delete Mode)"):
+                st.session_state.manage_mode = not st.session_state.manage_mode
+                st.rerun()
 
     d_l = st.session_state.t_list if 'T' in p else st.session_state.u_list
     results = [fetch_guardian_engine(t, p) for t in d_l]
@@ -136,21 +141,20 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
         df_display = df.rename(columns={"DynamicCol": display_col_name})
         
-        # แสดงตาราง
         st.dataframe(df_display.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, 
                      column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", display_col_name, "TimeUpdate"))
         
-        # ส่วนปุ่มลบรายตัว (เฉพาะหน้า Watchlist)
-        if 'W' in p:
+        # ส่วนลบรายตัว (จะแสดงผลเฉพาะเมื่อกด Manage List เท่านั้น)
+        if 'W' in p and st.session_state.manage_mode:
             st.write("---")
-            st.write("🗑️ **Remove Items:**")
+            st.write("⚠️ **Delete Items:** (Click to remove)")
             cols = st.columns(6)
             for idx, ticker in enumerate(d_l):
                 if cols[idx % 6].button(f"✖ {ticker}", key=f"del_{ticker}", type="primary"):
                     d_l.remove(ticker); st.rerun()
     else:
-        st.write('<p style="text-align:center; opacity:0.6;">No data found. Please add stocks in Watchlist.</p>', unsafe_allow_html=True)
+        st.write('<p style="text-align:center; opacity:0.6;">No data found.</p>', unsafe_allow_html=True)
 
-if 'S' in p: # Auto refresh เฉพาะหน้า Scan
+if 'S' in p:
     time.sleep(300) 
     st.rerun()
