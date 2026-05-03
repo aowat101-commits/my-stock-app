@@ -7,7 +7,7 @@ import pytz
 import time
 
 # --- 1. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V9.2", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V9.3", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -26,7 +26,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE ENGINE ---
+# --- 2. CORE ENGINE (1H Signal Tracking) ---
 @st.cache_data(ttl=60)
 def fetch_guardian_engine(ticker, mode):
     try:
@@ -68,10 +68,7 @@ def fetch_guardian_engine(ticker, mode):
         chg = c_cp - c_pp
         t_val = (c_cp * float(df['Volume'].iloc[-1])) / 1_000_000
         
-        # จัดการสัญลักษณ์นำหน้าชื่อหุ้น
-        display_ticker = f"{icon}{ticker.upper()}"
-        
-        return {"Ticker": display_ticker, "Prev": f"{c_pp:.2f}", "Price": f"{c_cp:.2f}", 
+        return {"Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{c_cp:.2f}", 
                 "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
                 "Col6": f"{t_val:.2f}M" if 'W' in mode else f"{icon}{s_label}", 
                 "TimeUpdate": found_time, "RawTime": raw_time,
@@ -80,14 +77,13 @@ def fetch_guardian_engine(ticker, mode):
     except: return None
 
 def apply_style(row):
-    # แก้ Bug ValueError โดยส่งคืนสีให้ครบทุกคอลัมน์ที่อยู่ใน DataFrame
     colors = []
     for col in row.index:
-        if col == "Ticker": colors.append(f'color: {row["SigCol"]}')
+        if col == "Ticker": colors.append(f'color: {row["SigCol"]}') # ชื่อหุ้นสีตามสัญญาณ
         elif col in ["Price", "Chg", "%Chg"]: colors.append(f'color: {row["PriceCol"]}')
         elif col == "Col6": colors.append(f'color: {row["ValCol"]}')
         elif col == "TimeUpdate": colors.append(f'color: {row["SigCol"]}')
-        else: colors.append('') # สำหรับคอลัมน์ซ่อน
+        else: colors.append('')
     return colors
 
 # --- 3. SESSION & NAVIGATION ---
@@ -112,13 +108,13 @@ if p == 'Home':
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:30px; font-weight:900; letter-spacing:5px;">WELCOME</span></div>', unsafe_allow_html=True)
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:35px; font-weight:900; letter-spacing:2px;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<div class="classic-header">PPE Guardian V9.2 | {dt_str}</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">PPE Guardian V9.3 | {dt_str}</div>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     c6_label = "Value (M)" if 'W' in p else "Signal"
     f_t = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
     st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{f_t}</span></div>', unsafe_allow_html=True)
-    st.write(f'<div class="classic-header">PPE Guardian V9.2 | {dt_str}</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">PPE Guardian V9.3 | {dt_str}</div>', unsafe_allow_html=True)
     
     if 'W' in p:
         with st.expander("➕ Manage Your Watchlist", expanded=True):
@@ -132,7 +128,7 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                 else: st.session_state.u_list = []
                 st.rerun()
     else:
-        if st.button("🔄 Manual Refresh Scan"): st.cache_data.clear()
+        if st.button("🔄 Manual Refresh Scan"): st.cache_data.clear(); st.rerun()
 
     d_l = st.session_state.t_list if 'T' in p else st.session_state.u_list
     results = [fetch_guardian_engine(t, p) for t in d_l]
