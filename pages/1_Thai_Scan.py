@@ -27,8 +27,9 @@ extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 
 full_scan_list = list(set(set100 + extra_growth))
 
 # --- 3. CORE ENGINE ---
-def analyze_guardian_v4(ticker):
+def analyze_guardian_v4_1(ticker):
     try:
+        # ดึงข้อมูล 60 วันเพื่อให้มีข้อมูลย้อนหลังโชว์ในตาราง
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         if df.empty or len(df) < 40: return None
@@ -56,52 +57,52 @@ def analyze_guardian_v4(ticker):
             tz = pytz.timezone('Asia/Bangkok')
             sig_time = last.name.astimezone(tz)
             
-            if sig_time > datetime.now(tz) - timedelta(days=60):
-                curr, idx = float(df['Close'].iloc[-1]), df.index.get_loc(last.name)
-                prev = float(df['Close'].iloc[idx-1]) if idx > 0 else curr
-                p_prev = float(df['Close'].iloc[idx-2]) if idx > 1 else prev
-                
-                return {
-                    "Ticker": ticker.replace('.BK', ''),
-                    "Prev": prev, "Price": curr, 
-                    "%Chg": ((curr - prev) / prev) * 100,
-                    "Signal": "▲ Deep Buy" if last['buy_deep'] else ("🚀 Buy" if last['buy_std'] else "⚠️ P-Sell"),
-                    "Time/Date": sig_time.strftime("%H:%M %d/%m"),
-                    "raw_time": sig_time, "p_diff": prev - p_prev
-                }
+            curr, idx = float(df['Close'].iloc[-1]), df.index.get_loc(last.name)
+            prev = float(df['Close'].iloc[idx-1]) if idx > 0 else curr
+            p_prev = float(df['Close'].iloc[idx-2]) if idx > 1 else prev
+            
+            return {
+                "Ticker": ticker.replace('.BK', ''),
+                "Prev": prev, "Price": curr, 
+                "%Chg": ((curr - prev) / prev) * 100,
+                "Signal": "▲ Deep Buy" if last['buy_deep'] else ("🚀 Buy" if last['buy_std'] else "⚠️ P-Sell"),
+                "Time/Date": sig_time.strftime("%H:%M %d/%m"),
+                "raw_time": sig_time, "p_diff": prev - p_prev
+            }
     except: pass
     return None
 
 # --- 4. DASHBOARD ---
-st.subheader("🛡️ Guardian Balanced Dashboard (v4.0)")
+st.subheader("🛡️ Guardian Balanced Dashboard (v4.1)")
 
 if st.button("🔄 Refresh Market", use_container_width=True): st.rerun()
 
 @st.fragment(run_every="10m")
 def dashboard():
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Mode: Clean Structure v4.0</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Mode: History-First v4.1</div>', unsafe_allow_html=True)
     
-    results = [res for t in full_scan_list if (res := analyze_guardian_v4(t))]
+    # ดึงข้อมูลสแกน
+    results = [res for t in full_scan_list if (res := analyze_guardian_v4_1(t))]
     
     if results:
         df_master = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         df_display = df_master.drop(columns=['raw_time', 'p_diff']).reset_index(drop=True)
 
-        # 🎯 ฟังก์ชันทำสีแยกอิสระ (Isolate Colors)
+        # 🎯 ตรรกะสีแยกอิสระ (Isolation Logic)
         def get_row_styles(row):
             ticker = row['Ticker']
             m = df_master[df_master['Ticker'] == ticker].iloc[0]
             
-            # 1. สี Signal Groups
+            # 1. สี Signal (Ticker, Signal, Time)
             sig = m['Signal']
             s_c = '#4fd1c5' if "▲" in sig else ('#10b981' if "🚀" in sig else '#ef4444')
             
-            # 2. สี Prev (ช่อง 2)
+            # 2. สี Prev (ช่อง 2) - อิงราคาปิดก่อนหน้า
             p_val = m['p_diff']
             prev_style = f'color: {"#10b981" if p_val > 0 else ("#ef4444" if p_val < 0 else "")};'
             
-            # 3. สี Price & %Chg (ช่อง 3, 4)
+            # 3. สี Price & %Chg (ช่อง 3, 4) - อิงราคาวันนี้
             pct = m['%Chg']
             price_style = f'color: {"#10b981" if pct > 0 else ("#ef4444" if pct < 0 else "")};'
             
@@ -118,8 +119,8 @@ def dashboard():
             "Signal": st.column_config.TextColumn("Signal", width=110),
             "Time/Date": st.column_config.TextColumn("Time/Date", width=100),
         })
-    else: st.info("🔎 ไม่พบสัญญาณ")
+    else: st.info("🔎 กำลังโหลดข้อมูลย้อนหลัง...")
 
 dashboard()
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Fresh Start v4.0")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Release v4.1")
