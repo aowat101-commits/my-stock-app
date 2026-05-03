@@ -5,7 +5,7 @@ import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# --- 1. UI SETUP ---
+# --- 1. UI SETUP & CSS ---
 st.set_page_config(page_title="Guardian Dashboard V8.5", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -25,48 +25,56 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE LOGIC (The Guardian Swing) ---
+# --- 2. CORE LOGIC ---
 @st.cache_data(ttl=60)
-def fetch_guardian_data(ticker):
+def fetch_guardian_engine(ticker, mode='Watchlist'):
     try:
         df = yf.download(ticker, period="60d", interval="1d", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        # อินดิเคเตอร์ (สูตรกลางๆ)
-        ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
-        hull = ta.hma(df['Close'], 30)
-        vma5 = ta.sma(df['Volume'], 5)
-        esa = ta.ema(df['Close'], 9)
-        d = ta.ema(abs(df['Close'] - esa), 9)
-        ci = (df['Close'] - esa) / (0.015 * d)
-        wt1, wt2 = ta.ema(ci, 12), ta.sma(ta.ema(ci, 12), 4)
-
         cp, pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
         chg = cp - pp
-        
-        # 4 สัญญาณ (Deep Buy -47, Buy Vol 1.2x, P-Sell 53, Sell EMA20)
-        sig, s_col = "-", "#FFD700"
-        if cp > ema8.iloc[-1] and hull.iloc[-1] > hull.iloc[-2] and df['Volume'].iloc[-1] > (vma5.iloc[-1] * 1.2):
-            sig, s_col = "✅ BUY", "#00FF00"
-        elif wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -47:
-            sig, s_col = "🔺 DEEP BUY", "#00FF00"
-        elif wt1.iloc[-1] < wt2.iloc[-1] and wt1.iloc[-1] > 53:
-            sig, s_col = "🔶 P-SELL", "#FFA500"
-        elif cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
-            sig, s_col = "🚨 SELL", "#FF1100"
+        # คำนวณมูลค่าการซื้อขาย (Price * Volume) หน่วยเป็นล้าน
+        trade_value_m = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
 
-        # คืนค่าคอลัมน์ให้เป๊ะ 7 คอลัมน์เสมอ
-        return [
-            ticker.replace('.BK', ''), f"{pp:.2f}", f"{cp:.2f}", f"{chg:+.2f}", 
-            f"{(chg/pp)*100:.2f}%", sig, f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}",
-            "#00FF00" if chg > 0 else "#FF1100", s_col
-        ]
+        sig, s_col = "-", "#FFD700"
+        if mode == 'Scan':
+            # สูตร The Guardian Swing (Balanced)
+            ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
+            hull = ta.hma(df['Close'], 30)
+            vma5 = ta.sma(df['Volume'], 5)
+            esa = ta.ema(df['Close'], 9)
+            d = ta.ema(abs(df['Close'] - esa), 9)
+            ci = (df['Close'] - esa) / (0.015 * d)
+            wt1, wt2 = ta.ema(ci, 12), ta.sma(ta.ema(ci, 12), 4)
+
+            if cp > ema8.iloc[-1] and hull.iloc[-1] > hull.iloc[-2] and df['Volume'].iloc[-1] > (vma5.iloc[-1] * 1.2):
+                sig, s_col = "✅ BUY", "#00FF00"
+            elif wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -47:
+                sig, s_col = "🔺 DEEP BUY", "#00FF00"
+            elif wt1.iloc[-1] < wt2.iloc[-1] and wt1.iloc[-1] > 53:
+                sig, s_col = "🔶 P-SELL", "#FFA500"
+            elif cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
+                sig, s_col = "🚨 SELL", "#FF1100"
+
+        return {
+            "Ticker": ticker.replace('.BK', ''),
+            "Prev": f"{pp:.2f}",
+            "Price": f"{cp:.2f}",
+            "Chg": f"{chg:+.2f}",
+            "%Chg": f"{(chg/pp)*100:.2f}%",
+            "Value (M)": f"{trade_value_m:.2f}M" if mode == 'Watchlist' else sig,
+            "RSI(14)": f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}",
+            "_pc": "#00FF00" if chg > 0 else "#FF1100",
+            "_sc": s_col if mode == 'Scan' else "#FFD700"
+        }
     except: return None
 
-def apply_final_style(row):
-    # row[-2] คือสีราคา, row[-1] คือสีสัญญาณ
-    p_c, s_c = f'color: {row.iloc[-2]}', f'color: {row.iloc[-1]}'
+def apply_universal_style(row):
+    p_c = f'color: {row["_pc"]}'
+    s_c = f'color: {row["_sc"]}'
+    # ลำดับ 7 คอลัมน์หลัก
     return ['', '', p_c, p_c, p_c, s_c, 'color: #FFD700', '', '']
 
 # --- 3. NAVIGATION ---
@@ -87,28 +95,30 @@ p = st.session_state.page
 
 # --- 4. CONTENT ---
 if p in ['TW', 'UW', 'TS', 'US']:
+    mode = 'Scan' if 'S' in p else 'Watchlist'
     title = {"TW":"🇹🇭 Thai Watchlist", "TS":"🇹🇭 Thai Market Scan", "UW":"🇺🇸 US Watchlist", "US":"🇺🇸 US Market Scan"}[p]
     st.markdown(f'<p class="centered-yellow-title">{title}</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="centered-time">{dt_label}</p>', unsafe_allow_html=True)
     
-    if "Scan" in title:
+    if mode == 'Scan':
         st.markdown('<div class="scan-btn">', unsafe_allow_html=True)
         if st.button("🔍 เริ่มสแกนหาจังหวะเทรด"):
             st.cache_data.clear()
-            st.toast("กำลังสแกนสดใหม่...")
+            st.toast("กำลังสแกนตลาด...")
         st.markdown('</div>', unsafe_allow_html=True)
-        t_list = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
+        tickers = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
     else:
         with st.expander("➕ จัดการลิสต์หุ้น"):
-            t_list = st.multiselect("เลือกหุ้น:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'], default=['PTT.BK', 'DELTA.BK'])
+            tickers = st.multiselect("หุ้นของคุณ:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK'], default=['PTT.BK', 'DELTA.BK'])
     
-    raw_data = [fetch_guardian_data(t) for t in t_list if fetch_guardian_data(t)]
-    if raw_data:
-        cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "RSI(14)", "P_COL", "S_COL"]
-        df_final = pd.DataFrame(raw_data, columns=cols)
-        # แสดงผล 7 คอลัมน์หลักตามที่สั่ง
-        st.dataframe(df_final.style.apply(apply_final_style, axis=1), use_container_width=True, hide_index=True,
-                     column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "RSI(14)"))
+    data = [fetch_guardian_engine(t, mode) for t in tickers if fetch_guardian_engine(t, mode)]
+    if data:
+        df = pd.DataFrame(data)
+        # เปลี่ยนหัวข้อคอลัมน์ที่ 6 ให้ตรงตามโหมด
+        col6_name = "Value (M)" if mode == 'Watchlist' else "Signal"
+        df = df.rename(columns={"Value (M)": col6_name})
+        st.dataframe(df.style.apply(apply_universal_style, axis=1), use_container_width=True, hide_index=True,
+                     column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "RSI(14)"))
 
 else: # Home
     st.markdown('<p class="welcome-title">WELCOME</p><p class="trading-home">TRADING HOME</p>', unsafe_allow_html=True)
