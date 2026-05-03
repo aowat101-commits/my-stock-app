@@ -39,7 +39,7 @@ def fetch_data_v85(ticker):
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        # Technicals
+        # Technicals (สูตรคอมโบ: The Guardian Swing)
         ema8 = ta.ema(df['Close'], 8)
         ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30)
@@ -57,14 +57,18 @@ def fetch_data_v85(ticker):
         chg = curr_p - prev_p
         pchg = (chg / prev_p) * 100
         
-        # Signals
+        # Signals (4 สัญญาณ: Deep Buy, Buy, P-Sell, Sell)
         sig, s_col = "-", "#FFD700"
+        # 1. Buy (Volume 1.2x + EMA8)
         if curr_p > ema8.iloc[-1] and hull.iloc[-1] > hull.iloc[-2] and df['Volume'].iloc[-1] > (vma5.iloc[-1] * 1.2):
             sig, s_col = "✅ BUY", "#00FF00"
+        # 2. Deep Buy (-47)
         elif wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -47:
             sig, s_col = "🔺 DEEP BUY", "#00FF00"
+        # 3. P-Sell (53)
         elif wt1.iloc[-1] < wt2.iloc[-1] and wt1.iloc[-1] > 53:
             sig, s_col = "🔶 P-SELL", "#FFA500"
+        # 4. Sell (หลุด EMA20 หรือ Hull แดง)
         elif curr_p < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
             sig, s_col = "🚨 SELL", "#FF1100"
 
@@ -81,13 +85,13 @@ def fetch_data_v85(ticker):
         }
     except: return None
 
-def apply_style(row):
+def apply_style_fixed(row):
     p_c = f'color: {row["_pc"]}'
     s_c = f'color: {row["_sc"]}'
-    # ลำดับ: Ticker, Prev, Price, Chg, %Chg, Signal, RSI
+    # แก้ไข Error: ต้องส่งค่าสีให้ครบ 7 คอลัมน์ (Ticker, Prev, Price, Chg, %Chg, Signal, RSI)
     return ['', '', p_c, p_c, p_c, s_c, 'color: #FFD700']
 
-# --- 3. NAVIGATION ---
+# ---  navigation ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK']
 if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA', 'IREN']
@@ -123,7 +127,8 @@ elif p in ['TW', 'UW']:
     if lst:
         data = [fetch_data_v85(t) for t in lst if fetch_data_v85(t)]
         if data:
-            st.dataframe(pd.DataFrame(data).style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, 
+            df_disp = pd.DataFrame(data)
+            st.dataframe(df_disp.style.apply(apply_style_fixed, axis=1), use_container_width=True, hide_index=True, 
                          column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "RSI(14)"))
 
 elif p in ['TS', 'US']:
@@ -134,6 +139,11 @@ elif p in ['TS', 'US']:
         st.cache_data.clear()
         st.toast("กำลังสแกนตลาด...")
     st.markdown('</div>', unsafe_allow_html=True)
-    # ... (ส่วนการสแกนเหมือนเดิม)
+    
+    tickers = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'] if p == "TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
+    scan_data = [fetch_data_v85(t) for t in tickers if fetch_data_v85(t)]
+    if scan_data:
+        st.dataframe(pd.DataFrame(scan_data).style.apply(apply_style_fixed, axis=1), use_container_width=True, hide_index=True, 
+                     column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "RSI(14)"))
 
 st.markdown(f'<p style="text-align:center; color:#FFD700; margin-top:20px; opacity:0.6;">PPE Guardian V8.5 | {dt_label}</p>', unsafe_allow_html=True)
