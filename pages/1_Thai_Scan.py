@@ -3,23 +3,30 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import pandas_ta as ta
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 
 # --- 1. UI SETUP ---
 st.set_page_config(page_title="Guardian Dashboard", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("""
     <style>
-    /* ซ่อน Header มาตรฐานเพื่อให้หน้าจอกว้างขึ้น */
+    /* ซ่อน Header มาตรฐาน */
     [data-testid="stStatusWidget"] {display: none !important;}
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
     
-    /* บังคับให้ปุ่มลูกศร Sidebar (Toggle) แสดงผลเสมอแม้ใน PC */
-    [data-testid="stSidebarCollapsedControl"] {
-        display: block !important;
+    /* บังคับแสดงปุ่มลูกศร Sidebar (Toggle) สำหรับ PC/Tablet */
+    section[data-testid="stSidebarCollapsedControl"] {
+        display: flex !important;
+        left: 10px !important;
+        top: 10px !important;
+        z-index: 999999;
+    }
+    button[kind="headerNoSpacing"] {
+        display: inline-flex !important;
+        background-color: #1e293b !important;
+        border: 1px solid #334155 !important;
         color: #10b981 !important;
-        background-color: rgba(30, 41, 59, 0.7);
-        border-radius: 0 8px 8px 0;
+        border-radius: 5px !important;
     }
     
     .main { background-color: #0f172a; }
@@ -31,20 +38,24 @@ st.markdown("""
         font-weight: bold;
     }
     
-    .center-header {
-        text-align: center;
-        color: white;
-        padding: 10px 0px;
-        font-weight: bold;
+    /* จัดวางหัวข้อและรูปธงชาติ */
+    .header-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 15px 0;
+        gap: 12px;
     }
-    
-    /* แก้ไขการแสดงผลรูปธงชาติบน Windows PC */
-    .flag-icon {
-        display: inline-block;
-        width: 32px;
+    .header-text {
+        color: white;
+        font-size: 28px;
+        font-weight: bold;
+        margin: 0;
+    }
+    .flag-img {
+        width: 38px;
         height: auto;
-        vertical-align: middle;
-        margin-right: 10px;
+        border-radius: 3px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -58,20 +69,20 @@ with st.sidebar:
         st.rerun()
     st.caption("Por Piang Electric Plus Co., Ltd.")
 
-# --- 3. TICKERS & ENGINE (คงเดิม v4.6/v4.7) ---
+# --- 3. TICKERS & ENGINE (เสถียร v4.2) ---
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
-def analyze_guardian_v4_2_core(ticker):
+def analyze_v4_core(ticker):
     try:
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         if df.empty or len(df) < 30: return None
         df = df.dropna()
-        df['hma'] = ta.hma(df['Close'], length=24)
-        df['ema8'] = ta.ema(df['Close'], length=8)
-        df['vma5'] = ta.sma(df['Volume'], length=5)
+        df['hma'] = ta.hma(df['Close'], 24)
+        df['ema8'] = ta.ema(df['Close'], 8)
+        df['vma5'] = ta.sma(df['Volume'], 5)
         ap = (df['High'] + df['Low'] + df['Close']) / 3
         esa, d = ta.ema(ap, 10), ta.ema(abs(ap - ta.ema(ap, 10)), 10)
         ci = (ap - esa) / (0.015 * d)
@@ -99,48 +110,38 @@ def analyze_guardian_v4_2_core(ticker):
 
 # --- 4. DISPLAY LOGIC ---
 if app_page == "Thai Scan":
-    # หัวข้อกึ่งกลาง พร้อมใช้รูปภาพธงชาติเพื่อให้แสดงผลได้ทุกอุปกรณ์ (PC/Mobile)
+    # แก้ไขชื่อและธงชาติให้ขึ้นครบถ้วนทุกอุปกรณ์
     st.markdown("""
-        <div class="center-header">
-            <h2>
-                <img src="https://flagcdn.com/w40/th.png" class="flag-icon">
-                Thai scan
-            </h2>
+        <div class="header-container">
+            <img src="https://flagcdn.com/w80/th.png" class="flag-img">
+            <p class="header-text">Thai scan</p>
         </div>
         """, unsafe_allow_html=True)
     
     tz = pytz.timezone('Asia/Bangkok')
-    # แสดงเวอร์ชันปัจจุบัน V4.8
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V4.8</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V4.9</div>', unsafe_allow_html=True)
     
-    results = []
-    bar = st.progress(0, text="กำลังสแกนหุ้น...")
-    for i, t in enumerate(full_scan_list):
-        res = analyze_guardian_v4_2_core(t)
-        if res: results.append(res)
-        bar.progress((i + 1) / len(full_scan_list))
-    bar.empty()
+    results = [analyze_v4_core(t) for t in full_scan_list]
+    results = [r for r in results if r]
 
     if results:
         df_m = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         df_d = df_m.drop(columns=['raw_time', 'p_diff']).reset_index(drop=True)
 
         def apply_styles(row):
-            ticker = row['Ticker']
-            m = df_m[df_m['Ticker'] == ticker].iloc[0]
+            m = df_m[df_m['Ticker'] == row['Ticker']].iloc[0]
             sig_c = '#4fd1c5' if "▲" in m['Signal'] or "🚀" in m['Signal'] else '#ef4444'
             prev_s = f'color: {"#10b981" if m["p_diff"] > 0 else ("#ef4444" if m["p_diff"] < 0 else "")};'
             price_s = f'color: {"#10b981" if m["%Chg"] > 0 else ("#ef4444" if m["%Chg"] < 0 else "")};'
             return [f'color: {sig_c};', prev_s, price_s, price_s, f'color: {sig_c};', f'color: {sig_c};']
 
-        styled = df_d.style.format({"Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"}).apply(apply_styles, axis=1)
-        st.dataframe(styled, use_container_width=True, height=750, hide_index=True)
+        st.dataframe(df_d.style.format({"Prev":"{:.2f}","Price":"{:.2f}","%Chg":"{:.2f}%"}).apply(apply_styles, axis=1), use_container_width=True, height=750, hide_index=True)
     else:
         st.warning("🔎 ไม่พบข้อมูลสัญญาณ")
 
 else:
     st.subheader(f"📂 หน้าจอ {app_page}")
-    st.info("หน้านี้พร้อมใช้งานสำหรับการสลับหน้าผ่าน Sidebar ครับ")
+    st.info("ใช้ปุ่มลูกศรมุมซ้ายบนเพื่อเปลี่ยนหน้าจอ")
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v4.8")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v4.9")
