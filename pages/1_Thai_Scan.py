@@ -5,9 +5,10 @@ import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# --- 1. UI SETUP & CSS (เน้นล็อกสีให้ลอยเด่น) ---
+# --- 1. UI SETUP ---
 st.set_page_config(page_title="PPE Guardian V8.5", layout="wide", initial_sidebar_state="collapsed")
 
+# CSS สำหรับจัดการส่วนประกอบอื่นๆ
 st.markdown("""
     <style>
     .block-container { padding-top: 0rem !important; padding-bottom: 0rem !important; }
@@ -15,44 +16,33 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     .stApp { background-color: #0f172a; }
 
-    /* แก้ปัญหา Manage Your Watchlist สีมืด */
-    [data-testid="stExpander"] details summary p {
-        color: #FFD700 !important;
-        font-weight: 800 !important;
-        font-size: 20px !important;
-        text-shadow: 1px 1px 2px black;
-    }
+    /* ล็อกสีเหลืองให้ Expander และ Multiselect */
+    [data-testid="stExpander"] details summary p { color: #FFD700 !important; font-weight: bold !important; font-size: 20px !important; }
     [data-testid="stExpander"] svg { fill: #FFD700 !important; }
+    .stMultiSelect label p { color: #FFD700 !important; }
 
-    /* ตาราง Dark Mode */
+    /* ตาราง */
     .stDataFrame [data-testid="stTable"] { background-color: #000000 !important; }
     .stDataFrame th { color: #FFD700 !important; background-color: #000000 !important; border: 0.1px solid #334155 !important; }
-    .stDataFrame [data-testid="stTable"] td { 
-        font-size: 14px !important; 
-        background-color: #000000 !important; 
-        color: #FFD700 !important; 
-        border: 0.1px solid #334155 !important; 
-    }
+    .stDataFrame [data-testid="stTable"] td { font-size: 14px !important; background-color: #000000 !important; color: #FFD700 !important; border: 0.1px solid #334155 !important; }
 
-    /* ปุ่มเมนู */
+    /* ปุ่ม */
     .stButton > button { height: 38px !important; border-radius: 8px !important; width: 100%; font-size: 13px !important; margin-bottom: -10px !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
-    
-    /* ปุ่มอัปเดตภาษาอังกฤษ */
-    .update-btn > div > button { background-color: #FFD700 !important; color: #000000 !important; font-weight: bold !important; height: 45px !important; margin-top: 15px !important; }
+    .update-btn > div > button { background-color: #FFD700 !important; color: #000000 !important; font-weight: bold !important; height: 45px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE LOGIC (Guardian Engine) ---
+# --- 2. CORE LOGIC ---
 @st.cache_data(ttl=60)
 def fetch_guardian_engine(ticker, mode='Watchlist'):
     try:
         df = yf.download(ticker, period="60d", interval="1d", progress=False)
-        if df.empty or len(df) < 20: return None
+        if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         cp, pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
         chg = cp - pp
-        trade_value_raw = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
+        trade_val = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
         sig, s_col = "-", "#FFD700"
         if mode == 'Scan':
             ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
@@ -71,19 +61,19 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
             elif cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
                 sig, s_col = "🚨 SELL", "#FF1100"
         val_col = "#6b7280"
-        if trade_value_raw > 100: val_col = "#A855F7"
-        elif trade_value_raw >= 10: val_col = "#06B6D4"
-        return [ticker.replace('.BK', ''), f"{pp:.2f}", f"{cp:.2f}", f"{chg:+.2f}", f"{(chg/pp)*100:.2f}%", f"{trade_value_raw:.2f}M" if mode == 'Watchlist' else sig, f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}", "#00FF00" if chg > 0 else "#FF1100", s_col if mode == 'Scan' else val_col]
+        if trade_val > 100: val_col = "#A855F7"
+        elif trade_val >= 10: val_col = "#06B6D4"
+        return [ticker.replace('.BK', ''), f"{pp:.2f}", f"{cp:.2f}", f"{chg:+.2f}", f"{(chg/pp)*100:.2f}%", f"{trade_val:.2f}M" if mode == 'Watchlist' else sig, f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}", "#00FF00" if chg > 0 else "#FF1100", s_col if mode == 'Scan' else val_col]
     except: return None
 
-def apply_guardian_style(row):
+def apply_style(row):
     p_c, v_c = f'color: {row.iloc[-2]}', f'color: {row.iloc[-1]}'
     return ['', '', p_c, p_c, p_c, v_c, 'color: #FFD700', '', '']
 
 # --- 3. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK']
-if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA', 'IREN']
+if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT.BK', 'DELTA.BK']
+if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA']
 
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
@@ -101,37 +91,36 @@ dt_label = f"📅 {now.strftime('%d/%m/%Y')} | 🕒 {now.strftime('%H:%M:%S')}"
 # --- 4. CONTENT ---
 p = st.session_state.page
 if p == 'Home':
-    # แก้จุด Welcome & Trading Home ให้สว่างถาวร
-    st.markdown('<p style="color: #FFD700 !important; font-size: 48px; font-weight: 900; text-align: center; letter-spacing: 12px; margin-top: 30px; text-shadow: 2px 2px 4px black;">WELCOME</p>', unsafe_allow_html=True)
-    st.markdown('<p style="color: #FFD700 !important; font-size: 36px; font-weight: 800; text-align: center; letter-spacing: 6px; margin-bottom: 20px; text-shadow: 2px 2px 4px black;">TRADING HOME</p>', unsafe_allow_html=True)
+    # บังคับสีเหลืองทองแบบเจาะจงรายบรรทัด
+    st.write(f'<h1 style="text-align:center;"><span style="color:#FFD700 !important; font-size:60px; font-weight:900; letter-spacing:10px;">WELCOME</span></h1>', unsafe_allow_html=True)
+    st.write(f'<h2 style="text-align:center;"><span style="color:#FFD700 !important; font-size:40px; font-weight:800; letter-spacing:4px;">TRADING HOME</span></h2>', unsafe_allow_html=True)
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.markdown(f'<p style="text-align:center; color:#FFD700; font-size: 20px; font-weight: 600;">{dt_label}</p>', unsafe_allow_html=True)
+    st.write(f'<p style="text-align:center; color:#FFD700; font-size:20px;">{dt_label}</p>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     mode = 'Scan' if 'S' in p else 'Watchlist'
     col6 = "Value (M)" if mode == 'Watchlist' else "Signal"
-    title_text = {"TW":"Thai Watchlist", "TS":"Thai Market Scan", "UW":"US Watchlist", "US":"US Market Scan"}[p]
+    title = {"TW":"Thai Watchlist", "TS":"Thai Market Scan", "UW":"US Watchlist", "US":"US Market Scan"}[p]
     flag = "🇹🇭" if "T" in p else "🇺🇸"
     
-    # แก้จุดหัวข้อหน้า US Watchlist ที่มืด
-    st.markdown(f'<p style="color: #FFD700 !important; font-size: 34px; font-weight: 900; text-align: center; letter-spacing: 5px; text-shadow: 2px 2px 4px black;">{flag} {title_text}</p>', unsafe_allow_html=True)
-    st.markdown(f'<p style="text-align: center; color: #FFD700; font-size: 18px; margin-top: -5px;">{dt_label}</p>', unsafe_allow_html=True)
+    # บังคับสีเหลืองหัวข้อหน้าต่างๆ
+    st.write(f'<h1 style="text-align:center;"><span style="color:#FFD700 !important; font-size:38px; font-weight:900;">{flag} {title}</span></h1>', unsafe_allow_html=True)
+    st.write(f'<p style="text-align:center; color:#FFD700; font-size:18px; margin-top:-20px;">{dt_label}</p>', unsafe_allow_html=True)
     
     if mode == 'Scan':
         st.markdown('<div class="update-btn">', unsafe_allow_html=True)
         if st.button("🔄 Update Market Data"): st.cache_data.clear()
         st.markdown('</div>', unsafe_allow_html=True)
-        t_list = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
+        t_list = ['PTT.BK', 'DELTA.BK', 'AOT.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN']
     else:
-        # Manage Your Watchlist แก้ไขให้เหลืองทองเด่น
         with st.expander("➕ Manage Your Watchlist"):
-            if p == 'TW': st.session_state.t_watch = st.multiselect("Select Thai Stocks:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'], default=st.session_state.t_watch)
-            else: st.session_state.u_watch = st.multiselect("Select US Stocks:", ['IONQ', 'NVDA', 'IREN', 'TSLA'], default=st.session_state.u_watch)
+            if p == 'TW': st.session_state.t_watch = st.multiselect("Select Stocks:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK'], default=st.session_state.t_watch)
+            else: st.session_state.u_watch = st.multiselect("Select Stocks:", ['IONQ', 'NVDA', 'IREN'], default=st.session_state.u_watch)
         t_list = st.session_state.t_watch if p == 'TW' else st.session_state.u_watch
 
-    raw_data = [fetch_guardian_engine(t, mode) for t in t_list if fetch_guardian_engine(t, mode)]
-    if raw_data:
-        df_final = pd.DataFrame(raw_data, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)", "P_COL", "V_COL"])
-        st.dataframe(df_final.style.apply(apply_guardian_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)"))
+    res = [fetch_guardian_engine(t, mode) for t in t_list if fetch_guardian_engine(t, mode)]
+    if res:
+        df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)", "PC", "VC"])
+        st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)"))
 
-st.markdown(f'<p style="text-align:center; color:#FFD700; margin-top:40px; opacity:0.8;">PPE Guardian V8.5 | Powered by Por Piang Electric Plus</p>', unsafe_allow_html=True)
+st.write(f'<p style="text-align:center; color:#FFD700; opacity:0.6; margin-top:50px;">PPE Guardian V8.5 | Por Piang Electric Plus</p>', unsafe_allow_html=True)
