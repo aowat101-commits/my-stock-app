@@ -1,12 +1,11 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
 import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# --- 1. UI SETUP (Compact Base) ---
+# --- 1. UI SETUP ---
 st.set_page_config(page_title="Guardian Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -14,47 +13,45 @@ st.markdown("""
     [data-testid="stStatusWidget"] {display: none !important;}
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-    
     .stApp { background-color: #0f172a; }
 
-    /* ตารางตัวหนังสือดำพื้นขาว */
-    .stDataFrame [data-testid="stTable"] td, 
-    .stDataFrame [data-testid="stTable"] th {
-        color: #000000 !important;
-        background-color: #ffffff !important;
-        font-weight: 500 !important;
-        font-size: 13px !important;
-    }
-
-    .block-container { padding-top: 0.5rem !important; padding-bottom: 0rem !important; }
-
-    /* ปุ่มกดสไตล์ V6.9 Compact */
-    .stButton > button {
-        height: 40px !important;
-        font-size: 12px !important;
-        border-radius: 6px !important;
-        margin-bottom: -10px !important;
-    }
-
-    .time-status {
-        background-color: #1e293b; color: #10b981; padding: 5px; border-radius: 5px;
-        text-align: center; font-size: 11px; margin-top: 5px; margin-bottom: 5px; border: 1px solid #334155;
-    }
+    /* Home Styling */
+    .welcome-title { color: white; font-size: 26px; font-weight: bold; text-align: center; letter-spacing: 5px; margin-bottom: 0px; }
+    .trading-home { color: #ffcc00; font-size: 22px; font-weight: bold; text-align: center; letter-spacing: 2px; margin-top: -10px; }
+    .for-milk { color: white; font-style: italic; font-size: 18px; text-align: center; margin-bottom: 20px; font-family: 'Serif'; }
     
-    .welcome-text { color: #38bdf8; font-size: 24px; font-weight: bold; text-align: center; margin-top: 10px; }
-    .sub-welcome { color: #94a3b8; font-size: 14px; text-align: center; margin-bottom: 20px; }
+    .status-bar { color: #94a3b8; font-size: 14px; text-align: center; margin-top: 10px; }
+    .market-status-head { color: white; font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+
+    /* Table Styling */
+    .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
+        color: #000000 !important; background-color: #ffffff !important; font-size: 13px !important;
+    }
+
+    /* Compact Buttons V6.4 Base */
+    .stButton > button { height: 38px !important; font-size: 12px !important; border-radius: 6px !important; margin-bottom: -10px !important; }
+    .block-container { padding-top: 0.5rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. COMPACT NAVIGATION ---
+# --- 2. FUNCTION: THAI DATE ---
+def get_thai_datetime():
+    tz = pytz.timezone('Asia/Bangkok')
+    now = datetime.now(tz)
+    days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
+    months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+    
+    thai_date = f"📅 วัน{days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year + 543}"
+    thai_time = f"🕒 {now.strftime('%H:%M:%S')}"
+    return thai_date, thai_time
+
+# --- 3. NAVIGATION ---
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Home'
 
-# แถว 1: Home
 if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == 'Home' else "secondary"):
     st.session_state.current_page = 'Home'
 
-# แถว 2: Thai Scan | Charts
 c1, c2 = st.columns(2)
 with c1:
     if st.button("📈 Thai Scan", use_container_width=True, type="primary" if st.session_state.current_page == 'Thai Scan' else "secondary"):
@@ -63,7 +60,6 @@ with c2:
     if st.button("📊 Thai Charts", use_container_width=True, type="primary" if st.session_state.current_page == 'Thai Charts' else "secondary"):
         st.session_state.current_page = 'Thai Charts'
 
-# แถว 3: US Scan | Charts
 c3, c4 = st.columns(2)
 with c3:
     if st.button("🇺🇸 US Scan", use_container_width=True, type="primary" if st.session_state.current_page == 'US Scan' else "secondary"):
@@ -72,67 +68,41 @@ with c4:
     if st.button("📉 US Charts", use_container_width=True, type="primary" if st.session_state.current_page == 'US Charts' else "secondary"):
         st.session_state.current_page = 'US Charts'
 
-# --- 3. CORE ENGINE ---
-@st.cache_data(ttl=300)
-def fetch_stock(ticker):
-    try:
-        df = yf.download(ticker, period="60d", interval="1h", progress=False)
-        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        if df.empty: return None
-        df = df.dropna()
-        # Indicators...
-        df['ema8'] = ta.ema(df['Close'], 8)
-        ap = (df['High'] + df['Low'] + df['Close']) / 3
-        esa, d = ta.ema(ap, 10), ta.ema(abs(ap - ta.ema(ap, 10)), 10)
-        ci = (ap - esa) / (0.015 * d)
-        df['wt1'], df['wt2'] = ta.ema(ci, 21), ta.sma(ta.ema(ci, 21), 4)
-        
-        buy_c = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
-        sell_c = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2']) & (df['wt1'] > 48)
-
-        sigs = df[buy_c | sell_c].copy()
-        if not sigs.empty:
-            last = sigs.iloc[-1]
-            tz = pytz.timezone('Asia/Bangkok')
-            curr = float(df['Close'].iloc[-1])
-            prev = float(df['Close'].iloc[df.index.get_loc(last.name)-1]) if df.index.get_loc(last.name) > 0 else curr
-            return {"Ticker": ticker.replace('.BK', ''), "Price": curr, "%Chg": ((curr - prev) / prev) * 100, "Signal": "▲ Deep Buy" if last.name in df[buy_c].index else "⚠️ P-Sell", "Time": last.name.astimezone(tz).strftime("%H:%M %d/%m"), "raw_time": last.name.astimezone(tz)}
-    except: pass
-    return None
-
-# --- 4. PAGE ROUTING ---
+# --- 4. PAGE CONTENT ---
 cp = st.session_state.current_page
+t_date, t_time = get_thai_datetime()
 
 if cp == "Home":
-    st.markdown('<p class="welcome-text">Welcome Trading for milk</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-welcome">Por Piang Electric Plus Co., Ltd. (PPE)</p>', unsafe_allow_html=True)
+    st.markdown('<p class="welcome-title">WELCOME</p>', unsafe_allow_html=True)
+    st.markdown('<p class="trading-home">TRADING HOME</p>', unsafe_allow_html=True)
+    st.markdown('<p class="for-milk">For Milk</p>', unsafe_allow_html=True)
     
-    # แสดงกราฟหน้า Home เหมือนตอนแรก (ตัวอย่างหุ้นหลัก)
-    st.markdown('<div style="background-color:#1e293b; padding:10px; border-radius:10px; border:1px solid #334155;">', unsafe_allow_html=True)
-    st.subheader("📊 Market Overview")
-    index_data = yf.download("^SET.BK", period="1mo", interval="1d", progress=False)['Close']
-    st.line_chart(index_data)
-    st.markdown('</div>', unsafe_allow_html=True)
+    # กราฟหลักหน้า Home
+    st.image("https://images.unsplash.com/photo-1611974717482-98aa007e690a?auto=format&fit=crop&q=80&w=1000", use_container_width=True)
+    
+    # วันที่และเวลาภาษาไทย
+    st.markdown(f'<p class="status-bar">{t_date}  |  {t_time}</p>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="market-status-head">🌐 Market Status</div>', unsafe_allow_html=True)
+    st.write("---")
+    st.info(f"สวัสดีครับคุณมิลค์ (Aowat Lukthong)\nบริษัท พอเพียง อิเล็คทริค พลัส จำกัด (PPE)")
 
 elif cp == "Thai Scan":
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")} | V7.0</div>', unsafe_allow_html=True)
-    set100 = ['ADVANC.BK', 'AOT.BK', 'CPALL.BK', 'DELTA.BK', 'PTT.BK', 'SCB.BK'] # ตัวอย่าง
-    res = [fetch_stock(t) for t in set100]
-    res = [r for r in res if r]
-    if res:
-        df_m = pd.DataFrame(res).sort_values("raw_time", ascending=False)
-        st.dataframe(df_m.drop(columns=['raw_time']), use_container_width=True, hide_index=True)
+    st.markdown(f'<div style="color:white; text-align:center; padding:10px;">🇹🇭 Thai Market Scan | {t_time}</div>', unsafe_allow_html=True)
+    # ใส่ Engine สแกนหุ้นไทยที่นี่ (จาก V6.9)
+    st.write("กำลังโหลดข้อมูลหุ้นไทย...")
 
 elif cp == "Thai Charts":
-    t_in = st.text_input("หุ้นไทย:", "PTT.BK")
-    st.line_chart(yf.download(t_in, period="1mo")['Close'])
+    st.subheader("📊 Thai Charts")
+    st.line_chart(yf.download("PTT.BK", period="1mo")['Close'])
 
 elif cp == "US Scan":
-    us_res = [fetch_stock(t) for t in ['IONQ', 'IREN', 'NVDA', 'TSLA']]
-    st.dataframe(pd.DataFrame([r for r in us_res if r]).drop(columns=['raw_time']), use_container_width=True)
+    st.subheader("🇺🇸 US Scan")
+    st.write("ข้อมูลหุ้น IONQ, IREN, NVDA...")
 
 elif cp == "US Charts":
+    st.subheader("📉 US Charts")
     st.line_chart(yf.download("IONQ", period="1mo")['Close'])
 
 st.write("---")
-st.caption("PPE | Home Classic v7.0")
+st.caption(f"PPE Dashboard V7.1 | {t_date}")
