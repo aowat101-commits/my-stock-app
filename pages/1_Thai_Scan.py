@@ -7,7 +7,7 @@ import pytz
 import time
 
 # --- 1. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V9.7", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V9.8", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -22,12 +22,11 @@ st.markdown("""
     .stDataFrame th { color: #FFD700 !important; background-color: #000000 !important; border: 0.1px solid #334155 !important; }
     .stDataFrame [data-testid="stTable"] td { font-size: 13px !important; color: #FFD700 !important; border: 0.1px solid #334155 !important; }
     .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 14px !important; font-weight: 600 !important; }
-    /* ปุ่มลบสีแดง */
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE ENGINE (Deep Buy + EMA 8 Confirm) ---
+# --- 2. CORE ENGINE (EMA 8 + Deep Buy Logic) ---
 @st.cache_data(ttl=60)
 def fetch_guardian_engine(ticker, mode):
     try:
@@ -107,17 +106,18 @@ with c2:
 p = st.session_state.page
 dt_str = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
 
+# แสดง Header บนสุดเพียงบรรทัดเดียว
+st.write(f'<div class="classic-header">PPE Guardian V9.8 | {dt_str}</div>', unsafe_allow_html=True)
+
 if p == 'Home':
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:30px; font-weight:900; letter-spacing:5px;">WELCOME</span></div>', unsafe_allow_html=True)
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:35px; font-weight:900; letter-spacing:2px;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<div class="classic-header">PPE Guardian V9.7 | {dt_str}</div>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     display_col_name = "Value (M)" if 'W' in p else "Signal"
     f_t = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
     st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{f_t}</span></div>', unsafe_allow_html=True)
-    st.write(f'<div class="classic-header">PPE Guardian V9.7 | {dt_str}</div>', unsafe_allow_html=True)
     
     if 'W' in p:
         with st.expander("➕ Manage Your Watchlist", expanded=True):
@@ -126,8 +126,6 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                 curr_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
                 if new not in curr_list:
                     curr_list.append(new); st.rerun()
-            
-            # ปุ่มเปิด/ปิดโหมดลบหุ้น
             if st.button("🛠️ Edit Watchlist (Delete Mode)"):
                 st.session_state.manage_mode = not st.session_state.manage_mode
                 st.rerun()
@@ -144,10 +142,9 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         st.dataframe(df_display.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, 
                      column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", display_col_name, "TimeUpdate"))
         
-        # ส่วนลบรายตัว (จะแสดงผลเฉพาะเมื่อกด Manage List เท่านั้น)
         if 'W' in p and st.session_state.manage_mode:
             st.write("---")
-            st.write("⚠️ **Delete Items:** (Click to remove)")
+            st.write("⚠️ **Delete Items:**")
             cols = st.columns(6)
             for idx, ticker in enumerate(d_l):
                 if cols[idx % 6].button(f"✖ {ticker}", key=f"del_{ticker}", type="primary"):
