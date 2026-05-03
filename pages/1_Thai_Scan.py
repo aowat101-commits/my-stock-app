@@ -22,36 +22,42 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR NAVIGATION (เพิ่มส่วนนี้เพื่อให้มีลูกศรย้อนกลับ/เปลี่ยนหน้า) ---
+# --- 2. SIDEBAR NAVIGATION (ปุ่มลูกศรเปลี่ยนหน้า) ---
 with st.sidebar:
     st.title("📌 Menu")
-    # สร้างเมนูเลือกหน้าเหมือน ThaiChart
+    # เมนูเลือกหน้าจอหลักตามที่คุณมิลค์ต้องการ
     app_page = st.radio("เลือกหน้าจอ:", ["Home", "Thai Scan", "Thai Charts", "US Scan"], index=1)
     st.write("---")
     if st.button("🔄 Force Refresh", use_container_width=True):
         st.rerun()
     st.caption("Por Piang Electric Plus Co., Ltd.")
 
-# --- 3. TICKERS & ENGINE (ตรรกะเดิม v4.2) ---
+# --- 3. TICKERS & ENGINE (ตรรกะเสถียร v4.2) ---
+# รายชื่อหุ้น SET100 และ Extra Growth จากฐานข้อมูลของคุณมิลค์
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
 extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
 full_scan_list = list(set(set100 + extra_growth))
 
 def analyze_guardian_v4_2_core(ticker):
     try:
+        # ดึงข้อมูลย้อนหลัง 60 วันเพื่อความแม่นยำของอินดิเคเตอร์
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         if df.empty or len(df) < 30: return None
         df = df.dropna()
-        # Indicators
+        
+        # คำนวณอินดิเคเตอร์พื้นฐาน: HMA, EMA8 และ Volume
         df['hma'] = ta.hma(df['Close'], length=24)
         df['ema8'] = ta.ema(df['Close'], length=8)
         df['vma5'] = ta.sma(df['Volume'], length=5)
+        
+        # WaveTrend Logic สำหรับหาจุดกลับตัว
         ap = (df['High'] + df['Low'] + df['Close']) / 3
         esa, d = ta.ema(ap, 10), ta.ema(abs(ap - ta.ema(ap, 10)), 10)
         ci = (ap - esa) / (0.015 * d)
         df['wt1'], df['wt2'] = ta.ema(ci, 21), ta.sma(ta.ema(ci, 21), 4)
-        # Signals
+        
+        # เงื่อนไขสัญญาณ Buy/Sell
         df['buy_deep'] = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
         df['buy_std'] = (df['hma'] > df['hma'].shift(1)) & (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -45) & (df['Volume'] >= df['vma5']*1.2)
         df['sell_p'] = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2']) & (df['wt1'] > 48)
@@ -63,6 +69,7 @@ def analyze_guardian_v4_2_core(ticker):
             curr, idx = float(df['Close'].iloc[-1]), df.index.get_loc(last.name)
             prev = float(df['Close'].iloc[idx-1]) if idx > 0 else curr
             p_prev = float(df['Close'].iloc[idx-2]) if idx > 1 else prev
+            
             return {
                 "Ticker": ticker.replace('.BK', ''), "Prev": prev, "Price": curr, 
                 "%Chg": ((curr - prev) / prev) * 100,
@@ -73,7 +80,7 @@ def analyze_guardian_v4_2_core(ticker):
     except: pass
     return None
 
-# --- 4. DISPLAY LOGIC (แยกหน้าจอ) ---
+# --- 4. DISPLAY LOGIC ---
 if app_page == "Thai Scan":
     st.subheader("🛡️ Thai Scan Dashboard (v4.2 Logic)")
     tz = pytz.timezone('Asia/Bangkok')
@@ -91,13 +98,15 @@ if app_page == "Thai Scan":
         df_m = pd.DataFrame(results).sort_values("raw_time", ascending=False).head(40)
         df_d = df_m.drop(columns=['raw_time', 'p_diff']).reset_index(drop=True)
 
+        # ตรรกะสีแยกอิสระ (Prev อิงประวัติ / Price อิงปัจจุบัน)
         def apply_styles(row):
             ticker = row['Ticker']
             m = df_m[df_m['Ticker'] == ticker].iloc[0]
             sig_c = '#4fd1c5' if "▲" in m['Signal'] or "🚀" in m['Signal'] else '#ef4444'
-            # ตรรกะสีที่คุณมิลค์สั่ง
+            
             prev_s = f'color: {"#10b981" if m["p_diff"] > 0 else ("#ef4444" if m["p_diff"] < 0 else "")};'
             price_s = f'color: {"#10b981" if m["%Chg"] > 0 else ("#ef4444" if m["%Chg"] < 0 else "")};'
+            
             return [f'color: {sig_c};', prev_s, price_s, price_s, f'color: {sig_c};', f'color: {sig_c};']
 
         styled = df_d.style.format({"Prev": "{:,.2f}", "Price": "{:,.2f}", "%Chg": "{:+.2f}%"}).apply(apply_styles, axis=1)
@@ -107,7 +116,7 @@ if app_page == "Thai Scan":
 
 else:
     st.subheader(f"📂 หน้าจอ {app_page}")
-    st.info("หน้านี้พร้อมใช้งานสำหรับการขยายฟีเจอร์ในอนาคตครับ")
+    st.info("หน้านี้พร้อมใช้งานสำหรับการสลับหน้าผ่าน Sidebar ครับ")
 
 st.write("---")
 st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v4.6")
