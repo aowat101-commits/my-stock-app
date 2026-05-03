@@ -7,16 +7,21 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY SYSTEM (Fixed & Stable) ---
+# --- 1. MEMORY SYSTEM (ตรวจสอบการมีอยู่ของไฟล์อย่างละเอียด) ---
 def get_watchlist(market_type):
     file_path = f"{market_type}_list.txt"
     defaults = ['PTT', 'DELTA', 'ADVANC'] if market_type == 'th' else ['IONQ', 'NVDA', 'IREN']
+    
+    # ถ้าไม่มีไฟล์ ให้สร้างและใส่ค่า Default
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
         return defaults
+    
+    # อ่านไฟล์และเช็คว่ามีข้อมูลไหม
     with open(file_path, "r") as f:
-        data = f.read().strip()
-        return data.split(",") if data else []
+        content = f.read().strip()
+        if not content: return defaults # ถ้าไฟล์ว่างให้คืนค่า Default
+        return content.split(",")
 
 def update_watchlist(market_type, new_list):
     file_path = f"{market_type}_list.txt"
@@ -41,7 +46,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE (Real-time & Complete Logic) ---
+# --- 3. CORE ENGINE (ตรวจสอบเงื่อนไข EMA 8 แบบ Real-time) ---
 @st.cache_data(ttl=30)
 def fetch_data(ticker, mode):
     try:
@@ -61,6 +66,7 @@ def fetch_data(ticker, mode):
             h_curr, h_prev = hull.iloc[i], hull.iloc[i-1] if i>0 else hull.iloc[i]
             w1, w2, vol, v5, e8 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i]
             
+            # ต้องครบทุกเงื่อนไขตามที่คุณมิลค์สั่ง (EMA 8 ยืน + สัญญาณอินดิเคเตอร์)
             if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label, s_col, icon = "BUY", "#00FF00", "🚀 "
             elif w1 > w2 and w1 < -47 and cp > e8: s_label, s_col, icon = "DEEP BUY", "#00FF00", "▲ "
             elif w1 < w2 and w1 > 53: s_label, s_col, icon = "P-SELL", "#FFA500", "🔶 "
@@ -81,7 +87,7 @@ def fetch_data(ticker, mode):
 def apply_style(row):
     return [f'color: {row["SigCol"]}' if col in ["Ticker", "Signal", "TimeUpdate"] else (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else '') for col in row.index]
 
-# --- 4. NAVIGATION & STATE ---
+# --- 4. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'manage_mode' not in st.session_state: st.session_state.manage_mode = False
 
@@ -95,40 +101,50 @@ with c2:
     st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
 
 p = st.session_state.page
-dt_str = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
-st.write(f'<div class="classic-header">PPE Guardian V10.1 | {dt_str}</div>', unsafe_allow_html=True)
+dt_now = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
+st.write(f'<div class="classic-header">PPE Guardian V10.1 | {dt_now}</div>', unsafe_allow_html=True)
 
-# --- 5. CONTENT ---
+# --- 5. CONTENT LOGIC (แยกหน้าชัดเจน) ---
 if p == 'Home':
-    st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME TRADING HOME</span></div>', unsafe_allow_html=True)
+    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     market = 'th' if p in ['TW', 'TS'] else 'us'
-    st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{p} PAGE</span></div>', unsafe_allow_html=True)
-    
     current_list = get_watchlist(market)
     
+    # ส่วนจัดการ Watchlist
     if 'W' in p:
         with st.expander("➕ Manage Watchlist", expanded=True):
-            new_ticker = st.text_input("Ticker Name:").upper()
+            new_ticker = st.text_input("Ticker Name (Press Enter to Add):").upper()
             if new_ticker and new_ticker not in current_list:
                 current_list.append(new_ticker); update_watchlist(market, current_list); st.rerun()
-            if st.button("🛠️ Edit Mode (Delete)"): st.session_state.manage_mode = not st.session_state.manage_mode; st.rerun()
+            if st.button("🛠️ Edit Watchlist (Delete Mode)"):
+                st.session_state.manage_mode = not st.session_state.manage_mode; st.rerun()
+    else:
+        if st.button("🔄 Manual Refresh Market"): st.cache_data.clear(); st.rerun()
 
+    # ดึงข้อมูล
     results = [fetch_data(t, p) for t in current_list]
     results = [r for r in results if r is not None]
 
     if results:
         df = pd.DataFrame(results)
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
+        
         cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if 'W' in p else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
         
+        # ปุ่มลบหุ้น
         if 'W' in p and st.session_state.manage_mode:
-            st.write("---"); dc = st.columns(6)
+            st.write("---")
+            st.write("🗑️ **Click to Delete:**")
+            dc = st.columns(6)
             for i, t in enumerate(current_list):
-                if dc[i % 6].button(f"✖ {t}", key=f"del_{t}", type="primary"): current_list.remove(t); update_watchlist(market, current_list); st.rerun()
-    else: st.write("No data found. Please add tickers.")
+                if dc[i % 6].button(f"✖ {t}", key=f"del_{t}", type="primary"):
+                    current_list.remove(t); update_watchlist(market, current_list); st.rerun()
+    else:
+        st.write('<p style="text-align:center; opacity:0.6;">No data found. Please add tickers to Watchlist.</p>', unsafe_allow_html=True)
 
+# Auto-refresh เฉพาะหน้า Scan
 if 'S' in p: time.sleep(300); st.rerun()
