@@ -16,13 +16,15 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     .stApp { background-color: #0f172a; }
 
+    /* ปรับแต่งช่องพิมพ์ (Text Input) */
+    .stTextInput > div > div > input { background-color: #1e293b !important; color: #FFD700 !important; border: 1px solid #FFD700 !important; }
     [data-testid="stExpander"] details summary p { color: #FFD700 !important; font-weight: 700 !important; font-size: 16px !important; }
     
     .stDataFrame [data-testid="stTable"] { background-color: #000000 !important; }
     .stDataFrame th { color: #FFD700 !important; background-color: #000000 !important; border: 0.1px solid #334155 !important; }
     .stDataFrame [data-testid="stTable"] td { font-size: 13px !important; background-color: #000000 !important; color: #FFD700 !important; border: 0.1px solid #334155 !important; }
 
-    .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 12px !important; margin-bottom: -10px !important; }
+    .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 12px !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -31,7 +33,7 @@ st.markdown("""
 @st.cache_data(ttl=60)
 def fetch_guardian_engine(ticker, mode='TW'):
     try:
-        # เติม .BK ให้อัตโนมัติสำหรับโหมดไทย
+        # ระบบเติม .BK อัตโนมัติสำหรับตลาดไทย
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
         df = yf.download(symbol, period="60d", interval="1d", progress=False)
         
@@ -45,6 +47,7 @@ def fetch_guardian_engine(ticker, mode='TW'):
         tz = pytz.timezone('Asia/Bangkok')
         last_update = datetime.now(tz).strftime("%H:%M %d/%m")
         
+        # Guardian Swing Indicators
         ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30)
         vma5 = ta.sma(df['Volume'], 5)
@@ -77,18 +80,18 @@ def apply_style(row):
     p_c, v_c, t_c = f'color: {row.iloc[-3]}', f'color: {row.iloc[-2]}', f'color: {row.iloc[-1]}'
     return ['', '', p_c, p_c, p_c, v_c, t_c, '', '', '']
 
-# --- 3. SESSION STATE MANAGEMENT ---
+# --- 3. SESSION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT', 'DELTA', 'ADVANC', 'TFG']
-if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA', 'IREN']
+if 't_list' not in st.session_state: st.session_state.t_list = ['PTT', 'DELTA', 'ADVANC', 'TFG', 'ALT']
+if 'u_list' not in st.session_state: st.session_state.u_list = ['IONQ', 'NVDA', 'IREN']
 
 # --- 4. NAVIGATION ---
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
-c_nav1, c_nav2 = st.columns(2)
-with c_nav1:
+c1, c2 = st.columns(2)
+with c1:
     st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW"}), type="primary" if st.session_state.page == 'TW' else "secondary")
     st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if st.session_state.page == 'TS' else "secondary")
-with c_nav2:
+with c2:
     st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if st.session_state.page == 'UW' else "secondary")
     st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
 
@@ -99,30 +102,40 @@ p = st.session_state.page
 
 if p == 'Home':
     st.write(f'<div style="text-align:center; padding:10px;"><span style="color:#FFD700 !important; font-size:32px; font-weight:900; letter-spacing:6px; display:block;">WELCOME</span><span style="color:#FFD700 !important; font-size:20px; font-weight:800; letter-spacing:2px; display:block;">TRADING HOME</span></div>', unsafe_allow_html=True)
-    c_img_l, c_img_m, c_img_r = st.columns([1, 1.5, 1])
-    with c_img_m: st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
+    cl, cm, cr = st.columns([1, 1.5, 1])
+    with cm: st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
     st.write(f'<p style="text-align:center;"><span style="color:#FFD700 !important; font-size:16px; font-weight:600;">{dt_label}</span></p>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
+    mode = p
     col6 = "Value (M)" if 'W' in p else "Signal"
     title = {"TW":"Thai Watchlist", "TS":"Thai Market Scan", "UW":"US Watchlist", "US":"US Market Scan"}[p]
     flag = "🇹🇭" if "T" in p else "🇺🇸"
     
     st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700 !important; font-size:22px; font-weight:900;">{flag} {title}</span><br><span style="color:#FFD700 !important; font-size:14px;">{dt_label}</span></div>', unsafe_allow_html=True)
     
-    with st.expander("➕ Manage Your Watchlist"):
-        # ระบบ Freedom Input: พิมพ์ชื่อหุ้นที่ต้องการเพิ่มได้อิสระ
-        current_list = st.session_state.t_watch if 'T' in p else st.session_state.u_watch
-        new_stocks = st.multiselect("พิมพ์ชื่อหุ้นเพื่อเพิ่ม (เช่น ALT, TFG):", 
-                                   options=list(set(current_list + ['ALT', 'TFG', 'OR', 'DELTA', 'PTT'])), 
-                                   default=current_list)
+    with st.expander("➕ Manage Your Watchlist", expanded=True):
+        c_in, c_btn = st.columns([3, 1])
+        with c_in:
+            new_stock = st.text_input("พิมพ์ชื่อหุ้นแล้วกด Enter (เช่น GUNKUL):", key=f"input_{p}").upper()
+            if new_stock:
+                target = st.session_state.t_list if 'T' in p else st.session_state.u_list
+                if new_stock not in target:
+                    target.append(new_stock)
+                    st.rerun()
+        with c_btn:
+            st.write("") # เว้นระยะ
+            if st.button("🗑️ Clear All"):
+                if 'T' in p: st.session_state.t_list = []
+                else: st.session_state.u_list = []
+                st.rerun()
         
-        if 'T' in p: st.session_state.t_watch = new_stocks
-        else: st.session_state.u_watch = new_stocks
-        
-        t_list = new_stocks
+        # แสดงรายชื่อหุ้นที่กำลังสแกนอยู่
+        display_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
+        st.write(f"กำลังสแกน: {', '.join(display_list)}")
 
-    res = [fetch_guardian_engine(t, p) for t in t_list if fetch_guardian_engine(t, p)]
+    # ดึงข้อมูลตามลิสต์ที่สะสมไว้
+    res = [fetch_guardian_engine(t, mode) for t in display_list if fetch_guardian_engine(t, mode)]
     if res:
         df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6, "Time Update", "PC", "VC", "TC"])
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6, "Time Update"))
