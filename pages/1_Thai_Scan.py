@@ -16,6 +16,7 @@ st.markdown("""
     [data-testid="stStatusWidget"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
+    /* สไตล์สำหรับส่วนหัว Classic Blue */
     .classic-header { color: #1E90FF !important; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
     
     .stTextInput > div > div > input { background-color: #1e293b !important; color: #FFD700 !important; border: 1px solid #FFD700 !important; }
@@ -28,7 +29,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE ENGINE ---
+# --- 2. CORE ENGINE (1H Lookback) ---
 @st.cache_data(ttl=60)
 def fetch_guardian_engine(ticker, mode):
     try:
@@ -46,6 +47,7 @@ def fetch_guardian_engine(ticker, mode):
         for i in range(len(df)-1, 0, -1):
             cp = float(df['Close'].iloc[i]); h_curr, h_prev = hull.iloc[i], hull.iloc[i-1]
             w1, w2 = wt1.iloc[i], wt2.iloc[i]; vol, v5 = df['Volume'].iloc[i], vma5.iloc[i]
+            
             if cp > ema8.iloc[i] and h_curr > h_prev and vol > (v5 * 1.2):
                 s_label, s_col = "✅ BUY", "#00FF00"
                 found_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok')).strftime("%H:%M %d/%m"); break
@@ -66,7 +68,9 @@ def fetch_guardian_engine(ticker, mode):
         if 'W' in mode:
             if t_val > 100: v_col = "#A855F7"
             elif t_val >= 10: v_col = "#06B6D4"
-        return [ticker.upper(), f"{c_pp:.2f}", f"{c_cp:.2f}", f"{chg:+.2f}", f"{(chg/c_pp)*100:.2f}%", col6_val, found_time, "#00FF00" if chg > 0 else "#FF1100", v_col, s_col]
+
+        return [ticker.upper(), f"{c_pp:.2f}", f"{c_cp:.2f}", f"{chg:+.2f}", f"{(chg/c_pp)*100:.2f}%", 
+                col6_val, found_time, "#00FF00" if chg > 0 else "#FF1100", v_col, s_col]
     except: return None
 
 def apply_style(row):
@@ -99,7 +103,13 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     col6_name = "Value (M)" if 'W' in p else "Signal"
     full_title = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
-    st.write(f'<div style="text-align:center; margin-bottom:15px;"><span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title}</span><br><span class="classic-header">PPE Guardian V9.0 | {date_time_str}</span></div>', unsafe_allow_html=True)
+    
+    st.write(f"""
+        <div style="text-align:center; margin-bottom:15px;">
+            <span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title}</span><br>
+            <span class="classic-header">PPE Guardian V9.0 | {date_time_str}</span>
+        </div>
+    """, unsafe_allow_html=True)
     
     if 'W' in p:
         with st.expander("➕ Manage Your Watchlist", expanded=True):
@@ -120,9 +130,11 @@ elif p in ['TW', 'UW', 'TS', 'US']:
 
     d_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
     res = [fetch_guardian_engine(t, p) for t in d_list if fetch_guardian_engine(t, p)]
+    
     if res:
         df = pd.DataFrame(res, columns=["Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update", "PC", "VC", "TC"])
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "Time Update"))
 
+# Auto Refresh 5 นาที
 time.sleep(300) 
 st.rerun()
