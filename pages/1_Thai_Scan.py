@@ -5,7 +5,7 @@ import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# --- 1. UI SETUP ---
+# --- 1. UI SETUP (Ultra Compact & Large Header) ---
 st.set_page_config(page_title="Guardian Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -15,10 +15,25 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     .stApp { background-color: #0f172a; }
 
-    /* Home Styling */
-    .welcome-title { color: white; font-size: 26px; font-weight: bold; text-align: center; letter-spacing: 5px; margin-bottom: 0px; }
-    .trading-home { color: #ffcc00; font-size: 22px; font-weight: bold; text-align: center; letter-spacing: 2px; margin-top: -10px; }
-    .for-milk { color: white; font-style: italic; font-size: 18px; text-align: center; margin-bottom: 20px; font-family: 'Serif'; }
+    /* Home Styling - ปรับขนาดตัวอักษรให้ใหญ่ขึ้นตามสั่ง */
+    .welcome-title { 
+        color: white; 
+        font-size: 36px; /* ขยายใหญ่ขึ้น */
+        font-weight: 800; 
+        text-align: center; 
+        letter-spacing: 8px; 
+        margin-top: 10px;
+        margin-bottom: 5px; 
+    }
+    .trading-home { 
+        color: #ffcc00; 
+        font-size: 30px; /* ขยายใหญ่ขึ้น */
+        font-weight: 800; 
+        text-align: center; 
+        letter-spacing: 3px; 
+        margin-top: -5px;
+        margin-bottom: 25px;
+    }
     
     .status-bar { color: #ffffff; font-size: 15px; text-align: center; margin-top: 15px; font-weight: 500; }
     .market-status-head { color: white; font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; margin-top: 25px; }
@@ -29,7 +44,7 @@ st.markdown("""
     }
 
     /* Navigation Buttons */
-    .stButton > button { height: 38px !important; font-size: 12px !important; border-radius: 6px !important; margin-bottom: -10px !important; }
+    .stButton > button { height: 42px !important; font-size: 14px !important; border-radius: 8px !important; margin-bottom: -10px !important; }
     .block-container { padding-top: 0.5rem !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -40,7 +55,6 @@ def get_thai_datetime():
     now = datetime.now(tz)
     days = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
     months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
-    # แสดงปี พ.ศ. (ค.ศ. + 543)
     thai_date = f"📅 วัน{days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year + 543}"
     thai_time = f"🕒 {now.strftime('%H:%M:%S')}"
     return thai_date, thai_time
@@ -49,7 +63,6 @@ def get_thai_datetime():
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Home'
 
-# ปุ่มนำทางสไตล์ V6.4 Compact
 if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == 'Home' else "secondary"):
     st.session_state.current_page = 'Home'
 
@@ -76,9 +89,8 @@ t_date, t_time = get_thai_datetime()
 if cp == "Home":
     st.markdown('<p class="welcome-title">WELCOME</p>', unsafe_allow_html=True)
     st.markdown('<p class="trading-home">TRADING HOME</p>', unsafe_allow_html=True)
-    st.markdown('<p class="for-milk">For Milk</p>', unsafe_allow_html=True)
     
-    # รูปภาพหน้าโฮม (ใช้ URL ใหม่ที่เสถียรกว่าเดิม)
+    # รูปภาพหน้าโฮม
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000&auto=format&fit=crop", use_container_width=True)
     
     # วันที่และเวลาภาษาไทย
@@ -87,11 +99,9 @@ if cp == "Home":
     # Market Status Section
     st.markdown('<div class="market-status-head">🌐 Market Status</div>', unsafe_allow_html=True)
     st.write("---")
-    # ตัดส่วนข้อมูลบริษัทและ Caption ด้านล่างออกเรียบร้อยครับ
 
 elif cp == "Thai Scan":
     st.markdown(f'<div style="color:white; text-align:center; padding:10px;">🇹🇭 Thai Market Scan | {t_time}</div>', unsafe_allow_html=True)
-    # (โค้ด Engine สแกนหุ้นไทยทำงานที่นี่...)
     st.info("กำลังโหลดข้อมูลหุ้นไทย...")
 
 elif cp == "Thai Charts":
@@ -105,5 +115,3 @@ elif cp == "US Scan":
 elif cp == "US Charts":
     st.subheader("📉 US Charts")
     st.line_chart(yf.download("IONQ", period="1mo")['Close'])
-
-# ตัด Caption ด้านล่างสุดออกตามสั่งครับ
