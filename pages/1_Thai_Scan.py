@@ -35,10 +35,12 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
 
         cp, pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
         chg = cp - pp
-        trade_value_raw = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
+        # คำนวณมูลค่าการซื้อขาย (Price * Volume) หน่วยเป็นล้าน
+        trade_value_m = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
 
         sig, s_col = "-", "#FFD700"
         if mode == 'Scan':
+            # สูตร The Guardian Swing (Balanced)
             ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
             hull = ta.hma(df['Close'], 30)
             vma5 = ta.sma(df['Volume'], 5)
@@ -55,11 +57,6 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
                 sig, s_col = "🔶 P-SELL", "#FFA500"
             elif cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
                 sig, s_col = "🚨 SELL", "#FF1100"
-        
-        # ตรรกะสี Value (M)
-        val_col = "#6b7280" # น้อยกว่า 10M เป็นสีเทา
-        if trade_value_raw > 100: val_col = "#A855F7" # มากกว่า 100M สีม่วง
-        elif trade_value_raw >= 10: val_col = "#06B6D4" # 10M-100M สีฟ้า
 
         return {
             "Ticker": ticker.replace('.BK', ''),
@@ -67,16 +64,17 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
             "Price": f"{cp:.2f}",
             "Chg": f"{chg:+.2f}",
             "%Chg": f"{(chg/pp)*100:.2f}%",
-            "Value (M)": f"{trade_value_raw:.2f}M" if mode == 'Watchlist' else sig,
+            "Value (M)": f"{trade_value_m:.2f}M" if mode == 'Watchlist' else sig,
             "RSI(14)": f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}",
             "_pc": "#00FF00" if chg > 0 else "#FF1100",
-            "_sc": s_col if mode == 'Scan' else val_col
+            "_sc": s_col if mode == 'Scan' else "#FFD700"
         }
     except: return None
 
-def apply_guardian_style(row):
+def apply_universal_style(row):
     p_c = f'color: {row["_pc"]}'
     s_c = f'color: {row["_sc"]}'
+    # ลำดับ 7 คอลัมน์หลัก
     return ['', '', p_c, p_c, p_c, s_c, 'color: #FFD700', '', '']
 
 # --- 3. NAVIGATION ---
@@ -116,10 +114,11 @@ if p in ['TW', 'UW', 'TS', 'US']:
     data = [fetch_guardian_engine(t, mode) for t in tickers if fetch_guardian_engine(t, mode)]
     if data:
         df = pd.DataFrame(data)
-        col6 = "Value (M)" if mode == 'Watchlist' else "Signal"
-        df = df.rename(columns={"Value (M)": col6})
-        st.dataframe(df.style.apply(apply_guardian_style, axis=1), use_container_width=True, hide_index=True,
-                     column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6, "RSI(14)"))
+        # เปลี่ยนหัวข้อคอลัมน์ที่ 6 ให้ตรงตามโหมด
+        col6_name = "Value (M)" if mode == 'Watchlist' else "Signal"
+        df = df.rename(columns={"Value (M)": col6_name})
+        st.dataframe(df.style.apply(apply_universal_style, axis=1), use_container_width=True, hide_index=True,
+                     column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", col6_name, "RSI(14)"))
 
 else: # Home
     st.markdown('<p class="welcome-title">WELCOME</p><p class="trading-home">TRADING HOME</p>', unsafe_allow_html=True)
