@@ -23,7 +23,7 @@ def save_list(file_path, data_list):
     with open(file_path, "w") as f: f.write(",".join(data_list))
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V9.8+", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V9.9", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -59,14 +59,13 @@ def fetch_guardian_engine(ticker, mode):
         s_label, s_col, found_time, raw_time, icon = "-", "#FFD700", "-", None, ""
         for i in range(len(df)-1, 0, -1):
             cp, h_curr, h_prev = float(df['Close'].iloc[i]), hull.iloc[i], hull.iloc[i-1]
-            w1, w2, vol, v5 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i]
-            e8_curr = ema8.iloc[i]
+            w1, w2, vol, v5, e8 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i]
             
-            if cp > e8_curr and h_curr > h_prev and vol > (v5 * 1.2):
+            if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2):
                 s_label, s_col, icon = "BUY", "#00FF00", "🚀 "
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
                 found_time = raw_time.strftime("%H:%M %d/%m"); break
-            elif w1 > w2 and w1 < -47 and cp > e8_curr: # DEEP BUY + EMA 8
+            elif w1 > w2 and w1 < -47 and cp > e8: 
                 s_label, s_col, icon = "DEEP BUY", "#00FF00", "▲ "
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
                 found_time = raw_time.strftime("%H:%M %d/%m"); break
@@ -86,10 +85,10 @@ def fetch_guardian_engine(ticker, mode):
         
         return {"Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{c_cp:.2f}", 
                 "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
-                "DynamicCol": f"{t_val:.2f}M" if 'W' in mode else f"{icon}{s_label}", 
+                "Signal": f"{icon}{s_label}", "Value (M)": f"{t_val:.2f}M",
                 "TimeUpdate": found_time, "RawTime": raw_time,
                 "PriceCol": "#00FF00" if chg > 0 else "#FF1100", 
-                "SigCol": s_col, "ValCol": "#6b7280" if 'W' in mode else s_col}
+                "SigCol": s_col}
     except: return None
 
 def apply_style(row):
@@ -97,17 +96,18 @@ def apply_style(row):
     for col in row.index:
         if col == "Ticker": colors.append(f'color: {row["SigCol"]}')
         elif col in ["Price", "Chg", "%Chg"]: colors.append(f'color: {row["PriceCol"]}')
-        elif col == "DynamicCol": colors.append(f'color: {row["ValCol"]}')
+        elif col == "Signal": colors.append(f'color: {row["SigCol"]}')
         elif col == "TimeUpdate": colors.append(f'color: {row["SigCol"]}')
         else: colors.append('')
     return colors
 
-# --- 4. SESSION & NAVIGATION ---
+# --- 4. SESSION ---
 if 't_list' not in st.session_state: st.session_state.t_list = load_list(TH_FILE, ['PTT', 'DELTA', 'ADVANC'])
 if 'u_list' not in st.session_state: st.session_state.u_list = load_list(US_FILE, ['IONQ', 'NVDA', 'IREN'])
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'manage_mode' not in st.session_state: st.session_state.manage_mode = False
 
+# --- 5. NAVIGATION ---
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
@@ -117,18 +117,17 @@ with c2:
     st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if st.session_state.page == 'UW' else "secondary")
     st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
 
-# --- 5. CONTENT ---
 p = st.session_state.page
 dt_str = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
-st.write(f'<div class="classic-header">PPE Guardian V9.8+ | {dt_str}</div>', unsafe_allow_html=True)
+st.write(f'<div class="classic-header">PPE Guardian V9.9 | {dt_str}</div>', unsafe_allow_html=True)
 
+# --- 6. CONTENT LOGIC ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:30px; font-weight:900; letter-spacing:5px;">WELCOME</span></div>', unsafe_allow_html=True)
     st.write('<div style="text-align:center; padding:5px;"><span style="color:#FFD700; font-size:35px; font-weight:900; letter-spacing:2px;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
-    display_col_name = "Value (M)" if 'W' in p else "Signal"
     f_t = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
     st.write(f'<div style="text-align:center; margin-bottom:10px;"><span style="color:#FFD700; font-size:24px; font-weight:900;">{f_t}</span></div>', unsafe_allow_html=True)
     
@@ -136,14 +135,13 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         with st.expander("➕ Manage Your Watchlist", expanded=True):
             new = st.text_input("Ticker Name:").upper()
             if new:
-                curr_list = st.session_state.t_list if 'T' in p else st.session_state.u_list
-                if new not in curr_list:
-                    curr_list.append(new)
-                    save_list(TH_FILE if 'T' in p else US_FILE, curr_list)
-                    st.rerun()
+                curr = st.session_state.t_list if 'T' in p else st.session_state.u_list
+                if new not in curr:
+                    curr.append(new); save_list(TH_FILE if 'T' in p else US_FILE, curr); st.rerun()
             if st.button("🛠️ Edit Watchlist (Delete Mode)"):
-                st.session_state.manage_mode = not st.session_state.manage_mode
-                st.rerun()
+                st.session_state.manage_mode = not st.session_state.manage_mode; st.rerun()
+    else:
+        if st.button("🔄 Manual Refresh Scan"): st.cache_data.clear(); st.rerun()
 
     d_l = st.session_state.t_list if 'T' in p else st.session_state.u_list
     results = [fetch_guardian_engine(t, p) for t in d_l]
@@ -152,22 +150,20 @@ elif p in ['TW', 'UW', 'TS', 'US']:
     if results:
         df = pd.DataFrame(results)
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
-        df_display = df.rename(columns={"DynamicCol": display_col_name})
-        st.dataframe(df_display.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, 
-                     column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", display_col_name, "TimeUpdate"))
+        
+        # จัดคอลัมน์ตามหน้า
+        cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if 'W' in p else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
+        st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
         
         if 'W' in p and st.session_state.manage_mode:
             st.write("---")
             st.write("⚠️ **Delete Items:**")
-            cols = st.columns(6)
-            for idx, ticker in enumerate(d_l):
-                if cols[idx % 6].button(f"✖ {ticker}", key=f"del_{ticker}", type="primary"):
-                    d_l.remove(ticker)
-                    save_list(TH_FILE if 'T' in p else US_FILE, d_l)
-                    st.rerun()
+            dc = st.columns(6)
+            for i, t in enumerate(d_l):
+                if dc[i % 6].button(f"✖ {t}", key=f"del_{t}", type="primary"):
+                    d_l.remove(t); save_list(TH_FILE if 'T' in p else US_FILE, d_l); st.rerun()
     else:
         st.write('<p style="text-align:center; opacity:0.6;">No data found.</p>', unsafe_allow_html=True)
 
 if 'S' in p:
-    time.sleep(300) 
-    st.rerun()
+    time.sleep(300); st.rerun()
