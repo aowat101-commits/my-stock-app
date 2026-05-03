@@ -6,7 +6,7 @@ import pandas_ta as ta
 from datetime import datetime
 import pytz
 
-# --- 1. UI SETUP (ปรับแต่งเพื่อมือถือ) ---
+# --- 1. UI SETUP (Compact Mobile Focus) ---
 st.set_page_config(page_title="Guardian Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -17,59 +17,65 @@ st.markdown("""
     
     .stApp { background-color: #0f172a; }
 
-    /* บังคับสีตาราง: ดำเข้มบนขาว */
+    /* บังคับสีตาราง: ตัวหนังสือดำเข้มบนพื้นขาว */
     .stDataFrame [data-testid="stTable"] td, 
     .stDataFrame [data-testid="stTable"] th {
         color: #000000 !important;
         background-color: #ffffff !important;
         font-weight: 500 !important;
-        font-size: 14px !important;
+        font-size: 13px !important;
     }
 
-    /* สไตล์เมนูปัดข้าง (Horizontal Scroll) */
-    .scroll-nav {
-        display: flex;
-        overflow-x: auto;
-        white-space: nowrap;
-        gap: 8px;
-        padding: 10px 0;
-        scrollbar-width: none; /* ซ่อน scrollbar สำหรับ Firefox */
-        -ms-overflow-style: none;  /* ซ่อน scrollbar สำหรับ IE */
+    /* ลดระยะห่างส่วนบนสุดของหน้าจอ */
+    .block-container { padding-top: 0.5rem !important; padding-bottom: 0rem !important; }
+
+    /* ปรับแต่งปุ่มให้เล็กและประหยัดพื้นที่ */
+    .stButton > button {
+        height: 38px !important;
+        padding: 0px 5px !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
+        margin-bottom: -10px !important;
     }
-    .scroll-nav::-webkit-scrollbar { display: none; } /* ซ่อน scrollbar สำหรับ Chrome/Safari */
 
     .time-status {
-        background-color: #1e293b; color: #10b981; padding: 6px; border-radius: 6px;
-        text-align: center; font-size: 12px; margin-bottom: 10px; border: 1px solid #334155;
+        background-color: #1e293b; color: #10b981; padding: 4px; border-radius: 5px;
+        text-align: center; font-size: 11px; margin-top: 5px; margin-bottom: 5px; border: 1px solid #334155;
     }
     
-    .header-box { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 10px 0; }
-    .header-text { color: white; font-size: 20px; font-weight: bold; margin: 0; }
-    .flag-img { width: 30px; height: auto; border-radius: 2px; }
+    .header-box { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 5px 0; }
+    .header-text { color: white; font-size: 18px; font-weight: bold; margin: 0; }
+    .flag-img { width: 25px; height: auto; border-radius: 2px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. MOBILE SCROLLING NAVIGATION ---
+# --- 2. COMPACT NAVIGATION (แบ่งคนละครึ่ง) ---
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Thai Scan'
 
-# ใช้ Container สร้างแถบเลื่อนซ้ายขวา
-st.markdown('<div class="scroll-nav">', unsafe_allow_html=True)
-cols = st.columns([1,1,1,1,1]) # สร้างคอลัมน์ขนาดเท่ากัน
+# แถวที่ 1: Home
+col_h = st.columns(1)
+with col_h[0]:
+    if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == 'Home' else "secondary"):
+        st.session_state.current_page = 'Home'
 
-pages = [
-    ("🏠 Home", "Home"),
-    ("📈 Thai Scan", "Thai Scan"),
-    ("📊 Thai Charts", "Thai Charts"),
-    ("🇺🇸 US Scan", "US Scan"),
-    ("📉 US Charts", "US Charts")
-]
+# แถวที่ 2: Thai Scan | Thai Charts (แบ่งคนละครึ่ง)
+col_th = st.columns(2)
+with col_th[0]:
+    if st.button("📈 Thai Scan", use_container_width=True, type="primary" if st.session_state.current_page == 'Thai Scan' else "secondary"):
+        st.session_state.current_page = 'Thai Scan'
+with col_th[1]:
+    if st.button("📊 Thai Charts", use_container_width=True, type="primary" if st.session_state.current_page == 'Thai Charts' else "secondary"):
+        st.session_state.current_page = 'Thai Charts'
 
-for i, (label, p_id) in enumerate(pages):
-    with cols[i]:
-        if st.button(label, use_container_width=True, type="primary" if st.session_state.current_page == p_id else "secondary"):
-            st.session_state.current_page = p_id
-st.markdown('</div>', unsafe_allow_html=True)
+# แถวที่ 3: US Scan | US Charts (แบ่งคนละครึ่ง)
+col_us = st.columns(2)
+with col_us[0]:
+    if st.button("🇺🇸 US Scan", use_container_width=True, type="primary" if st.session_state.current_page == 'US Scan' else "secondary"):
+        st.session_state.current_page = 'US Scan'
+with col_us[1]:
+    if st.button("📉 US Charts", use_container_width=True, type="primary" if st.session_state.current_page == 'US Charts' else "secondary"):
+        st.session_state.current_page = 'US Charts'
 
 # --- 3. UNIVERSAL ENGINE ---
 @st.cache_data(ttl=300)
@@ -110,31 +116,31 @@ cp = st.session_state.current_page
 
 if cp == "Thai Scan":
     st.markdown("""<div class="header-box"><img src="https://flagcdn.com/w80/th.png" class="flag-img"><p class="header-text">Thai Scan</p></div>""", unsafe_allow_html=True)
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")} | V6.3 Mobile</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")} | V6.4</div>', unsafe_allow_html=True)
     
     set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
     res = [fetch_stock(t) for t in set100]
     res = [r for r in res if r]
     if res:
         df_m = pd.DataFrame(res).sort_values("raw_time", ascending=False).head(35)
-        st.dataframe(df_m.drop(columns=['raw_time']), use_container_width=True, height=600, hide_index=True)
+        st.dataframe(df_m.drop(columns=['raw_time']), use_container_width=True, height=650, hide_index=True)
 
 elif cp == "Home":
-    st.markdown("<h4 style='text-align:center; color:white; padding:20px;'>🏡 Guardian Mobile Home</h4>", unsafe_allow_html=True)
-    st.info(f"สวัสดีคุณมิลค์ | PPE Co., Ltd.\nระบบปุ่มนำทางแบบปัดข้างเปิดใช้งานแล้วครับ")
+    st.markdown("<h5 style='text-align:center; color:white; margin-top:10px;'>🏡 Guardian Central</h5>", unsafe_allow_html=True)
+    st.info("สวัสดีคุณมิลค์ | PPE Co., Ltd.\nปรับเลย์เอาต์ปุ่มแบบแบ่งแถวเพื่อประหยัดพื้นที่มือถือแล้วครับ")
 
 elif cp == "Thai Charts":
-    st.markdown("<h4 style='text-align:center; color:white;'>📊 Mobile Charts</h4>", unsafe_allow_html=True)
+    st.markdown("<h5 style='text-align:center; color:white;'>📊 Thai Charts</h5>", unsafe_allow_html=True)
     st.line_chart(yf.download("PTT.BK", period="1mo")['Close'])
 
 elif cp == "US Scan":
-    st.markdown("<h4 style='text-align:center; color:white;'>🇺🇸 US Scan</h4>", unsafe_allow_html=True)
+    st.markdown("<h5 style='text-align:center; color:white;'>🇺🇸 US Scan</h5>", unsafe_allow_html=True)
     us_res = [fetch_stock(t) for t in ['IONQ', 'IREN', 'NVDA', 'TSLA']]
     st.dataframe(pd.DataFrame([r for r in us_res if r]).drop(columns=['raw_time']), use_container_width=True)
 
 elif cp == "US Charts":
-    st.markdown("<h4 style='text-align:center; color:white;'>📉 US Charts</h4>", unsafe_allow_html=True)
+    st.markdown("<h5 style='text-align:center; color:white;'>📉 US Charts</h5>", unsafe_allow_html=True)
     st.line_chart(yf.download("IONQ", period="1mo")['Close'])
 
 st.write("---")
-st.caption("PPE | Mobile Optimized V6.3")
+st.caption("PPE | Compact V6.4")
