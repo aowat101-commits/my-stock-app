@@ -11,36 +11,39 @@ st.set_page_config(page_title="Guardian Dashboard", layout="wide", initial_sideb
 
 st.markdown("""
     <style>
-    /* ซ่อน Header มาตรฐาน */
+    /* ซ่อนส่วนประกอบมาตรฐานที่ไม่ได้ใช้ */
     [data-testid="stStatusWidget"] {display: none !important;}
     [data-testid="stHeader"], header, .stAppHeader { display: none !important; }
+    section[data-testid="stSidebarCollapsedControl"] { display: none !important; } /* ซ่อนลูกศรเจ้าปัญหา */
     
-    /* พื้นหลังหลัก */
     .stApp { background-color: #0f172a; }
 
-    /* บังคับดึงปุ่มลูกศร (Sidebar Toggle) ให้แสดงผลลอยขึ้นมาสูงสุด */
-    section[data-testid="stSidebarCollapsedControl"] {
-        display: flex !important;
-        position: fixed !important;
-        left: 12px !important;
-        top: 12px !important;
-        z-index: 1000000 !important;
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        border-radius: 8px !important;
-    }
-    
-    /* บังคับสีไอคอนลูกศร >> */
-    section[data-testid="stSidebarCollapsedControl"] svg {
-        fill: #10b981 !important;
+    /* สร้างแถบนำทางลอยตัว (Floating Nav Bar) */
+    .floating-nav {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        z-index: 9999;
+        display: flex;
+        gap: 10px;
     }
 
-    /* ปรับแต่ง Sidebar ให้เข้มสะอาดตา */
-    [data-testid="stSidebar"] { background-color: #1e293b !important; }
-    
-    /* จัดการสีตัวหนังสือในตารางให้เข้มเสมอ (ป้องกันตัวหนังสือสีขาวมองไม่เห็น) */
-    .stDataFrame div[data-testid="stTable"] {
-        color: #1e293b !important;
+    /* สไตล์ปุ่มลอย */
+    .nav-btn {
+        background-color: #1e293b;
+        color: #10b981;
+        border: 1px solid #334155;
+        padding: 8px 15px;
+        border-radius: 8px;
+        font-weight: bold;
+        text-decoration: none;
+        font-size: 14px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    /* บังคับสีตัวหนังสือในตารางให้อ่านออก 100% */
+    .stDataFrame div {
+        color: #1e293b !important; /* บังคับเข้ม */
     }
     
     .time-status {
@@ -49,7 +52,6 @@ st.markdown("""
         font-weight: bold;
     }
     
-    /* Header รูปธง + ชื่อ */
     .header-box {
         display: flex; justify-content: center; align-items: center;
         gap: 12px; padding: 10px 0;
@@ -59,15 +61,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR ---
-with st.sidebar:
-    st.markdown("<h3 style='color:white;'>📌 Menu</h3>", unsafe_allow_html=True)
-    app_page = st.radio(" ", ["Home", "Thai Scan", "Thai Charts", "US Scan"], index=1)
-    st.write("---")
-    st.markdown("<p style='color:#94a3b8; font-weight:bold;'>⚙️ Settings</p>", unsafe_allow_html=True)
-    if st.button("🔄 Force Refresh", use_container_width=True):
-        st.rerun()
-    st.caption("Por Piang Electric Plus Co., Ltd.")
+# --- 2. CUSTOM NAVIGATION (ปุ่มลอยแทน Sidebar) ---
+# ใช้ Session State เก็บค่าหน้าปัจจุบัน
+if 'page' not in st.session_state:
+    st.session_state.page = 'Thai Scan'
+
+# สร้างปุ่มกดเปลี่ยนหน้าจริงๆ ด้วย Streamlit Columns ที่มุมบน
+col_nav1, col_nav2, col_nav3 = st.columns([1, 1, 8])
+with col_nav1:
+    if st.button("🏠 Home", use_container_width=True):
+        st.session_state.page = 'Home'
+with col_nav2:
+    if st.button("📊 Charts", use_container_width=True):
+        st.session_state.page = 'Thai Charts'
 
 # --- 3. SCAN ENGINE ---
 set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
@@ -108,7 +114,7 @@ def scan_stock(ticker):
     return None
 
 # --- 4. DISPLAY ---
-if app_page == "Thai Scan":
+if st.session_state.page == "Thai Scan":
     st.markdown("""
         <div class="header-box">
             <img src="https://flagcdn.com/w80/th.png" class="flag-img">
@@ -117,7 +123,7 @@ if app_page == "Thai Scan":
         """, unsafe_allow_html=True)
     
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V5.4</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V5.5</div>', unsafe_allow_html=True)
     
     results = [scan_stock(t) for t in full_scan_list]
     results = [r for r in results if r]
@@ -129,14 +135,15 @@ if app_page == "Thai Scan":
         def style_rows(row):
             m = df_m[df_m['Ticker'] == row['Ticker']].iloc[0]
             sig_c = '#0d9488' if "▲" in m['Signal'] else '#dc2626'
-            val_c = '#059669' if m['%Chg'] > 0 else ('#dc2626' if m['%Chg'] < 0 else '#4b5563')
-            # บังคับสีตัวหนังสือพื้นฐานให้เป็นสีเข้ม (Dark)
-            return [f'color: {sig_c};', 'color: #374151;', f'color: {val_c};', f'color: {val_c};', f'color: {sig_c};', 'color: #374151;']
+            val_c = '#059669' if m['%Chg'] > 0 else ('#dc2626' if m['%Chg'] < 0 else '#1f2937')
+            return [f'color: {sig_c}; font-weight:bold;', 'color: #1f2937;', f'color: {val_c};', f'color: {val_c};', f'color: {sig_c}; font-weight:bold;', 'color: #1f2937;']
 
         st.dataframe(df_final.style.format({"Prev":"{:.2f}","Price":"{:.2f}","%Chg":"{:.2f}%"}).apply(style_rows, axis=1), 
                      use_container_width=True, height=750, hide_index=True)
-    else:
-        st.info("🔎 ไม่พบสัญญาณในขณะนี้")
+else:
+    st.markdown(f"<h2 style='text-align:center; color:white; margin-top:100px;'>หน้านี้กำลังนำทางไปที่: {st.session_state.page}</h2>", unsafe_allow_html=True)
+    if st.button("⬅️ กลับไปหน้าสแกน"):
+        st.session_state.page = "Thai Scan"
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Navigation v5.4")
+st.caption("Por Piang Electric Plus Co., Ltd. | Floating Nav v5.5")
