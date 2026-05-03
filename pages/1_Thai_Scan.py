@@ -14,14 +14,11 @@ st.markdown("""
     [data-testid="stStatusWidget"], header, .stAppHeader { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     .stApp { background-color: #0f172a; }
-
     .centered-yellow-title { text-align: center !important; color: #FFD700 !important; font-size: 24px; font-weight: 700; margin-top: -10px !important; }
     .centered-time { text-align: center !important; color: #FFD700 !important; margin-bottom: 5px !important; margin-top: -5px !important; }
-    
     .stDataFrame [data-testid="stTable"] { background-color: #000000 !important; }
     .stDataFrame th { color: #FFD700 !important; background-color: #000000 !important; border: 0.1px solid #334155 !important; }
     .stDataFrame [data-testid="stTable"] td { font-size: 14px !important; background-color: #000000 !important; color: #FFD700 !important; border: 0.1px solid #334155 !important; }
-
     .stButton > button { height: 35px !important; border-radius: 8px !important; width: 100%; font-size: 12px !important; margin-bottom: -10px !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     .scan-btn > div > button { background-color: #FFD700 !important; color: #000000 !important; font-weight: bold !important; height: 45px !important; margin-top: 10px !important; }
@@ -30,17 +27,16 @@ st.markdown("""
 
 # --- 2. CORE LOGIC (The Guardian Swing) ---
 @st.cache_data(ttl=60)
-def fetch_guardian_v85(ticker):
+def fetch_guardian_data(ticker):
     try:
         df = yf.download(ticker, period="60d", interval="1d", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        # Technicals
+        # อินดิเคเตอร์ (สูตรกลางๆ)
         ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30)
         vma5 = ta.sma(df['Volume'], 5)
-        
         esa = ta.ema(df['Close'], 9)
         d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d)
@@ -49,7 +45,7 @@ def fetch_guardian_v85(ticker):
         cp, pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
         chg = cp - pp
         
-        # Signals
+        # 4 สัญญาณ (Deep Buy -47, Buy Vol 1.2x, P-Sell 53, Sell EMA20)
         sig, s_col = "-", "#FFD700"
         if cp > ema8.iloc[-1] and hull.iloc[-1] > hull.iloc[-2] and df['Volume'].iloc[-1] > (vma5.iloc[-1] * 1.2):
             sig, s_col = "✅ BUY", "#00FF00"
@@ -60,18 +56,18 @@ def fetch_guardian_v85(ticker):
         elif cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
             sig, s_col = "🚨 SELL", "#FF1100"
 
-        return {
-            "Ticker": ticker.replace('.BK', ''), "Prev": f"{pp:.2f}", "Price": f"{cp:.2f}",
-            "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/pp)*100:.2f}%", "Signal": sig,
-            "RSI(14)": f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}",
-            "_pc": "#00FF00" if chg > 0 else "#FF1100", "_sc": s_col
-        }
+        # คืนค่าคอลัมน์ให้เป๊ะ 7 คอลัมน์เสมอ
+        return [
+            ticker.replace('.BK', ''), f"{pp:.2f}", f"{cp:.2f}", f"{chg:+.2f}", 
+            f"{(chg/pp)*100:.2f}%", sig, f"{float(ta.rsi(df['Close'], 14).iloc[-1]):.2f}",
+            "#00FF00" if chg > 0 else "#FF1100", s_col
+        ]
     except: return None
 
-def apply_guardian_style(row):
-    p_c, s_c = f'color: {row["_pc"]}', f'color: {row["_sc"]}'
-    # บังคับคืนค่าสีให้ครบ 7 คอลัมน์ตามลำดับที่แสดงในตาราง
-    return ['', '', p_c, p_c, p_c, s_c, 'color: #FFD700']
+def apply_final_style(row):
+    # row[-2] คือสีราคา, row[-1] คือสีสัญญาณ
+    p_c, s_c = f'color: {row.iloc[-2]}', f'color: {row.iloc[-1]}'
+    return ['', '', p_c, p_c, p_c, s_c, 'color: #FFD700', '', '']
 
 # --- 3. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
@@ -99,18 +95,19 @@ if p in ['TW', 'UW', 'TS', 'US']:
         st.markdown('<div class="scan-btn">', unsafe_allow_html=True)
         if st.button("🔍 เริ่มสแกนหาจังหวะเทรด"):
             st.cache_data.clear()
-            st.toast("กำลังสแกน...")
+            st.toast("กำลังสแกนสดใหม่...")
         st.markdown('</div>', unsafe_allow_html=True)
-        tickers = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
+        t_list = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
     else:
         with st.expander("➕ จัดการลิสต์หุ้น"):
-            tickers = st.multiselect("เลือกหุ้น:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK'], default=['PTT.BK', 'DELTA.BK'])
+            t_list = st.multiselect("เลือกหุ้น:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'], default=['PTT.BK', 'DELTA.BK'])
     
-    data = [fetch_guardian_v85(t) for t in tickers if fetch_guardian_v85(t)]
-    if data:
-        # ส่วนสำคัญ: ตรวจสอบและแสดงผลตาราง
-        df_final = pd.DataFrame(data)
-        st.dataframe(df_final.style.apply(apply_guardian_style, axis=1), use_container_width=True, hide_index=True,
+    raw_data = [fetch_guardian_data(t) for t in t_list if fetch_guardian_data(t)]
+    if raw_data:
+        cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "RSI(14)", "P_COL", "S_COL"]
+        df_final = pd.DataFrame(raw_data, columns=cols)
+        # แสดงผล 7 คอลัมน์หลักตามที่สั่ง
+        st.dataframe(df_final.style.apply(apply_final_style, axis=1), use_container_width=True, hide_index=True,
                      column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "RSI(14)"))
 
 else: # Home
