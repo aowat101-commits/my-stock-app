@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 import time
 
-# --- 1. UI SETUP & ORIGINAL STYLE ---
+# --- 1. UI SETUP ---
 st.set_page_config(page_title="PPE Guardian V9.0", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -15,6 +15,10 @@ st.markdown("""
     .block-container { padding-top: 0.5rem !important; padding-bottom: 0rem !important; }
     [data-testid="stStatusWidget"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
+    
+    /* สไตล์สำหรับส่วนหัว Classic Blue */
+    .classic-header { color: #1E90FF !important; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    
     .stTextInput > div > div > input { background-color: #1e293b !important; color: #FFD700 !important; border: 1px solid #FFD700 !important; }
     [data-testid="stExpander"] details summary p { color: #FFD700 !important; font-weight: 700 !important; font-size: 16px !important; }
     .stDataFrame [data-testid="stTable"] { background-color: #000000 !important; }
@@ -89,24 +93,22 @@ with c2:
 # --- 4. CONTENT ---
 p = st.session_state.page
 now_tz = datetime.now(pytz.timezone('Asia/Bangkok'))
-date_str = now_tz.strftime('%d/%m/%Y')
-time_str = now_tz.strftime('%H:%M:%S')
+# ปรับเวลาขึ้นก่อนวันที่ (HH:MM:SS | DD/MM/YYYY)
+date_time_str = now_tz.strftime('%H:%M:%S | %d/%m/%Y')
 
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
-    st.write(f'<div style="text-align:center;"><p style="color:#FFD700; font-size:14px; margin-bottom:0;">{date_str} | {time_str}</p><p style="color:#FFD700; font-size:12px; opacity:0.8;">PPE Guardian V9.0</p></div>', unsafe_allow_html=True)
+    st.write(f'<div style="text-align:center;"><p class="classic-header">PPE Guardian V9.0 | {date_time_str}</p></div>', unsafe_allow_html=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     col6_name = "Value (M)" if 'W' in p else "Signal"
     full_title = {"TW":"🇹🇭 THAI WATCHLIST", "TS":"🇹🇭 THAI MARKET SCAN", "UW":"🇺🇸 US WATCHLIST", "US":"🇺🇸 US MARKET SCAN"}[p]
     
-    # ส่วนหัวแบบ Classic (ชื่อหน้า / วันที่-เวลา / เวอร์ชัน)
     st.write(f"""
         <div style="text-align:center; margin-bottom:15px;">
             <span style="color:#FFD700; font-size:22px; font-weight:900;">{full_title}</span><br>
-            <span style="color:#FFD700; font-size:14px;">{date_str} | {time_str}</span><br>
-            <span style="color:#FFD700; font-size:12px; opacity:0.8;">PPE Guardian V9.0</span>
+            <span class="classic-header">PPE Guardian V9.0 | {date_time_str}</span>
         </div>
     """, unsafe_allow_html=True)
     
