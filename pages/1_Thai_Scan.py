@@ -41,22 +41,29 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
         chg = cp - pp
         trade_val = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
         
-        # ดึงเวลาปัจจุบันของเครื่อง/เซิร์ฟเวอร์
+        # ดึงเวลาปัจจุบัน (เอาเวลาขึ้นก่อนวันที่)
         tz = pytz.timezone('Asia/Bangkok')
-        last_update = datetime.now(tz).strftime("%d/%m %H:%M")
+        last_update = datetime.now(tz).strftime("%H:%M %d/%m")
         
-        # สูตร Signal พื้นฐาน (ใช้ร่วมกันเพื่อกำหนดสีในคอลัมน์สุดท้าย)
-        sig, s_col = "-", "#FFD700"
-        ema20 = ta.ema(df['Close'], 20)
+        # คำนวณอินดิเคเตอร์สำหรับ Signal
+        ema8, ema20 = ta.ema(df['Close'], 8), ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30)
-        
-        # เงื่อนไขสี Signal (เขียว=Buy/Deep Buy, แดง=Sell, เหลือง=P-Sell/Hold)
-        if cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
-            s_col = "#FF1100" # แดง (Sell)
-            sig = "🚨 SELL"
-        elif cp > ta.ema(df['Close'], 8).iloc[-1]:
-            s_col = "#00FF00" # เขียว (Buy)
-            sig = "✅ BUY"
+        vma5 = ta.sma(df['Volume'], 5)
+        esa = ta.ema(df['Close'], 9)
+        d = ta.ema(abs(df['Close'] - esa), 9)
+        ci = (df['Close'] - esa) / (0.015 * d)
+        wt1, wt2 = ta.ema(ci, 12), ta.sma(ta.ema(ci, 12), 4)
+
+        # สัญญาณ Signal พร้อมสัญลักษณ์ (Emoji) ตามเวอร์ชันก่อนหน้า
+        sig, s_col = "-", "#FFD700"
+        if cp > ema8.iloc[-1] and hull.iloc[-1] > hull.iloc[-2] and df['Volume'].iloc[-1] > (vma5.iloc[-1] * 1.2):
+            sig, s_col = "✅ BUY", "#00FF00"
+        elif wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -47:
+            sig, s_col = "🔺 DEEP BUY", "#00FF00"
+        elif wt1.iloc[-1] < wt2.iloc[-1] and wt1.iloc[-1] > 53:
+            sig, s_col = "🔶 P-SELL", "#FFA500"
+        elif cp < ema20.iloc[-1] or hull.iloc[-1] < hull.iloc[-2]:
+            sig, s_col = "🚨 SELL", "#FF1100"
 
         val_col = "#6b7280"
         if trade_val > 100: val_col = "#A855F7"
@@ -65,10 +72,10 @@ def fetch_guardian_engine(ticker, mode='Watchlist'):
         return [
             ticker.replace('.BK', ''), f"{pp:.2f}", f"{cp:.2f}", f"{chg:+.2f}", f"{(chg/pp)*100:.2f}%", 
             f"{trade_val:.2f}M" if mode == 'Watchlist' else sig, 
-            last_update, # คอลัมน์ที่ 7: เปลี่ยนเป็นวันเวลา
-            "#00FF00" if chg > 0 else "#FF1100", # สีราคา (PC)
-            s_col if mode == 'Scan' else val_col, # สีคอลัมน์ที่ 6 (VC)
-            s_col # สีคอลัมน์ที่ 7 ตามซิกแนล (TC)
+            last_update, 
+            "#00FF00" if chg > 0 else "#FF1100", # PC
+            s_col if mode == 'Scan' else val_col, # VC
+            s_col # TC (สีตาม Signal)
         ]
     except: return None
 
@@ -90,9 +97,7 @@ with c_nav2:
     st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if st.session_state.page == 'UW' else "secondary")
     st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
 
-tz = pytz.timezone('Asia/Bangkok')
-now = datetime.now(tz)
-dt_label = f"📅 {now.strftime('%d/%m/%Y')} | 🕒 {now.strftime('%H:%M:%S')}"
+dt_label = f"📅 {datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%d/%m/%Y | %H:%M:%S')}"
 
 # --- 4. CONTENT ---
 p = st.session_state.page
@@ -106,7 +111,7 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     mode = 'Scan' if 'S' in p else 'Watchlist'
     col6 = "Value (M)" if mode == 'Watchlist' else "Signal"
-    col7 = "Updated" # คอลัมน์สุดท้าย
+    col7 = "Time Update"
     title_text = {"TW":"Thai Watchlist", "TS":"Thai Market Scan", "UW":"US Watchlist", "US":"US Market Scan"}[p]
     flag = "🇹🇭" if "T" in p else "🇺🇸"
     
@@ -116,11 +121,11 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         st.markdown('<div class="update-btn">', unsafe_allow_html=True)
         if st.button("🔄 Update Market Data"): st.cache_data.clear()
         st.markdown('</div>', unsafe_allow_html=True)
-        t_list = ['PTT.BK', 'DELTA.BK'] if p=="TS" else ['IONQ', 'NVDA']
+        t_list = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK'] if p=="TS" else ['IONQ', 'NVDA', 'IREN', 'TSLA']
     else:
         with st.expander("➕ Manage Your Watchlist"):
             if p == 'TW': st.session_state.t_watch = st.multiselect("Select Stocks:", ['PTT.BK', 'DELTA.BK', 'ADVANC.BK', 'AOT.BK', 'CPALL.BK'], default=st.session_state.t_watch)
-            else: st.session_state.u_watch = st.multiselect("Select Stocks:", ['IONQ', 'NVDA', 'IREN', 'TSLA'], default=st.session_state.u_watch)
+            else: st.session_state.u_watch = st.multiselect("Select Stocks:", ['IONQ', 'NVDA', 'IREN', 'TSLA', 'SMX', 'ONDS'], default=st.session_state.u_watch)
         t_list = st.session_state.t_watch if p == 'TW' else st.session_state.u_watch
 
     res = [fetch_guardian_engine(t, mode) for t in t_list if fetch_guardian_engine(t, mode)]
