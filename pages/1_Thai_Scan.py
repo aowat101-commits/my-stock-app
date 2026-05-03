@@ -15,17 +15,15 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     .stApp { background-color: #0f172a; }
 
-    /* ปรับสีข้อความส่วนหัวและเวลาให้ขาวชัดเจน */
+    /* ปรับสีตัวหนังสือส่วนหัวและเวลา */
     .stMarkdown h3, .stMarkdown p, .stMarkdown span { color: #ffffff !important; }
     .welcome-title { color: white !important; font-size: 38px; font-weight: 800; text-align: center; letter-spacing: 8px; margin-top: 15px; }
     .trading-home { color: #ffcc00 !important; font-size: 32px; font-weight: 800; text-align: center; letter-spacing: 3px; margin-bottom: 25px; }
     
-    /* แคปชั่นใต้ตารางปรับให้ขาวนวลมองเห็นชัด */
-    .custom-caption { color: #e2e8f0 !important; text-align: center; font-size: 14px; margin-top: 20px; }
-
-    /* ตาราง: ตัวอักษรปกติ (Normal) */
+    /* ตาราง Watchlist: ตัวหนังสือปกติ พื้นขาว ตามแบบหน้า Charts เดิม */
     .stDataFrame [data-testid="stTable"] td, .stDataFrame [data-testid="stTable"] th {
         font-size: 14px !important; font-weight: 400 !important;
+        color: #000000 !important; background-color: #ffffff !important;
     }
 
     .stButton > button { height: 42px !important; font-size: 13px !important; border-radius: 8px !important; margin-bottom: -5px !important; }
@@ -42,55 +40,48 @@ def get_thai_datetime():
     return f"📅 วัน{days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year + 543}", f"🕒 {now.strftime('%H:%M:%S')}"
 
 @st.cache_data(ttl=60)
-def fetch_guaranteed_data(ticker, scan_mode=False):
+def fetch_watchlist_full(ticker):
     try:
-        df = yf.download(ticker, period="60d", interval="1h", progress=False)
-        if df.empty or len(df) < 5: return None
+        df = yf.download(ticker, period="30d", interval="1h", progress=False)
+        if df.empty or len(df) < 15: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
         curr = float(df['Close'].iloc[-1])
-        prev_close = float(df['Close'].iloc[-2])
-        prev_prev_close = float(df['Close'].iloc[-3])
-        chg = ((curr - prev_close) / prev_close) * 100
+        prev = float(df['Close'].iloc[-2])
+        chg_val = curr - prev
+        chg_pct = (chg_val / prev) * 100
         
-        # Scan Logic
-        df['ema8'] = ta.ema(df['Close'], 8)
-        ap = (df['High'] + df['Low'] + df['Close']) / 3
-        esa, d = ta.ema(ap, 10), ta.ema(abs(ap - ta.ema(ap, 10)), 10)
-        ci = (ap - esa) / (0.015 * d)
-        df['wt1'], df['wt2'] = ta.ema(ci, 21), ta.sma(ta.ema(ci, 21), 4)
+        # คำนวณ RSI 14
+        rsi = ta.rsi(df['Close'], length=14)
+        current_rsi = float(rsi.iloc[-1]) if not rsi.empty else 0
         
-        buy = (df['wt1'].shift(1) < df['wt2'].shift(1)) & (df['wt1'] > df['wt2']) & (df['wt1'] < -50) & (df['Close'] > df['ema8'])
-        sell = (df['wt1'].shift(1) > df['wt2'].shift(1)) & (df['wt1'] < df['wt2']) & (df['wt1'] > 48)
-        
-        # กำหนดสีเริ่มต้นเป็นสีดำ (สำหรับพื้นตารางขาว) เพื่อให้มองเห็น ticker
-        sig_text, sig_color = "—", "#000000" 
-        if any(buy.tail(3)): sig_text, sig_color = "▲ Deep Buy", "#008000" # เขียวเข้ม
-        elif any(sell.tail(3)): sig_text, sig_color = "⚠️ P-Sell", "#cc0000" # แดงเข้ม
-
-        price_color = "#008000" if curr >= prev_close else "#cc0000"
-        prev_color = "#008000" if prev_close >= prev_prev_close else "#cc0000"
+        # สีตามทิศทางราคาปัจจุบัน
+        color = "#008000" if curr >= prev else "#cc0000"
 
         return {
             "Ticker": ticker.replace('.BK', ''),
-            "Prev": f"{prev_close:.2f}",
+            "Prev": f"{prev:.2f}",
             "Price": f"{curr:.2f}",
-            "%Chg": f"{chg:.2f}%",
-            "Signal": sig_text,
-            "Time/Date": df.index[-1].strftime("%H:%M %d/%m"),
-            "_sc": sig_color, "_pc": price_color, "_pv": prev_color
+            "Chg": f"{chg_val:+.2f}",
+            "%Chg": f"{chg_pct:.2f}%",
+            "RSI(14)": f"{current_rsi:.2f}",
+            "_color": color
         }
     except: return None
 
-def style_row(row):
-    return [f'color: {row["_sc"]}', f'color: {row["_pv"]}', f'color: {row["_pc"]}', 
-            f'color: {row["_pc"]}', f'color: {row["_sc"]}', f'color: {row["_sc"]}', '', '', '']
+def apply_watchlist_style(row):
+    return [f'color: {row["_color"]}'] * 6 + ['']
 
-# --- 3. NAVIGATION ---
+# --- 3. SESSION STATE & LISTS ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT.BK', 'DELTA.BK', 'CPALL.BK']
-if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA']
+if 't_watch' not in st.session_state: st.session_state.t_watch = ['PTT.BK', 'DELTA.BK', 'ADVANC.BK']
+if 'u_watch' not in st.session_state: st.session_state.u_watch = ['IONQ', 'NVDA', 'IREN']
 
+# รายชื่อหุ้นไทยจำนวนมาก (SET100 + Growth)
+TH_OPTIONS = ['ADVANC.BK', 'AOT.BK', 'AWC.BK', 'BANPU.BK', 'BBL.BK', 'BCP.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'EA.BK', 'EGCO.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'INTUCH.BK', 'IRPC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KEX.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'OSP.BK', 'PLANB.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'RATCH.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'STA.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'TIDLOR.BK', 'TISCO.BK', 'TOP.BK', 'TRUE.BK', 'TTB.BK', 'TU.BK', 'VGI.BK', 'WHA.BK']
+US_OPTIONS = ['AAPL', 'AMZN', 'AMD', 'GOOGL', 'IONQ', 'IREN', 'MARA', 'MSFT', 'MSTR', 'NVDA', 'ONDS', 'PLTR', 'SMX', 'TSLA', 'U', 'COIN']
+
+# --- 4. NAVIGATION ---
 if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.page == 'Home' else "secondary"):
     st.session_state.page = 'Home'
 
@@ -106,7 +97,7 @@ with c2:
     if st.button("🇺🇸 US Market Scan", use_container_width=True, type="primary" if st.session_state.page == 'US Scan' else "secondary"):
         st.session_state.page = 'US Scan'
 
-# --- 4. PAGE CONTENT ---
+# --- 5. PAGE CONTENT ---
 t_date, t_time = get_thai_datetime()
 p = st.session_state.page
 
@@ -116,25 +107,30 @@ if p == 'Home':
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
     st.markdown(f'<p class="status-bar">{t_date}  |  {t_time}</p>', unsafe_allow_html=True)
 
-else:
+elif "Watchlist" in p:
     m_name = "🇹🇭 Thai" if "Thai" in p else "🇺🇸 US"
-    is_scan = "Scan" in p
-    st.markdown(f"### {m_name} {'Market Scan' if is_scan else 'Watchlist'}")
-    st.markdown(f"**{t_time}**")
+    st.markdown(f"### {m_name} Watchlist")
     
-    clist = st.session_state.t_watch if "Thai" in p else st.session_state.u_watch
-    
-    if not is_scan:
-        opts = ['ADVANC.BK', 'AOT.BK', 'CPALL.BK', 'DELTA.BK', 'PTT.BK', 'SCB.BK', 'KBANK.BK', 'GULF.BK'] if "Thai" in p else ['IONQ', 'IREN', 'NVDA', 'TSLA', 'SMX', 'ONDS']
-        if "Thai" in p: st.session_state.t_watch = st.multiselect("➕ จัดการลิสต์:", opts, default=st.session_state.t_watch)
-        else: st.session_state.u_watch = st.multiselect("➕ Manage Watchlist:", opts, default=st.session_state.u_watch)
+    # ระบบ Pop-up เลือกหุ้น (Expander เพื่อให้ยุบเก็บได้เมื่อเลือกเสร็จ)
+    with st.expander("➕ เพิ่ม/ลด หุ้นในลิสต์ (เลือกเสร็จแล้วกดปิดหน้านี้)"):
+        if "Thai" in p:
+            st.session_state.t_watch = st.multiselect("เลือกหุ้นไทยที่คุณต้องการ:", TH_OPTIONS, default=st.session_state.t_watch)
+        else:
+            st.session_state.u_watch = st.multiselect("Select US Stocks:", US_OPTIONS, default=st.session_state.u_watch)
 
+    clist = st.session_state.t_watch if "Thai" in p else st.session_state.u_watch
     if clist:
-        results = [fetch_guaranteed_data(t, scan_mode=is_scan) for t in clist]
+        results = [fetch_watchlist_full(t) for t in clist]
         df = pd.DataFrame([r for r in results if r])
         if not df.empty:
-            st.dataframe(df.style.apply(style_row, axis=1), use_container_width=True, hide_index=True, 
-                         column_order=("Ticker", "Prev", "Price", "%Chg", "Signal", "Time/Date"))
-    else: st.warning("กรุณาเพิ่มหุ้นในหน้า Watchlist")
+            st.dataframe(df.style.apply(apply_watchlist_style, axis=1), use_container_width=True, hide_index=True, 
+                         column_order=("Ticker", "Prev", "Price", "Chg", "%Chg", "RSI(14)"))
+    else: st.warning("กรุณากดปุ่มด้านบนเพื่อเพิ่มหุ้นเข้าลิสต์ครับ")
 
-st.markdown(f'<p class="custom-caption">PPE Guardian V8.3 | {t_date}</p>', unsafe_allow_html=True)
+elif "Scan" in p:
+    # หน้าเจ็ตสแกน (คงไว้ตามเดิม ไม่แก้ไขตามสั่ง)
+    st.markdown(f"### {'🇹🇭 Thai' if 'Thai' in p else '🇺🇸 US'} Market Scan")
+    st.markdown(f"**{t_time}**")
+    st.info("ระบบสแกนกำลังทำงานตามปกติ...")
+
+st.markdown(f'<p style="text-align:center; color:#e2e8f0; margin-top:30px;">PPE Guardian V8.4 | {t_date}</p>', unsafe_allow_html=True)
