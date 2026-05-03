@@ -37,34 +37,31 @@ st.markdown("""
     }
     .header-text { color: white; font-size: 28px; font-weight: bold; margin: 0; }
     .flag-img { width: 42px; height: auto; border-radius: 4px; }
-
-    /* ตกแต่ง Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background-color: #1e293b;
-        padding: 10px;
-        border-radius: 10px;
-        justify-content: center;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        background-color: transparent;
-        border-radius: 5px;
-        color: #94a3b8;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #10b981 !important;
-        color: white !important;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. TOP NAVIGATION (เมนูแถบ) ---
-tab_home, tab_thai, tab_charts, tab_us = st.tabs(["🏠 Home", "📈 Thai Scan", "📊 Charts", "🇺🇸 US Scan"])
+# --- 2. FAST NAVIGATION LOGIC ---
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = 'Thai Scan'
 
-# --- 3. SCAN ENGINE ---
+# สร้างปุ่มนำทางด้านบน
+nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([1,1,1,1])
+with nav_col1:
+    if st.button("🏠 Home", use_container_width=True):
+        st.session_state.current_page = 'Home'
+with nav_col2:
+    if st.button("📈 Thai Scan", use_container_width=True):
+        st.session_state.current_page = 'Thai Scan'
+with nav_col3:
+    if st.button("📊 Charts", use_container_width=True):
+        st.session_state.current_page = 'Charts'
+with nav_col4:
+    if st.button("🇺🇸 US Scan", use_container_width=True):
+        st.session_state.current_page = 'US Scan'
+
+# --- 3. SCAN ENGINE (ทำงานเฉพาะหน้า Thai Scan) ---
 @st.cache_data(ttl=300)
-def get_data(ticker):
+def get_stock_data(ticker):
     try:
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
@@ -98,7 +95,7 @@ def get_data(ticker):
 
 # --- 4. DISPLAY CONTENT ---
 
-with tab_thai:
+if st.session_state.current_page == "Thai Scan":
     st.markdown("""
         <div class="header-box">
             <img src="https://flagcdn.com/w80/th.png" class="flag-img">
@@ -107,14 +104,14 @@ with tab_thai:
         """, unsafe_allow_html=True)
     
     tz = pytz.timezone('Asia/Bangkok')
-    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V5.7</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="time-status">🕒 {datetime.now(tz).strftime("%H:%M:%S")} | Guardian V5.8</div>', unsafe_allow_html=True)
     
-    # รายชื่อหุ้น (แสดงผลเฉพาะเมื่อเปิดแท็บนี้)
+    # รายชื่อหุ้น
     set100 = ['AAV.BK', 'ADVANC.BK', 'AMATA.BK', 'AOT.BK', 'AP.BK', 'AWC.BK', 'BA.BK', 'BAM.BK', 'BANPU.BK', 'BBL.BK', 'BCH.BK', 'BCP.BK', 'BCPG.BK', 'BDMS.BK', 'BEM.BK', 'BGRIM.BK', 'BH.BK', 'BJC.BK', 'BLA.BK', 'BPP.BK', 'BTG.BK', 'BTS.BK', 'CBG.BK', 'CENTEL.BK', 'CHG.BK', 'CK.BK', 'CKP.BK', 'COM7.BK', 'CPALL.BK', 'CPF.BK', 'CPN.BK', 'CRC.BK', 'DELTA.BK', 'DOHOME.BK', 'EA.BK', 'EGCO.BK', 'ERW.BK', 'FORTH.BK', 'GLOBAL.BK', 'GPSC.BK', 'GULF.BK', 'GUNKUL.BK', 'HANA.BK', 'HMPRO.BK', 'ICHI.BK', 'INTUCH.BK', 'IRPC.BK', 'ITC.BK', 'IVL.BK', 'JMART.BK', 'JMT.BK', 'KBANK.BK', 'KCE.BK', 'KKP.BK', 'KTB.BK', 'KTC.BK', 'LH.BK', 'M.BK', 'MASTER.BK', 'MBK.BK', 'MC.BK', 'MEGA.BK', 'MINT.BK', 'MTC.BK', 'OR.BK', 'ORI.BK', 'OSP.BK', 'PLANB.BK', 'PRM.BK', 'PSL.BK', 'PTG.BK', 'PTT.BK', 'PTTEP.BK', 'PTTGC.BK', 'QH.BK', 'RATCH.BK', 'RCL.BK', 'SAWAD.BK', 'SCB.BK', 'SCC.BK', 'SCGP.BK', 'SINGER.BK', 'SIRI.BK', 'SJWD.BK', 'SKY.BK', 'SPALI.BK', 'SPRC.BK', 'STA.BK', 'STEC.BK', 'STGT.BK', 'TCAP.BK', 'THANI.BK', 'THG.BK', 'TIDLOR.BK', 'TIPH.BK', 'TISCO.BK', 'TOP.BK', 'TQM.BK', 'TRUE.BK', 'TTB.BK', 'TTW.BK', 'TU.BK', 'VGI.BK', 'WHA.BK', 'WHAUP.BK']
     extra_growth = ['TFG.BK', 'JTS.BK', 'SAPPE.BK', 'SISB.BK', 'BE8.BK', 'BBIK.BK', 'SNNP.BK', 'AU.BK', 'DITTO.BK', 'NSL.BK', 'KAMART.BK', 'COCOCO.BK', 'KLINIQ.BK', 'WARRIX.BK', 'SABINA.BK', 'SCCC.BK', 'TASCO.BK', 'MALEE.BK', 'PLUS.BK', 'TKN.BK', 'XO.BK']
     full_list = list(set(set100 + extra_growth))
 
-    results = [get_data(t) for t in full_list]
+    results = [get_stock_data(t) for t in full_list]
     results = [r for r in results if r]
 
     if results:
@@ -132,15 +129,15 @@ with tab_thai:
     else:
         st.info("🔎 ไม่พบสัญญาณในขณะนี้")
 
-with tab_home:
-    st.markdown("<h2 style='text-align:center; color:white; padding-top:50px;'>🏡 Welcome to Home Page</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; color:#94a3b8;'>สลับเมนูด้วยแถบด้านบนเพื่อดูข้อมูลสแกนหุ้น</p>", unsafe_allow_html=True)
+elif st.session_state.current_page == "Home":
+    st.markdown("<h2 style='text-align:center; color:white; padding-top:100px;'>🏡 Welcome to Home Page</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#94a3b8;'>สลับเมนูด้วยปุ่มด้านบนเพื่อดูข้อมูลสแกนหุ้น</p>", unsafe_allow_html=True)
 
-with tab_charts:
-    st.markdown("<h2 style='text-align:center; color:white; padding-top:50px;'>📊 Charts Analytics</h2>", unsafe_allow_html=True)
+elif st.session_state.current_page == "Charts":
+    st.markdown("<h2 style='text-align:center; color:white; padding-top:100px;'>📊 Charts Analytics</h2>", unsafe_allow_html=True)
 
-with tab_us:
-    st.markdown("<h2 style='text-align:center; color:white; padding-top:50px;'>🇺🇸 US Market Scan</h2>", unsafe_allow_html=True)
+elif st.session_state.current_page == "US Scan":
+    st.markdown("<h2 style='text-align:center; color:white; padding-top:100px;'>🇺🇸 US Market Scan</h2>", unsafe_allow_html=True)
 
 st.write("---")
-st.caption("Por Piang Electric Plus Co., Ltd. | Stable Fast Nav v5.7")
+st.caption("Por Piang Electric Plus Co., Ltd. | Stable Fast Nav v5.8")
