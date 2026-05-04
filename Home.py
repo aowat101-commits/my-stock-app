@@ -7,22 +7,27 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY SYSTEM (จัดการไฟล์และการลบรายตัว) ---
+# --- 1. MEMORY SYSTEM (Fixed Logic) ---
 def manage_list(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
-    defaults = ['PTT', 'DELTA', 'ADVANC', 'EA', 'NEX', 'JTS'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
+    defaults = ['PTT', 'DELTA', 'ADVANC'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
+    
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
+    
     with open(file_path, "r") as f:
         data = f.read().strip()
-        current_data = data.split(",") if data else defaults
+        current_data = [x for x in data.split(",") if x] if data else defaults
     
-    if action == "add" and ticker and ticker not in current_data:
-        current_data.append(ticker)
-        with open(file_path, "w") as f: f.write(",".join(current_data))
-    elif action == "delete" and ticker and ticker in current_data:
-        current_data.remove(ticker)
-        with open(file_path, "w") as f: f.write(",".join(current_data))
+    if action == "add" and ticker:
+        ticker = ticker.strip().upper()
+        if ticker not in current_data:
+            current_data.append(ticker)
+            with open(file_path, "w") as f: f.write(",".join(current_data))
+    elif action == "delete" and ticker:
+        if ticker in current_data:
+            current_data.remove(ticker)
+            with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
 # --- 2. UI SETUP ---
@@ -43,7 +48,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE (EMA 8 + Wave Trend + No Icon) ---
+# --- 3. CORE ENGINE ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, mode):
     try:
@@ -98,14 +103,14 @@ def apply_style(row):
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'edit_mode' not in st.session_state: st.session_state.edit_mode = False
 
-st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
+st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home", "edit_mode": False}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
-    st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW"}), type="primary" if st.session_state.page == 'TW' else "secondary")
-    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if st.session_state.page == 'TS' else "secondary")
+    st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW", "edit_mode": False}), type="primary" if st.session_state.page == 'TW' else "secondary")
+    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS", "edit_mode": False}), type="primary" if st.session_state.page == 'TS' else "secondary")
 with c2:
-    st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if st.session_state.page == 'UW' else "secondary")
-    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
+    st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW", "edit_mode": False}), type="primary" if st.session_state.page == 'UW' else "secondary")
+    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US", "edit_mode": False}), type="primary" if st.session_state.page == 'US' else "secondary")
 
 p = st.session_state.page
 dt_now = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
@@ -121,12 +126,19 @@ elif p in ['TW', 'UW', 'TS', 'US']:
     curr_list = manage_list(m_key)
     
     if 'W' in p:
-        with st.expander("➕ Manage Watchlist", expanded=True):
-            new_t = st.text_input("Ticker:").upper()
-            if new_t: manage_list(m_key, new_t, "add"); st.rerun()
-            if st.button("🛠️ Edit Mode"): st.session_state.edit_mode = not st.session_state.edit_mode; st.rerun()
+        with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
+            # แยก Key ให้เด็ดขาดป้องกันหุ้นข้ามฝั่ง
+            new_t = st.text_input(f"Add {m_key.upper()} Ticker:", key=f"input_{m_key}").upper()
+            if new_t:
+                manage_list(m_key, new_t, "add")
+                st.rerun()
+            if st.button("🛠️ Toggle Edit Mode"):
+                st.session_state.edit_mode = not st.session_state.edit_mode
+                st.rerun()
     else:
-        if st.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
+        if st.button("🔄 Manual Refresh"):
+            st.cache_data.clear()
+            st.rerun()
 
     results = [fetch_verified_data(t, p) for t in curr_list]
     results = [r for r in results if r is not None]
@@ -137,13 +149,12 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         if 'S' in p: cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
 
-        # ส่วนปุ่มลบหุ้นรายตัว (แสดงผลเมื่อเปิด Edit Mode)
         if 'W' in p and st.session_state.edit_mode:
             st.write("---")
-            st.write("🗑️ **Select Ticker to Remove:**")
+            st.write("🗑️ **Select to Remove:**")
             del_cols = st.columns(4)
             for i, t in enumerate(curr_list):
-                if del_cols[i % 4].button(f"✖ {t}", key=f"del_{t}", type="primary"):
+                if del_cols[i % 4].button(f"✖ {t}", key=f"del_{m_key}_{t}", type="primary"):
                     manage_list(m_key, t, "delete")
                     st.rerun()
 
