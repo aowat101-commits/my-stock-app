@@ -25,8 +25,12 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & DEEP CSS ---
-st.set_page_config(page_title="PPE Guardian V16.3", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & PERSISTENT CSS ---
+st.set_page_config(page_title="PPE Guardian V16.4", layout="wide", initial_sidebar_state="collapsed")
+
+# ระบบจัดการหน่วยความจำสัญญาณ (Buffer 30 rows)
+if 'signal_history' not in st.session_state:
+    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime"])
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -34,46 +38,29 @@ curr_m = st.query_params.get('market', None)
 
 st.markdown("""
     <style>
-    /* ปิดส่วนหัวและเมนูที่ไม่จำเป็น */
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
-    /* 🎯 เจาะจงจัดกึ่งกลางลึกถึงระดับ Container */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
     
-    /* บังคับ Vertical Block ทุกอันให้กึ่งกลาง */
-    [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBorderWrapper"] {
-        display: flex !important; flex-direction: column !important;
-        align-items: center !important; justify-content: center !important;
+    /* 🎯 ล็อกปุ่มกึ่งกลางถาวร (Universal Fix) */
+    [data-testid="stVerticalBlock"] > div {
+        display: flex !important;
+        justify-content: center !important;
         width: 100% !important;
     }
 
-    /* จัดการช่องว่างและตำแหน่งปุ่ม */
-    div.element-container, div.stButton {
-        display: flex !important;
-        justify-content: center !important;
-        width: 100% !important;
-    }
-    
     .stButton > button { 
-        height: 52px !important; 
-        border-radius: 14px !important; 
-        font-size: 18px !important; 
-        font-weight: bold !important; 
-        color: #FFD700 !important; 
-        background-color: #1e293b !important; 
-        border: 2px solid #FFD700 !important; 
-        width: 320px !important; 
-        margin: 12px auto !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+        height: 52px !important; width: 320px !important;
+        border-radius: 14px !important; font-size: 18px !important; 
+        font-weight: bold !important; color: #FFD700 !important; 
+        background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
+        margin: 10px auto !important; display: block !important;
     }
-    
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -97,11 +84,12 @@ def fetch_data(ticker, mode):
         elif w1 > w2 and w1 < -47 and cp > e8.iloc[-1]: sig = "DEEP BUY"
         elif cp < e20.iloc[-1] or hc < hp: sig = "SELL"
         elif cp < e8.iloc[-1] and hc < hp: sig = "P-SELL"
+        
         c_pp = float(df['Close'].iloc[-2]); p_p_c = float(df['Close'].iloc[-3])
-        # 🕒 แสดงเวลาที่ตรวจพบสัญญาณจริงวินาทีต่อวินาที
-        now_time = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S %d/%m")
+        now = datetime.now(pytz.timezone("Asia/Bangkok"))
         return {"Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp, "%Chg": ((cp - c_pp) / c_pp) * 100, 
-                "Value (M)": (cp * vol) / 1_000_000, "TimeUpdate": now_time, "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp}
+                "Value (M)": (cp * vol) / 1_000_000, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
+                "RawTime": now, "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp}
     except: return None
 
 def apply_styles(data):
@@ -113,7 +101,7 @@ def apply_styles(data):
         p_c = 'color: #00FF00' if row['p_sig'] > 0 else ('color: #FF0000' if row['p_sig'] < 0 else 'color: #FFD700')
         styles.at[data.index[i], "Prev"] = p_c
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
-        for c in ["Price", "Chg", "%Chg", "Value (M)"]: styles.at[data.index[i], c] = m_c
+        for c in ["Price", "Chg", "%Chg"]: styles.at[data.index[i], c] = m_c
     return styles
 
 # --- 4. NAVIGATION ---
@@ -125,11 +113,11 @@ def go(p, m=None):
 def hdr(t, s):
     st.markdown(f'<div style="text-align: center;"><h1 style="color: #FFD700; margin:0;">{t}</h1><p style="color: #1E90FF;">{s}</p></div>', unsafe_allow_html=True)
 
-# --- 5. PAGE LOGIC ---
+# --- 5. MAIN LOGIC ---
 t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
 
 if curr_p == 'Home':
-    hdr("TRADING HOME", f"{t_now} | V16.3")
+    hdr("TRADING HOME", t_now)
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
@@ -156,21 +144,29 @@ elif curr_p == 'Watch':
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M"}), 
-                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","TimeUpdate"])
+        st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
+                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","TimeUpdate"])
 
 elif curr_p == 'Scan':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
     hdr(f"{f} SCAN", t_now)
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
-    res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
-    res = [r for r in res if r]
-    if res:
-        df = pd.DataFrame(res)
-        df = df[df['Signal'] != "-"]
-        if not df.empty:
-            st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
-                         use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
-        else: st.info("No active signals. Pull down to refresh.")
+    
+    # ดึงข้อมูลใหม่
+    new_results = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
+    new_results = [r for r in new_results if r and r['Signal'] != "-"]
+    
+    if new_results:
+        new_df = pd.DataFrame(new_results)
+        # ผสมข้อมูลใหม่เข้ากับประวัติเดิม (ห้ามลบอันเก่า)
+        combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
+        # เรียงลำดับเวลาล่าสุดไว้บนสุด และตัดเหลือ 30 แถว
+        combined = combined.sort_values(by="RawTime", ascending=False).head(30)
+        st.session_state.signal_history = combined
+
+    if not st.session_state.signal_history.empty:
+        st.dataframe(st.session_state.signal_history.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
+                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
+    else: st.info("No active signals yet. Pull down to refresh.")
 
 time.sleep(600); st.rerun()
