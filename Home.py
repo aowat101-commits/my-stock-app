@@ -31,67 +31,80 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
-# --- 2. UI SETUP & ABSOLUTE CENTERING (V13.4) ---
-st.set_page_config(page_title="PPE Guardian V13.4", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & SPACE OPTIMIZATION (V13.5) ---
+st.set_page_config(page_title="PPE Guardian V13.5", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     [data-testid="stSidebar"], .st-emotion-cache-10o48ve, header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
-    /* ล็อกกึ่งกลางระดับ Container ใหญ่ที่สุด */
+    /* ดึงเนื้อหาขึ้นชิดบนสุดและจัดกึ่งกลาง */
     .main .block-container {
-        padding-top: 1.5rem !important;
+        padding-top: 0.2rem !important;
+        padding-bottom: 0rem !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
-        text-align: center !important;
-        width: 100% !important;
     }
 
-    /* บังคับทุกบรรทัดให้กึ่งกลาง */
-    div[data-testid="stVerticalBlock"] {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        width: 100% !important;
+    /* บีบช่องว่างระหว่างบรรทัด */
+    div[data-testid="stVerticalBlock"] > div {
+        gap: 0.1rem !important;
+        padding: 0 !important;
     }
 
     .menu-title {
         color: #FFD700 !important;
-        font-size: 35px !important;
+        font-size: 28px !important;
         font-weight: 900 !important;
-        text-align: center !important;
-        width: 100% !important;
+        margin: 0px !important;
     }
 
     .classic-header { 
         color: #1E90FF !important; 
-        font-size: 14px; 
-        width: 100% !important;
-        text-align: center !important;
+        font-size: 12px; 
+        margin-bottom: 2px !important;
     }
 
-    /* สไตล์ปุ่ม */
+    /* สไตล์ปุ่มหลัก */
     .stButton > button { 
-        height: 52px !important; 
-        border-radius: 12px !important; 
-        font-size: 18px !important; 
+        height: 48px !important; 
+        border-radius: 10px !important; 
+        font-size: 16px !important; 
         font-weight: bold !important; 
         color: #FFD700 !important; 
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important;
-        width: 300px !important;
-        margin: 6px auto !important;
+        width: 280px !important;
+        margin: 2px auto !important;
     }
 
+    /* 🔥 ล็อกระนาบปุ่ม Add/Delete ให้ตรงกันเป๊ะ 🔥 */
     .manage-row {
         display: flex !important;
+        flex-direction: row !important;
         justify-content: center !important;
-        gap: 12px !important;
+        align-items: center !important;
+        gap: 10px !important;
         width: 100% !important;
+        margin-top: -5px !important;
     }
+    
+    .manage-row div[data-testid="stHorizontalBlock"] {
+        align-items: center !important;
+    }
+
+    .manage-row .stButton > button {
+        width: 140px !important;
+        height: 42px !important;
+        margin: 0 !important;
+    }
+
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
+    
+    /* บีบพื้นที่ตารางหุ้น */
+    .stDataFrame { margin-top: -10px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -134,22 +147,13 @@ if st.session_state.page == 'Home':
     st.markdown('<div class="menu-title">TRADING HOME</div>', unsafe_allow_html=True)
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
-    st.markdown(f'<div class="classic-header">{time_str} 📅 {date_str} | V13.4</div>', unsafe_allow_html=True)
-    st.write('---')
-    # 🔥 ล็อกรูปภาพกึ่งกลางด้วย HTML Direct Style เพื่อป้องกันระบบดีดกลับ
-    st.markdown(
-        """
-        <div style="display: flex; justify-content: center; width: 100%; margin: 15px 0;">
-            <img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="400" style="border-radius: 15px;">
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<div class="classic-header">{time_str} | {date_str} | V13.5</div>', unsafe_allow_html=True)
+    st.markdown('<div style="display:flex; justify-content:center; width:100%; margin-top:5px;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius:12px;"></div>', unsafe_allow_html=True)
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
     st.markdown(f'<div class="menu-title">{m_label}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="classic-header">{time_str} 📅 {date_str} | V13.4</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="classic-header">{time_str} | {date_str} | V13.5</div>', unsafe_allow_html=True)
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
@@ -157,26 +161,28 @@ elif st.session_state.page == 'SubMenu':
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
     st.markdown(f'<div class="menu-title">📋 WATCHLIST ({m_code})</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="classic-header">{time_str} 📅 {date_str} | V13.4</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="classic-header">{time_str} | {date_str} | V13.5</div>', unsafe_allow_html=True)
     back_lbl = "⬅ กลับเมนูไทย" if st.session_state.market == 'th' else "⬅ กลับเมนู US"
     if st.button(back_lbl): st.session_state.page = 'SubMenu'; st.rerun()
-    st.write('---')
+    
     with st.expander("⚙️ Manage List", expanded=True):
         new_t = st.text_input("Ticker:", label_visibility="collapsed", placeholder="e.g. PTT").upper()
+        # แถวปุ่มที่ล็อกระนาบเดียวกัน
         st.markdown('<div class="manage-row">', unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
+        col1, col2 = st.columns(2)
+        with col1:
             if st.button("➕ Add"): manage_storage(st.session_state.market, new_t, "add"); st.cache_data.clear(); st.rerun()
-        with c2:
+        with col2:
             st.markdown('<div class="del-btn">', unsafe_allow_html=True)
             if st.button("🗑️ Delete"): manage_storage(st.session_state.market, new_t, "delete"); st.cache_data.clear(); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
     cl = manage_storage(st.session_state.market); results = [fetch_verified_data(t, st.session_state.market) for t in cl]; results = [r for r in results if r]
     if results: st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
 
 elif st.session_state.page == 'Scan':
-    st.markdown(f'<div class="classic-header">{time_str} 📅 {date_str} | V13.4</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="classic-header">{time_str} | {date_str} | V13.5</div>', unsafe_allow_html=True)
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     m = st.session_state.market
