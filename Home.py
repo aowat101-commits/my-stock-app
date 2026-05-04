@@ -7,16 +7,14 @@ import pytz
 import time
 import os
 
-# --- 1. ROBUST MEMORY SYSTEM ---
+# --- 1. SEPARATED MEMORY SYSTEM ---
 def manage_list(mode, ticker=None, action="load"):
-    # แยกชื่อไฟล์ให้ชัดเจน (th_list.txt / us_list.txt)
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA'] if mode == "th" else ['IONQ', 'NVDA']
     
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
     
-    # อ่านข้อมูลล่าสุดแบบ Real-time
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = [x.strip().upper() for x in data.split(",") if x.strip()] if data else defaults
@@ -28,7 +26,7 @@ def manage_list(mode, ticker=None, action="load"):
             with open(file_path, "w") as f:
                 f.write(",".join(current_data))
                 f.flush()
-                os.fsync(f.fileno()) # บังคับเขียนลง Disk ทันที
+                os.fsync(f.fileno())
     
     elif action == "delete" and ticker:
         if ticker in current_data:
@@ -39,10 +37,10 @@ def manage_list(mode, ticker=None, action="load"):
                 os.fsync(f.fileno())
     return current_data
 
-if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = pd.DataFrame()
-if 'last_alert_key' not in st.session_state:
-    st.session_state.last_alert_key = set()
+# แยก History ของแต่ละตลาดออกจากกัน
+if 'th_history' not in st.session_state: st.session_state.th_history = pd.DataFrame()
+if 'us_history' not in st.session_state: st.session_state.us_history = pd.DataFrame()
+if 'alert_keys' not in st.session_state: st.session_state.alert_keys = set()
 
 # --- 2. UI SETUP ---
 st.set_page_config(page_title="PPE Guardian V10.0", layout="wide", initial_sidebar_state="collapsed")
@@ -62,16 +60,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE ---
+# --- 3. CORE ENGINE (Indicators & Logic) ---
 @st.cache_data(ttl=60)
-def fetch_verified_data(ticker, mode, is_scan=False):
+def fetch_verified_data(ticker, market_mode, is_scan=False):
     try:
-        symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
+        symbol = f"{ticker.upper()}.BK" if market_mode == "th" and ".BK" not in ticker.upper() else ticker.upper()
         df = yf.download(symbol, period="7d", interval="1h", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        # อินดิเคเตอร์ชุดเดิม
         ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
@@ -93,7 +90,6 @@ def fetch_verified_data(ticker, mode, is_scan=False):
 
         if s_label == "-": return None
         
-        # V10.0 Logic: กลางแท่งเทียนเป็น DEEP BUY
         display_label = s_label
         if not is_candle_closed and s_label == "BUY": display_label = "DEEP BUY"
 
@@ -107,16 +103,19 @@ def fetch_verified_data(ticker, mode, is_scan=False):
             "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
             "Signal": display_label, "Value (M)": f"{val_raw:.2f}M",
             "TimeUpdate": last_time.strftime("%H:%M %d/%m"), "RawTime": last_time,
-            "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col,
-            "Market": "th" if ".BK" in symbol else "us"
+            "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col
         }
 
-        alert_key = f"{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
-        if is_scan and alert_key not in st.session_state.last_alert_key:
-            st.session_state.last_alert_key.add(alert_key)
-            new_row = pd.DataFrame([res])
-            st.session_state.signal_history = pd.concat([new_row, st.session_state.signal_history], ignore_index=True)
-
+        # บันทึกลงประวัติแยกตามตลาด
+        if is_scan:
+            key = f"{market_mode}_{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
+            if key not in st.session_state.alert_keys:
+                st.session_state.alert_keys.add(key)
+                new_row = pd.DataFrame([res])
+                if market_mode == "th":
+                    st.session_state.th_history = pd.concat([new_row, st.session_state.th_history], ignore_index=True)
+                else:
+                    st.session_state.us_history = pd.concat([new_row, st.session_state.us_history], ignore_index=True)
         return res
     except: return None
 
@@ -130,73 +129,73 @@ if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'edit_mode' not in st.session_state: st.session_state.edit_mode = False
 p = st.session_state.page
 
-st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home", "edit_mode": False}), type="primary" if p == 'Home' else "secondary")
+st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if p == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
     st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW", "edit_mode": False}), type="primary" if p == 'TW' else "secondary")
-    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS", "edit_mode": False}), type="primary" if p == 'TS' else "secondary")
+    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if p == 'TS' else "secondary")
 with c2:
     st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW", "edit_mode": False}), type="primary" if p == 'UW' else "secondary")
-    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US", "edit_mode": False}), type="primary" if p == 'US' else "secondary")
+    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if p == 'US' else "secondary")
 
 st.write(f'<div class="classic-header">PPE Guardian V10.0 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
 
-# --- 5. CONTENT AREA ---
-m_key = "th" if p in ['TW', 'TS'] else "us"
-curr_list = manage_list(m_key)
-
+# --- 5. EXECUTION BY GAP ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
-elif 'W' in p: # Watchlist Pages
-    with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
-        # แยก Key ของ Input ให้เด็ดขาด
-        input_key = f"input_ticker_{m_key}"
-        new_ticker = st.text_input("Ticker Name:", key=input_key).upper()
+# --- THAI MARKET GAP ---
+elif p in ['TW', 'TS']:
+    curr_list = manage_list("th")
+    if p == 'TW':
+        with st.expander("➕ Manage THAI List", expanded=True):
+            t_input = st.text_input("Ticker Name (Thai):", key="th_gap_input").upper()
+            ca, ce = st.columns(2)
+            if ca.button("✅ Add TH"):
+                if t_input: manage_list("th", t_input, "add"); st.cache_data.clear(); st.rerun()
+            if ce.button("🛠️ Toggle TH Edit"): st.session_state.edit_mode = not st.session_state.edit_mode; st.rerun()
         
-        col_a, col_e = st.columns(2)
-        if col_a.button("✅ Add Ticker", key=f"btn_add_{m_key}"):
-            if new_ticker:
-                manage_list(m_key, new_ticker, "add")
-                st.cache_data.clear()
-                st.rerun()
-        if col_e.button("🛠️ Toggle Edit", key=f"btn_edit_{m_key}"):
-            st.session_state.edit_mode = not st.session_state.edit_mode
-            st.rerun()
-    
-    # ดึงข้อมูลมาแสดงผล
-    results = [fetch_verified_data(t, p) for t in curr_list]
-    results = [r for r in results if r is not None]
-    if results:
-        df_watch = pd.DataFrame(results)
-        st.dataframe(df_watch.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
+        results = [fetch_verified_data(t, "th") for t in curr_list]
+        results = [r for r in results if r is not None]
+        if results:
+            st.dataframe(pd.DataFrame(results).style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
+            if st.session_state.edit_mode:
+                st.write("🗑️ **Remove TH:**")
+                cols = st.columns(4)
+                for i, t in enumerate(curr_list):
+                    if cols[i%4].button(f"✖ {t}", key=f"th_del_{t}"): manage_list("th", t, "delete"); st.cache_data.clear(); st.rerun()
+    else:
+        if st.button("🔄 Manual TH Refresh"): st.cache_data.clear(); st.rerun()
+        for t in curr_list: fetch_verified_data(t, "th", is_scan=True)
+        if not st.session_state.th_history.empty:
+            st.dataframe(st.session_state.th_history.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
+
+# --- US MARKET GAP ---
+elif p in ['UW', 'US']:
+    curr_list = manage_list("us")
+    if p == 'UW':
+        with st.expander("➕ Manage US List", expanded=True):
+            u_input = st.text_input("Ticker Name (US):", key="us_gap_input").upper()
+            ca, ce = st.columns(2)
+            if ca.button("✅ Add US"):
+                if u_input: manage_list("us", u_input, "add"); st.cache_data.clear(); st.rerun()
+            if ce.button("🛠️ Toggle US Edit"): st.session_state.edit_mode = not st.session_state.edit_mode; st.rerun()
         
-        if st.session_state.edit_mode:
-            st.write("---")
-            st.write("🗑️ **Delete Ticker:**")
-            del_cols = st.columns(4)
-            for i, t in enumerate(curr_list):
-                if del_cols[i % 4].button(f"✖ {t}", key=f"del_btn_{m_key}_{t}"):
-                    manage_list(m_key, t, "delete")
-                    st.cache_data.clear()
-                    st.rerun()
+        results = [fetch_verified_data(t, "us") for t in curr_list]
+        results = [r for r in results if r is not None]
+        if results:
+            st.dataframe(pd.DataFrame(results).style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
+            if st.session_state.edit_mode:
+                st.write("🗑️ **Remove US:**")
+                cols = st.columns(4)
+                for i, t in enumerate(curr_list):
+                    if cols[i%4].button(f"✖ {t}", key=f"us_del_{t}"): manage_list("us", t, "delete"); st.cache_data.clear(); st.rerun()
+    else:
+        if st.button("🔄 Manual US Refresh"): st.cache_data.clear(); st.rerun()
+        for t in curr_list: fetch_verified_data(t, "us", is_scan=True)
+        if not st.session_state.us_history.empty:
+            st.dataframe(st.session_state.us_history.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
 
-elif 'S' in p: # Scan Pages
-    col_ref, col_space = st.columns([1, 3])
-    if col_ref.button("🔄 Manual Refresh", key=f"manual_ref_{m_key}"):
-        st.cache_data.clear()
-        st.rerun()
-    
-    # รันสแกนเพื่อเก็บเข้า History
-    for t in curr_list: fetch_verified_data(t, p, is_scan=True)
-    
-    if not st.session_state.signal_history.empty:
-        df_full_hist = st.session_state.signal_history
-        # กรองข้อมูลให้ตรงกับตลาดที่เลือก 100%
-        market_filtered = df_full_hist[df_full_hist['Market'] == m_key]
-        st.dataframe(market_filtered.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
-
-# Auto-Refresh ทุก 10 นาที
 time.sleep(600)
 st.rerun()
