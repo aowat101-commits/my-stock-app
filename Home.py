@@ -5,6 +5,7 @@ import pandas_ta as ta
 from datetime import datetime
 import pytz
 import time
+import os
 
 # --- 1. CORE STORAGE SYSTEM ---
 def manage_storage(mode, ticker=None, action="load"):
@@ -24,10 +25,10 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & URL PERSISTENCE ---
-st.set_page_config(page_title="PPE Guardian V15.8", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & CSS ---
+st.set_page_config(page_title="PPE Guardian V15.9", layout="wide", initial_sidebar_state="collapsed")
 
-# ป้องกันหน้าเด้งโดยใช้ URL Parameters
+# ป้องกันหน้าเด้ง
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
 curr_m = st.query_params.get('market', None)
@@ -36,10 +37,21 @@ st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
+    
+    /* บังคับกึ่งกลางทุกส่วน */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
-        align-items: center !important; width: 100% !important; margin: 0 auto !important;
+        align-items: center !important; justify-content: flex-start !important;
+        width: 100% !important; margin: 0 auto !important;
     }
+    
+    div[data-testid="stVerticalBlock"] { 
+        display: flex !important; flex-direction: column !important;
+        align-items: center !important; width: 100% !important; 
+    }
+
+    /* สไตล์ปุ่มและบังคับกึ่งกลาง */
+    .stButton { display: flex !important; justify-content: center !important; width: 100% !important; }
     .stButton > button { 
         height: 50px !important; border-radius: 12px !important; font-size: 17px !important; 
         font-weight: bold !important; color: #FFD700 !important; background-color: #1e293b !important; 
@@ -50,7 +62,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. INDICATOR ENGINE ---
-@st.cache_data(ttl=30) # ลด Cache ลงเพื่อให้การรีเฟรชเห็นผลไวขึ้น
+@st.cache_data(ttl=30)
 def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
@@ -58,7 +70,6 @@ def fetch_data(ticker, mode):
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
-        # Calculation Logic
         e8 = ta.ema(df['Close'], 8); e20 = ta.ema(df['Close'], 20)
         h = ta.hma(df['Close'], 30); v5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
@@ -107,7 +118,7 @@ def hdr(t, s):
 t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
 
 if curr_p == 'Home':
-    hdr("TRADING HOME", f"{t_now} | V15.8")
+    hdr("TRADING HOME", f"{t_now} | V15.9")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
