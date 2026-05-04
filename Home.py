@@ -35,28 +35,17 @@ if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
 curr_m = st.query_params.get('market', None)
 
-# CSS บังคับกึ่งกลางแบบเจาะจงชั้นในสุด
 st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
-    .stApp .main .block-container {
-        display: block !important;
-        width: 100% !important;
-        text-align: center !important;
-    }
-    div.stButton {
-        display: flex !important;
-        justify-content: center !important;
-        margin: 0 auto !important;
-    }
     .stButton > button { 
-        height: 52px !important; width: 320px !important;
+        height: 54px !important; width: 100% !important;
         border-radius: 14px !important; font-size: 18px !important; 
         font-weight: 500 !important; color: #FFD700 !important; 
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
     }
-    [data-testid="stDataFrame"] { margin: 0 auto !important; }
+    [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; margin: 0 auto !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -120,22 +109,26 @@ def hdr(t):
 # --- 4. PAGE LOGIC ---
 if curr_p == 'Home':
     hdr("TRADING HOME")
-    # บังคับปุ่มกึ่งกลาง
-    st.button("🇹🇭 ตลาดหุ้นไทย", on_click=go, args=('SubMenu', 'th'))
-    st.button("🇺🇸 ตลาดหุ้นอเมริกา", on_click=go, args=('SubMenu', 'us'))
-    # บังคับรูปกึ่งกลาง
-    st.markdown('<div style="display: flex; justify-content: center; width: 100%;"><hr style="border: 1px solid #1e293b; width: 320px;"></div>', unsafe_allow_html=True)
-    st.markdown('<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 1.2, 1])
+    with c2:
+        if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
+        if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
+    st.markdown('<center><hr style="border: 1px solid #1e293b; width: 320px;"></center>', unsafe_allow_html=True)
+    st.markdown('<center><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></center>', unsafe_allow_html=True)
 
 elif curr_p == 'SubMenu':
     hdr(f"{'🇹🇭' if curr_m == 'th' else '🇺🇸'} MENU")
-    st.button("📋 WATCHLIST", on_click=go, args=('Watch', curr_m))
-    st.button("🔍 MARKET SCAN", on_click=go, args=('Scan', curr_m))
-    st.button("🏠 กลับหน้าหลัก", on_click=go, args=('Home',))
+    c1, c2, c3 = st.columns([1, 1.2, 1])
+    with c2:
+        if st.button("📋 WATCHLIST"): go('Watch', curr_m)
+        if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
+        if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
 elif curr_p == 'Watch':
     hdr("WATCHLIST")
-    st.button("⬅ กลับเมนูตลาด", on_click=go, args=('SubMenu', curr_m))
+    c1, c2, c3 = st.columns([1, 1.2, 1])
+    with c2:
+        if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     if res:
         df = pd.DataFrame([r for r in res if r])
@@ -144,7 +137,9 @@ elif curr_p == 'Watch':
 
 elif curr_p == 'Scan':
     hdr("SCAN")
-    st.button("⬅ กลับเมนูตลาด", on_click=go, args=('SubMenu', curr_m))
+    c1, c2, c3 = st.columns([1, 1.2, 1])
+    with c2:
+        if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     new_active = [r for r in new_res if r and r['Signal'] in ["P-BUY", "BUY", "P-SELL", "SELL"]]
     
