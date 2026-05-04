@@ -13,9 +13,12 @@ def manage_list(mode, ticker=None, action="load"):
     defaults = ['PTT', 'DELTA', 'ADVANC'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
+    
+    # อ่านข้อมูลล่าสุดจากไฟล์เสมอ
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = [x for x in data.split(",") if x] if data else defaults
+    
     if action == "add" and ticker:
         ticker = ticker.strip().upper()
         if ticker and ticker not in current_data:
@@ -51,6 +54,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. CORE ENGINE ---
+@st.cache_data(ttl=60) # เพิ่มระบบ Cache เพื่อความเร็ว แต่ Reset เมื่อมีการแอดหุ้น
 def fetch_verified_data(ticker, mode, is_scan=False):
     try:
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
@@ -64,8 +68,10 @@ def fetch_verified_data(ticker, mode, is_scan=False):
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
 
         current_idx = len(df) - 1
-        cp, h_curr, h_prev = float(df['Close'].iloc[current_idx]), hull.iloc[current_idx], hull.iloc[current_idx-1]
-        w1, w2, vol, v5, e8 = wt1.iloc[current_idx], wt2.iloc[current_idx], df['Volume'].iloc[current_idx], vma5.iloc[current_idx], ema8.iloc[current_idx]
+        cp = float(df['Close'].iloc[current_idx])
+        h_curr, h_prev = hull.iloc[current_idx], hull.iloc[current_idx-1]
+        w1, w2 = wt1.iloc[current_idx], wt2.iloc[current_idx]
+        vol, v5, e8 = df['Volume'].iloc[current_idx], vma5.iloc[current_idx], ema8.iloc[current_idx]
         
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         is_candle_closed = (datetime.now(pytz.timezone('Asia/Bangkok')) - last_time) > timedelta(minutes=55)
@@ -92,7 +98,7 @@ def fetch_verified_data(ticker, mode, is_scan=False):
             "Signal": display_label, "Value (M)": f"{val_raw:.2f}M",
             "TimeUpdate": last_time.strftime("%H:%M %d/%m"), "RawTime": last_time,
             "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col,
-            "Market": "th" if mode in ['TW', 'TS'] else "us" # เพิ่มสถานะตลาด
+            "Market": "th" if mode in ['TW', 'TS'] else "us"
         }
 
         alert_key = f"{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
@@ -132,18 +138,22 @@ if p == 'Home':
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
-    curr_list = manage_list(m_key)
     
     if 'W' in p:
         with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
             new_t = st.text_input(f"Add Ticker:", key=f"in_{m_key}").upper()
             ca, ce = st.columns(2)
             if ca.button("✅ Add"):
-                if new_t: manage_list(m_key, new_t, "add"); st.rerun()
+                if new_t: 
+                    manage_list(m_key, new_t, "add")
+                    st.cache_data.clear() # ล้าง Cache ทันทีที่แอด
+                    st.rerun()
             if ce.button("🛠️ Toggle Edit"):
                 st.session_state.edit_mode = not st.session_state.edit_mode
                 st.rerun()
         
+        # ย้ายการอ่านไฟล์มาไว้ "หลัง" ปุ่มกด เพื่อให้ข้อมูลเป็นปัจจุบันที่สุด
+        curr_list = manage_list(m_key)
         results = [fetch_verified_data(t, p) for t in curr_list]
         results = [r for r in results if r is not None]
         if results:
@@ -154,15 +164,21 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                 st.write("🗑️ **Select to Remove:**")
                 del_cols = st.columns(4)
                 for i, t in enumerate(curr_list):
-                    if del_cols[i % 4].button(f"✖ {t}", key=f"d_{t}"): manage_list(m_key, t, "delete"); st.rerun()
+                    if del_cols[i % 4].button(f"✖ {t}", key=f"d_{t}"): 
+                        manage_list(m_key, t, "delete")
+                        st.cache_data.clear()
+                        st.rerun()
 
     else:
+        # ย้ายปุ่มมาไว้ฝั่งซ้ายแทนตัวหนังสือ US Signal History
         c_btn, c_spacer = st.columns([1, 3])
-        if c_btn.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
+        if c_btn.button("🔄 Manual Refresh"): 
+            st.cache_data.clear()
+            st.rerun()
         
+        curr_list = manage_list(m_key)
         for t in curr_list: fetch_verified_data(t, p, is_scan=True)
         if not st.session_state.signal_history.empty:
-            # เพิ่มตัวกรองแยกตลาด ไทย/US ตรงนี้ครับ
             df_hist = st.session_state.signal_history
             filtered_df = df_hist[df_hist['Market'] == m_key]
             st.dataframe(filtered_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
