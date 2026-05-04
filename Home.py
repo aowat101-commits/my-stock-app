@@ -31,7 +31,7 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 
 # --- 2. UI SETUP & ABSOLUTE CENTERING ---
-st.set_page_config(page_title="PPE Guardian V14.7", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V14.8", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -39,6 +39,7 @@ st.markdown("""
     .stApp { background-color: #0f172a; }
     
     .stApp .main .block-container {
+        padding-top: 1rem !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
@@ -52,10 +53,12 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] {
         align-items: center !important;
         width: 100% !important;
+        gap: 0.2rem !important; /* บีบระยะห่างระหว่างบล็อกแนวตั้ง */
     }
 
+    /* สไตล์ปุ่มกด: ปรับ Margin ให้ชิดกันมากขึ้น */
     .stButton > button { 
-        height: 50px !important; 
+        height: 48px !important; 
         border-radius: 12px !important; 
         font-size: 17px !important; 
         font-weight: bold !important; 
@@ -63,10 +66,15 @@ st.markdown("""
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important;
         width: 300px !important;
-        margin: 8px auto !important;
+        margin: 2px auto !important; /* ลดจาก 8px เหลือ 2px */
     }
 
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
+
+    /* ปรับแต่งพื้นที่ Expander และ ตาราง */
+    .stExpander { width: 100% !important; margin-bottom: -15px !important; }
+    [data-testid="stExpanderDetails"] { padding-top: 0px !important; padding-bottom: 5px !important; }
+    .stDataFrame { margin-top: -10px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -88,7 +96,6 @@ def fetch_verified_data(ticker, market_mode):
         val_raw = (cp * df['Volume'].iloc[-1]) / 1_000_000
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         
-        # สัญญาณปิดวันก่อนหน้า
         prev_close = float(df['Close'].iloc[-2])
         prev_prev_close = float(df['Close'].iloc[-3])
         prev_signal = prev_close - prev_prev_close
@@ -107,7 +114,6 @@ def fetch_verified_data(ticker, market_mode):
         }
     except: return None
 
-# 🔥 ฟังก์ชันสี V9.9 (เปลี่ยนเป็นสีเหลืองทอง #FFD700)
 def style_v99(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
@@ -117,25 +123,21 @@ def style_v99(data):
         val = row['Value (M)']
         rsi = row['RSI']
         
-        # สีหลัก: Ticker, Price, Chg, %Chg, TimeUpdate (เขียว/แดง)
         main_color = 'color: #00FF00' if chg > 0 else 'color: #FF0000'
         for col in ["Ticker", "Price", "Chg", "%Chg", "TimeUpdate"]:
             styles.at[data.index[i], col] = main_color
             
-        # คอลัมน์ 2: Prev (อิงสัญญาณวันก่อน)
         if prev_sig > 0: styles.at[data.index[i], "Prev"] = 'color: #00FF00'
         elif prev_sig < 0: styles.at[data.index[i], "Prev"] = 'color: #FF0000'
-        else: styles.at[data.index[i], "Prev"] = 'color: #FFD700' # เปลี่ยนเป็นเหลืองทอง
+        else: styles.at[data.index[i], "Prev"] = 'color: #FFD700'
         
-        # คอลัมน์ 6: Value (M) (เทา/ฟ้าเข้ม/ม่วง)
         if val > 100: styles.at[data.index[i], "Value (M)"] = 'color: #BF40BF'
         elif val >= 10: styles.at[data.index[i], "Value (M)"] = 'color: #00BFFF'
         else: styles.at[data.index[i], "Value (M)"] = 'color: #808080'
         
-        # คอลัมน์ 8: RSI (แดง < 30 / เขียว > 70 / เหลืองทองระหว่างกลาง)
         if rsi < 30: styles.at[data.index[i], "RSI"] = 'color: #FF0000'
         elif rsi > 70: styles.at[data.index[i], "RSI"] = 'color: #00FF00'
-        else: styles.at[data.index[i], "RSI"] = 'color: #FFD700' # เปลี่ยนเป็นเหลืองทอง
+        else: styles.at[data.index[i], "RSI"] = 'color: #FFD700'
             
     return styles
 
@@ -145,26 +147,26 @@ now = datetime.now(pytz.timezone("Asia/Bangkok"))
 time_str = now.strftime("%H:%M:%S"); date_str = now.strftime("%d/%m/%Y")
 
 def centered_header(title, subtitle):
-    st.markdown(f"""<div style="text-align: center; width: 100%;"><h1 style="color: #FFD700; font-size: 32px; font-weight: 900; margin-bottom: 0px;">{title}</h1><p style="color: #1E90FF; font-size: 13px; margin-top: 0px; margin-bottom: 10px;">{subtitle}</p></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="text-align: center; width: 100%;"><h1 style="color: #FFD700; font-size: 32px; font-weight: 900; margin-bottom: 0px;">{title}</h1><p style="color: #1E90FF; font-size: 13px; margin-top: 0px; margin-bottom: 5px;">{subtitle}</p></div>""", unsafe_allow_html=True)
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.7")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.8")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
-    st.markdown(f'<div style="display: flex; justify-content: center; width: 100%; margin: 10px 0;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="display: flex; justify-content: center; width: 100%; margin: 5px 0;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
-    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.7")
+    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.8")
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
-    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.7")
+    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.8")
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     
     with st.expander("⚙️ Manage List", expanded=True):
