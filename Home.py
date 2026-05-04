@@ -25,12 +25,12 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & PERSISTENT CSS ---
-st.set_page_config(page_title="PPE Guardian V16.4", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & CSS ---
+st.set_page_config(page_title="PPE Guardian V16.5", layout="wide", initial_sidebar_state="collapsed")
 
 # ระบบจัดการหน่วยความจำสัญญาณ (Buffer 30 rows)
 if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime"])
+    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "p_sig", "m_chg"])
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -40,20 +40,12 @@ st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
-    
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    
-    /* 🎯 ล็อกปุ่มกึ่งกลางถาวร (Universal Fix) */
-    [data-testid="stVerticalBlock"] > div {
-        display: flex !important;
-        justify-content: center !important;
-        width: 100% !important;
-    }
-
+    [data-testid="stVerticalBlock"] > div { display: flex !important; justify-content: center !important; width: 100% !important; }
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
@@ -77,8 +69,11 @@ def fetch_data(ticker, mode):
         h = ta.hma(df['Close'], 30); v5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
+        rsi = ta.rsi(df['Close'], length=14)
+        
         cp = float(df['Close'].iloc[-1]); hc = h.iloc[-1]; hp = h.iloc[-2]
         vol = df['Volume'].iloc[-1]; w1 = wt1.iloc[-1]; w2 = wt2.iloc[-2]
+        
         sig = "-"
         if cp > e8.iloc[-1] and hc > hp and vol > (v5.iloc[-1] * 1.2): sig = "BUY"
         elif w1 > w2 and w1 < -47 and cp > e8.iloc[-1]: sig = "DEEP BUY"
@@ -88,7 +83,7 @@ def fetch_data(ticker, mode):
         c_pp = float(df['Close'].iloc[-2]); p_p_c = float(df['Close'].iloc[-3])
         now = datetime.now(pytz.timezone("Asia/Bangkok"))
         return {"Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp, "%Chg": ((cp - c_pp) / c_pp) * 100, 
-                "Value (M)": (cp * vol) / 1_000_000, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
+                "Value (M)": (cp * vol) / 1_000_000, "RSI": rsi.iloc[-1], "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
                 "RawTime": now, "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp}
     except: return None
 
@@ -101,7 +96,9 @@ def apply_styles(data):
         p_c = 'color: #00FF00' if row['p_sig'] > 0 else ('color: #FF0000' if row['p_sig'] < 0 else 'color: #FFD700')
         styles.at[data.index[i], "Prev"] = p_c
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
-        for c in ["Price", "Chg", "%Chg"]: styles.at[data.index[i], c] = m_c
+        for c in ["Price", "Chg", "%Chg", "Value (M)"]: styles.at[data.index[i], c] = m_c
+        if "RSI" in data.columns:
+            styles.at[data.index[i], "RSI"] = 'color: #FF0000' if row['RSI'] < 30 else ('color: #00FF00' if row['RSI'] > 70 else 'color: #FFD700')
     return styles
 
 # --- 4. NAVIGATION ---
@@ -132,7 +129,7 @@ elif curr_p == 'SubMenu':
 
 elif curr_p == 'Watch':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} WATCHLIST", t_now)
+    hdr(f"🇹🇭 WATCHLIST", t_now)
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     with st.expander("⚙️ Manage List", expanded=False):
         nt = st.text_input("Ticker:", placeholder="e.g. PTT", key="in_w").upper()
@@ -144,23 +141,20 @@ elif curr_p == 'Watch':
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
-                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","TimeUpdate"])
+        st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), 
+                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
 elif curr_p == 'Scan':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} SCAN", t_now)
+    hdr(f"🇹🇭 SCAN", t_now)
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     
-    # ดึงข้อมูลใหม่
     new_results = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     new_results = [r for r in new_results if r and r['Signal'] != "-"]
     
     if new_results:
         new_df = pd.DataFrame(new_results)
-        # ผสมข้อมูลใหม่เข้ากับประวัติเดิม (ห้ามลบอันเก่า)
         combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
-        # เรียงลำดับเวลาล่าสุดไว้บนสุด และตัดเหลือ 30 แถว
         combined = combined.sort_values(by="RawTime", ascending=False).head(30)
         st.session_state.signal_history = combined
 
