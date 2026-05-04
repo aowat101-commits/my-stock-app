@@ -31,7 +31,7 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 
 # --- 2. UI SETUP & ABSOLUTE CENTERING ---
-st.set_page_config(page_title="PPE Guardian V14.4", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V14.5", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -88,7 +88,7 @@ def fetch_verified_data(ticker, market_mode):
         val_raw = (cp * df['Volume'].iloc[-1]) / 1_000_000
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         
-        # สัญญาณปิดวันก่อนหน้า (คอลัมน์ที่ 2)
+        # สัญญาณวันก่อนหน้า
         prev_close = float(df['Close'].iloc[-2])
         prev_prev_close = float(df['Close'].iloc[-3])
         prev_signal = prev_close - prev_prev_close
@@ -102,38 +102,35 @@ def fetch_verified_data(ticker, market_mode):
             "Value (M)": val_raw,
             "TimeUpdate": last_time.strftime("%H:%M %d/%m"),
             "RSI": curr_rsi,
-            "prev_signal": prev_signal, # ใช้สำหรับคำนวณสีคอลัมน์ 2
-            "main_chg": chg           # ใช้สำหรับคำนวณสีคอลัมน์หลัก
+            "prev_signal": prev_signal,
+            "main_chg": chg
         }
     except: return None
 
-# 🔥 ฟังก์ชันสี V9.9 เป๊ะ
+# 🔥 ฟังก์ชันสี V9.9 แบบแก้ Error
 def style_v99(row):
-    chg = row['main_chg']
-    prev_sig = row['prev_signal']
+    chg = row.name[1]      # ดึง main_chg จาก Index ตัวที่ 2
+    prev_sig = row.name[2] # ดึง prev_signal จาก Index ตัวที่ 3
     val = row['Value (M)']
     rsi = row['RSI']
     
-    # สีหลัก (Ticker, Price, Chg, %Chg, TimeUpdate)
     main_color = 'color: #00FF00' if chg > 0 else 'color: #FF0000'
-    
-    # สไตล์รายคอลัมน์ [Ticker, Prev, Price, Chg, %Chg, Value, TimeUpdate, RSI]
     styles = [main_color] * 8
     
     # คอลัมน์ 2: Prev
     if prev_sig > 0: styles[1] = 'color: #00FF00'
     elif prev_sig < 0: styles[1] = 'color: #FF0000'
-    else: styles[1] = 'color: #B8860B' # เหลืองเข้ม
+    else: styles[1] = 'color: #B8860B'
     
     # คอลัมน์ 6: Value (M)
-    if val > 100: styles[5] = 'color: #BF40BF' # ม่วง
-    elif val >= 10: styles[5] = 'color: #00BFFF' # ฟ้าเข้ม
-    else: styles[5] = 'color: #808080' # เทา
+    if val > 100: styles[5] = 'color: #BF40BF'
+    elif val >= 10: styles[5] = 'color: #00BFFF'
+    else: styles[5] = 'color: #808080'
     
     # คอลัมน์ 8: RSI
     if rsi < 30: styles[7] = 'color: #FF0000'
     elif rsi > 70: styles[7] = 'color: #00FF00'
-    else: styles[7] = 'color: #B8860B' # เหลืองเข้ม
+    else: styles[7] = 'color: #B8860B'
     
     return styles
 
@@ -147,7 +144,7 @@ def centered_header(title, subtitle):
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.4")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.5")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
@@ -155,14 +152,14 @@ if st.session_state.page == 'Home':
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
-    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.4")
+    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.5")
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
-    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.4")
+    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.5")
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     
     with st.expander("⚙️ Manage List", expanded=True):
@@ -179,15 +176,21 @@ elif st.session_state.page == 'Watch':
     results = [r for r in results if r]
     
     disp_cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate", "RSI"]
-    calc_cols = disp_cols + ["prev_signal", "main_chg"] # คอลัมน์ที่ต้องใช้คำนวณสี
 
     if results:
         df = pd.DataFrame(results)
-        # ใช้ calc_cols เพื่อให้มีข้อมูลสำหรับ style_v99
-        styled_df = df[calc_cols].style.apply(style_v99, axis=1)\
-                                .format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M", "RSI": "{:.2f}"})\
-                                .hide(subset=["prev_signal", "main_chg"], axis=1) # ซ่อนคอลัมน์คำนวณ
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        # 🔥 ทางแก้: ฝากค่า main_chg และ prev_signal ไว้ใน MultiIndex เพื่อให้ style_v99 เรียกใช้ได้โดยไม่ต้องโชว์คอลัมน์
+        df = df.set_index(["Ticker", "main_chg", "prev_signal"])
+        
+        styled_df = df[disp_cols[1:]].style.apply(style_v99, axis=1)\
+                                .format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M", "RSI": "{:.2f}"})
+        
+        # คืนค่า Ticker กลับมาเป็นคอลัมน์ปกติก่อนแสดงผล
+        final_df = styled_df.data.reset_index()
+        final_styled = final_df[disp_cols].style.apply(style_v99, axis=1)\
+                                .format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M", "RSI": "{:.2f}"})
+        
+        st.dataframe(final_styled, use_container_width=True, hide_index=True)
     else:
         st.dataframe(pd.DataFrame(columns=disp_cols), use_container_width=True, hide_index=True)
 
