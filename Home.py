@@ -28,7 +28,7 @@ def manage_storage(mode, ticker=None, action="load"):
     return current_data
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V15.4", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V15.5", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -84,7 +84,7 @@ def fetch_verified_data(ticker, market_mode):
         }
     except: return None
 
-def apply_v15_4_styling(data):
+def apply_v15_5_styling(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
@@ -108,9 +108,12 @@ def centered_header(title, subtitle):
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V15.4")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V15.5")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
+    st.write('---')
+    # 🖼️ ดึงรูปภาพหน้าโฮมกลับมาแสดงผล
+    st.markdown(f'<div style="display: flex; justify-content: center; width: 100%; margin: 10px 0;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif st.session_state.page == 'SubMenu':
     flag = "🇹🇭" if st.session_state.market == 'th' else "🇺🇸"
@@ -131,7 +134,6 @@ elif st.session_state.page in ['Watch', 'Scan']:
         if st.button("🔍 กดเพื่อสแกนใหม่ (Manual Scan)"): st.cache_data.clear(); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Manage List - ล็อกให้พับเก็บไว้เสมอ (expanded=False)
     with st.expander("⚙️ Manage List", expanded=False):
         new_t = st.text_input("Ticker:", placeholder="e.g. PTT").upper()
         if st.button("➕ Add"): manage_storage(st.session_state.market, new_t, "add"); st.cache_data.clear(); st.rerun()
@@ -147,7 +149,7 @@ elif st.session_state.page in ['Watch', 'Scan']:
         watch_disp = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"]
         if results:
             df = pd.DataFrame(results)
-            styled = df.style.apply(apply_v15_4_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M"})
+            styled = df.style.apply(apply_v15_5_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M"})
             st.dataframe(styled, use_container_width=True, hide_index=True, column_order=watch_disp)
     
     elif st.session_state.page == 'Scan':
@@ -155,7 +157,7 @@ elif st.session_state.page in ['Watch', 'Scan']:
         if results:
             df_scan = pd.DataFrame([r for r in results if r['Signal'] != "-"] )
             if not df_scan.empty:
-                styled_s = df_scan.style.apply(apply_v15_4_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%"})
+                styled_s = df_scan.style.apply(apply_v15_5_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%"})
                 st.dataframe(styled_s, use_container_width=True, hide_index=True, column_order=scan_cols)
             else: st.info("No active signals in your list.")
 
