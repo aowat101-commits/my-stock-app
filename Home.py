@@ -25,8 +25,8 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & STRICT CSS ---
-st.set_page_config(page_title="PPE Guardian V16.9", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & STRICT CLEAN CSS ---
+st.set_page_config(page_title="PPE Guardian V16.10", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg", "Value (M)"])
@@ -40,7 +40,7 @@ st.markdown("""
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
-    /* 🎯 ล็อกทุกอย่างกึ่งกลางถาวร ไม่ให้เด้งชิดซ้าย */
+    /* 🎯 ล็อกกึ่งกลางถาวรและปรับฟอนต์ตัวธรรมดา */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
@@ -51,13 +51,20 @@ st.markdown("""
         display: flex !important; justify-content: center !important; width: 100% !important;
     }
 
+    /* ปรับฟอนต์ปุ่มและตารางไม่ให้เป็นตัวหนา */
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
-        font-weight: bold !important; color: #FFD700 !important; 
+        font-weight: 500 !important; color: #FFD700 !important; 
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
-        margin: 12px auto !important; display: block !important;
+        margin: 10px auto !important; display: block !important;
     }
+    
+    /* บังคับตัวหนังสือในตารางให้เป็นตัวธรรมดา (สวยงามเหมือนเวอร์ชันแรก) */
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        font-weight: 400 !important;
+    }
+    
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -70,7 +77,6 @@ def fetch_data(ticker, mode):
         hist = t_obj.history(period="5d", interval="1d")
         if hist.empty: return None
         
-        # ราคาปิดวันก่อนหน้า (Previous Close) เพื่อให้ Chg/%Chg ตรงกราฟ
         prev_close = float(hist['Close'].iloc[-2])
         current_price = float(t_obj.fast_info['last_price'])
         current_vol = float(t_obj.fast_info['last_volume'])
@@ -99,7 +105,7 @@ def apply_styles(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
-        # สีอิงตามราคาปัจจุบัน (เขียว/แดง/เหลือง)
+        # สีอิงตามราคาปัจจุบัน
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
         
         for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
@@ -120,13 +126,12 @@ def go(p, m=None):
     st.rerun()
 
 def hdr(t):
-    # คืนค่าบรรทัด PPE GUARDIAN V16.9 ต่อท้ายเวลาและวันที่
     t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
     st.markdown(f'''
         <div style="text-align: center;">
-            <h1 style="color: #FFD700; margin-bottom: 5px;">{t}</h1>
-            <p style="color: #1E90FF; font-weight: bold; font-size: 16px;">
-                {t_now} | PPE GUARDIAN V16.9
+            <h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
+            <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">
+                {t_now} | PPE GUARDIAN V16.10
             </p>
         </div>
     ''', unsafe_allow_html=True)
