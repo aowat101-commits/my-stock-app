@@ -94,7 +94,6 @@ def fetch_verified_data(ticker, mode, is_scan=False):
             "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col
         }
 
-        # บันทึกประวัติ (ไม่โชว์ Alert ข้อความ)
         alert_key = f"{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
         if is_scan and alert_key not in st.session_state.last_alert_key:
             st.session_state.last_alert_key.add(alert_key)
@@ -157,8 +156,8 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                     if del_cols[i % 4].button(f"✖ {t}", key=f"d_{t}"): manage_list(m_key, t, "delete"); st.rerun()
 
     else:
-        c_head, c_btn = st.columns([3, 1])
-        c_head.write(f"🔍 **{m_key.upper()} Signal History**")
+        # ย้ายปุ่มมาไว้ฝั่งซ้ายและเอาข้อความหัวข้อออก
+        c_btn, c_spacer = st.columns([1, 3])
         if c_btn.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
         
         for t in curr_list: fetch_verified_data(t, p, is_scan=True)
