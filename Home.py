@@ -31,7 +31,7 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 
 # --- 2. UI SETUP & ABSOLUTE CENTERING ---
-st.set_page_config(page_title="PPE Guardian V14.1", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V14.3", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -54,11 +54,6 @@ st.markdown("""
         width: 100% !important;
     }
 
-    .stButton {
-        display: flex !important;
-        justify-content: center !important;
-        width: 100% !important;
-    }
     .stButton > button { 
         height: 50px !important; 
         border-radius: 12px !important; 
@@ -72,47 +67,78 @@ st.markdown("""
     }
 
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
-    .stExpander { width: 100% !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. INDICATOR ENGINE (With RSI) ---
+# --- 3. INDICATOR ENGINE ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, market_mode):
     try:
         symbol = f"{ticker.upper()}.BK" if market_mode == "th" and ".BK" not in ticker.upper() else ticker.upper()
-        # ดึงข้อมูลย้อนหลังมากขึ้นเพื่อคำนวณ RSI 14 วัน
         df = yf.download(symbol, period="1mo", interval="1h", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
-        # คำนวณ RSI
         rsi_series = ta.rsi(df['Close'], length=14)
-        current_rsi = rsi_series.iloc[-1] if not rsi_series.empty else 0
-        
+        curr_rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty else 0
         cp = float(df['Close'].iloc[-1])
         c_pp = float(df['Close'].iloc[-2])
         chg = cp - c_pp
-        vol = df['Volume'].iloc[-1]
-        val_raw = (cp * vol) / 1_000_000
+        pct_chg = (chg / c_pp) * 100
+        val_raw = (cp * df['Volume'].iloc[-1]) / 1_000_000
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         
-        # คืนค่าตามลำดับคอลัมน์ที่คุณมิลค์ต้องการ
+        # คํานวณสัญญาณปิดวันก่อนหน้า (เพื่อใช้เปลี่ยนสีคอลัมน์ Prev)
+        prev_close = float(df['Close'].iloc[-2])
+        prev_prev_close = float(df['Close'].iloc[-3])
+        prev_signal = prev_close - prev_prev_close
+        
         return {
             "Ticker": ticker.upper(),
-            "Prev": f"{c_pp:.2f}",
-            "Price": f"{cp:.2f}",
-            "Chg": f"{chg:+.2f}",
-            "%Chg": f"{(chg/c_pp)*100:.2f}%",
-            "Value (M)": f"{val_raw:.2f}M",
+            "Prev": c_pp,
+            "Price": cp,
+            "Chg": chg,
+            "%Chg": pct_chg,
+            "Value (M)": val_raw,
             "TimeUpdate": last_time.strftime("%H:%M %d/%m"),
-            "RSI": f"{current_rsi:.2f}"
+            "RSI": curr_rsi,
+            "prev_signal": prev_signal,
+            "main_chg": chg
         }
     except: return None
 
-# --- 4. NAVIGATION & TIME ---
+# 🔥 คืนค่าฟังก์ชันสีดั้งเดิม (V9.9)
+def style_v99(row):
+    chg = row['main_chg']
+    prev_sig = row['prev_signal']
+    val = row['Value (M)']
+    rsi = row['RSI']
+    
+    # สีพื้นฐาน (เขียว/แดง) อิงจาก Chg ปัจจุบัน
+    color = 'color: #00FF00' if chg > 0 else 'color: #FF0000'
+    
+    # สไตล์รายคอลัมน์
+    styles = [color] * 8 # เริ่มต้นด้วยสีหลักสําหรับคอลัมน์ 1, 3, 4, 5, 7
+    
+    # คอลัมน์ 2: Prev (สัญญาณวันก่อนหน้า)
+    if prev_sig > 0: styles[1] = 'color: #00FF00'
+    elif prev_sig < 0: styles[1] = 'color: #FF0000'
+    else: styles[1] = 'color: #B8860B' # เหลืองเข้ม
+    
+    # คอลัมน์ 6: Value (M)
+    if val > 100: styles[5] = 'color: #BF40BF' # ม่วง
+    elif val >= 10: styles[5] = 'color: #00BFFF' # ฟ้าเข้ม/น้ำเงิน
+    else: styles[5] = 'color: #808080' # เทา
+    
+    # คอลัมน์ 8: RSI
+    if rsi > 70: styles[7] = 'color: #00FF00'
+    elif rsi < 30: styles[7] = 'color: #FF0000'
+    else: styles[7] = 'color: #B8860B' # เหลืองเข้ม
+    
+    return styles
+
+# --- 4. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 'market' not in st.session_state: st.session_state.market = None
 now = datetime.now(pytz.timezone("Asia/Bangkok"))
 time_str = now.strftime("%H:%M:%S"); date_str = now.strftime("%d/%m/%Y")
 
@@ -121,7 +147,7 @@ def centered_header(title, subtitle):
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.1")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.3")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
@@ -129,14 +155,14 @@ if st.session_state.page == 'Home':
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
-    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.1")
+    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.3")
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
-    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.1")
+    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.3")
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     
     with st.expander("⚙️ Manage List", expanded=True):
@@ -152,18 +178,13 @@ elif st.session_state.page == 'Watch':
     results = [fetch_verified_data(t, st.session_state.market) for t in cl]
     results = [r for r in results if r]
     
-    # แสดงหัวตารางรอไว้แม้ไม่มีข้อมูล (เรียงคอลัมน์ตามสั่ง: ตัด Signal, ขยับ Value, จบด้วย RSI)
-    cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate", "RSI"]
-    df_display = pd.DataFrame(results) if results else pd.DataFrame(columns=cols)
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-elif st.session_state.page == 'Scan':
-    centered_header(f"🔍 SIGNAL SCAN", f"{time_str} 📅 {date_str} | V14.1")
-    if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
-    if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
-    m = st.session_state.market
-    if st.button("🔄 รีเฟรชสัญญาณ"): st.cache_data.clear(); st.rerun()
-    hist_df = st.session_state.th_logs if m == 'th' else st.session_state.us_logs
-    st.dataframe(hist_df, use_container_width=True, hide_index=True)
+    disp_cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate", "RSI"]
+    if results:
+        df = pd.DataFrame(results)
+        styled_df = df[disp_cols].style.apply(style_v99, axis=1)\
+                                .format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M", "RSI": "{:.2f}"})
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(pd.DataFrame(columns=disp_cols), use_container_width=True, hide_index=True)
 
 time.sleep(600); st.rerun()
