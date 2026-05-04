@@ -7,14 +7,14 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY & HISTORY SYSTEM ---
+# --- 1. MEMORY SYSTEM (โหลดสดจากไฟล์ทุกครั้ง) ---
 def manage_list(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA', 'ADVANC'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
+    
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
     
-    # อ่านข้อมูลล่าสุดจากไฟล์เสมอ
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = [x for x in data.split(",") if x] if data else defaults
@@ -30,6 +30,7 @@ def manage_list(mode, ticker=None, action="load"):
             with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
+# ระบบเก็บประวัติ (ย้ายมาไว้ข้างนอกเพื่อให้คงอยู่ตลอด Session)
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame()
 if 'last_alert_key' not in st.session_state:
@@ -54,7 +55,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 3. CORE ENGINE ---
-@st.cache_data(ttl=60) # เพิ่มระบบ Cache เพื่อความเร็ว แต่ Reset เมื่อมีการแอดหุ้น
+@st.cache_data(ttl=60)
 def fetch_verified_data(ticker, mode, is_scan=False):
     try:
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
@@ -67,11 +68,10 @@ def fetch_verified_data(ticker, mode, is_scan=False):
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
 
-        current_idx = len(df) - 1
-        cp = float(df['Close'].iloc[current_idx])
-        h_curr, h_prev = hull.iloc[current_idx], hull.iloc[current_idx-1]
-        w1, w2 = wt1.iloc[current_idx], wt2.iloc[current_idx]
-        vol, v5, e8 = df['Volume'].iloc[current_idx], vma5.iloc[current_idx], ema8.iloc[current_idx]
+        cp = float(df['Close'].iloc[-1])
+        h_curr, h_prev = hull.iloc[-1], hull.iloc[-2]
+        w1, w2 = wt1.iloc[-1], wt2.iloc[-2]
+        vol, v5, e8 = df['Volume'].iloc[-1], vma5.iloc[-1], ema8.iloc[-1]
         
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         is_candle_closed = (datetime.now(pytz.timezone('Asia/Bangkok')) - last_time) > timedelta(minutes=55)
@@ -80,7 +80,7 @@ def fetch_verified_data(ticker, mode, is_scan=False):
         if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label, s_col = "BUY", "#00FF00"
         elif w1 > w2 and w1 < -47 and cp > e8: s_label, s_col = "DEEP BUY", "#00FF00"
         elif w1 < w2 and w1 > 53: s_label, s_col = "P-SELL", "#FFA500"
-        elif cp < ema20.iloc[current_idx] or h_curr < h_prev: s_label, s_col = "SELL", "#FF1100"
+        elif cp < ema20.iloc[-1] or h_curr < h_prev: s_label, s_col = "SELL", "#FF1100"
 
         if s_label == "-": return None
         
@@ -98,7 +98,7 @@ def fetch_verified_data(ticker, mode, is_scan=False):
             "Signal": display_label, "Value (M)": f"{val_raw:.2f}M",
             "TimeUpdate": last_time.strftime("%H:%M %d/%m"), "RawTime": last_time,
             "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col,
-            "Market": "th" if mode in ['TW', 'TS'] else "us"
+            "Market": "th" if ".BK" in symbol else "us"
         }
 
         alert_key = f"{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
@@ -131,7 +131,7 @@ with c2:
 
 st.write(f'<div class="classic-header">PPE Guardian V10.0 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
 
-# --- 5. CONTENT ---
+# --- 5. MAIN CONTENT ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
@@ -139,6 +139,7 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
     
+    # 1. จัดการข้อมูลก่อน (Add/Delete)
     if 'W' in p:
         with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
             new_t = st.text_input(f"Add Ticker:", key=f"in_{m_key}").upper()
@@ -146,14 +147,16 @@ elif p in ['TW', 'UW', 'TS', 'US']:
             if ca.button("✅ Add"):
                 if new_t: 
                     manage_list(m_key, new_t, "add")
-                    st.cache_data.clear() # ล้าง Cache ทันทีที่แอด
+                    st.cache_data.clear()
                     st.rerun()
             if ce.button("🛠️ Toggle Edit"):
                 st.session_state.edit_mode = not st.session_state.edit_mode
                 st.rerun()
-        
-        # ย้ายการอ่านไฟล์มาไว้ "หลัง" ปุ่มกด เพื่อให้ข้อมูลเป็นปัจจุบันที่สุด
-        curr_list = manage_list(m_key)
+
+    # 2. อ่านข้อมูลเพื่อแสดงผล
+    curr_list = manage_list(m_key)
+    
+    if 'W' in p: # Watchlist Mode
         results = [fetch_verified_data(t, p) for t in curr_list]
         results = [r for r in results if r is not None]
         if results:
@@ -168,18 +171,18 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                         manage_list(m_key, t, "delete")
                         st.cache_data.clear()
                         st.rerun()
-
-    else:
-        # ย้ายปุ่มมาไว้ฝั่งซ้ายแทนตัวหนังสือ US Signal History
+    else: # Scan Mode
         c_btn, c_spacer = st.columns([1, 3])
         if c_btn.button("🔄 Manual Refresh"): 
             st.cache_data.clear()
             st.rerun()
         
-        curr_list = manage_list(m_key)
+        # รันสแกนเพื่อเก็บเข้าประวัติ
         for t in curr_list: fetch_verified_data(t, p, is_scan=True)
+        
         if not st.session_state.signal_history.empty:
             df_hist = st.session_state.signal_history
+            # กรองแยกตลาด ไทย/US อย่างแม่นยำ
             filtered_df = df_hist[df_hist['Market'] == m_key]
             st.dataframe(filtered_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
 
