@@ -1,1 +1,136 @@
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import pandas_ta as ta
+from datetime import datetime
+import pytz
+import time
+import os
 
+# --- 1. CORE STORAGE ---
+def manage_storage(mode, ticker=None, action="load"):
+    file_path = f"{mode}_list.txt"
+    if not os.path.exists(file_path):
+        with open(file_path, "w") as f: f.write("PTT,DELTA,ADVANC")
+    with open(file_path, "r") as f:
+        data = f.read().strip()
+        current_data = [x.strip().upper() for x in data.split(",") if x.strip()]
+    if action == "add" and ticker:
+        ticker = ticker.strip().upper()
+        if ticker not in current_data:
+            current_data.append(ticker)
+            with open(file_path, "w") as f: f.write(",".join(current_data))
+    elif action == "delete" and ticker in current_data:
+        current_data.remove(ticker)
+        with open(file_path, "w") as f: f.write(",".join(current_data))
+    return current_data
+
+# --- 2. UI SETUP ---
+st.set_page_config(page_title="PPE Guardian V16.13", layout="wide", initial_sidebar_state="collapsed")
+
+if 'page' not in st.query_params: st.query_params['page'] = 'Home'
+curr_p = st.query_params.get('page', 'Home')
+curr_m = st.query_params.get('market', 'th')
+
+st.markdown("""
+    <style>
+    [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
+    .stApp { background-color: #0f172a; }
+    .stApp .main .block-container {
+        display: flex !important; flex-direction: column !important;
+        align-items: center !important; justify-content: flex-start !important;
+        width: 100% !important; margin: 0 auto !important;
+    }
+    div[data-testid="stVerticalBlock"] > div, div.stButton {
+        display: flex !important; justify-content: center !important; width: 100% !important;
+    }
+    .stButton > button { 
+        height: 52px !important; width: 320px !important;
+        border-radius: 14px !important; font-size: 18px !important; 
+        font-weight: 500 !important; color: #FFD700 !important; 
+        background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
+        margin: 10px auto !important;
+    }
+    [data-testid="stDataFrame"] { background-color: #ffffff !important; border-radius: 12px !important; }
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        font-weight: 400 !important;
+    }
+    .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 3. ENGINE ---
+def fetch_data_thai(ticker):
+    try:
+        sym = f"{ticker.upper()}.BK"
+        t_obj = yf.Ticker(sym)
+        hist = t_obj.history(period="5d")
+        if hist.empty: return None
+        prev_close = float(hist['Close'].iloc[-2])
+        cp = float(t_obj.fast_info['last_price'])
+        chg = cp - prev_close
+        pct_chg = (chg / prev_close) * 100
+        val_m = (t_obj.fast_info['last_volume'] * cp) / 1_000_000
+        
+        df_h = t_obj.history(period="1mo", interval="1h")
+        rsi = ta.rsi(df_h['Close'], length=14).iloc[-1]
+        
+        now = datetime.now(pytz.timezone("Asia/Bangkok"))
+        return {"Ticker": ticker.upper(), "Prev": prev_close, "Price": cp, "Chg": chg, "%Chg": pct_chg, "Value (M)": val_m, "RSI": rsi, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), "m_chg": chg}
+    except: return None
+
+def apply_styles(data):
+    def row_style(row):
+        color = '#00FF00' if row['m_chg'] > 0 else ('#FF0000' if row['m_chg'] < 0 else '#FFD700')
+        return [f'color: {color}; font-weight: 400'] * len(row)
+    return data.style.apply(row_style, axis=1)
+
+# --- 4. NAVIGATION ---
+def go(p, m=None):
+    st.query_params['page'] = p
+    if m: st.query_params['market'] = m
+    st.rerun()
+
+def hdr(t):
+    t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
+    st.markdown(f'''<div style="text-align: center;"><h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
+    <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">{t_now} | PPE GUARDIAN V16.13</p></div>''', unsafe_allow_html=True)
+
+# --- 5. PAGE LOGIC ---
+if curr_p == 'Home':
+    hdr("TRADING HOME")
+    if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
+    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
+    st.write('---')
+    st.markdown('<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
+
+elif curr_p == 'SubMenu':
+    f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
+    hdr(f"{f} MENU")
+    if st.button("📋 WATCHLIST"): go('Watch', curr_m)
+    if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
+    if st.button("🏠 กลับหน้าหลัก"): go('Home')
+
+elif curr_p == 'Watch':
+    f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
+    hdr(f"{f} WATCHLIST")
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
+    with st.expander("⚙️ Manage List", expanded=False):
+        nt = st.text_input("Ticker:", key="in_w").upper()
+        if st.button("➕ Add"): manage_storage(curr_m, nt, "add"); st.rerun()
+        st.markdown('<div class="del-btn">', unsafe_allow_html=True)
+        if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    if st.button("🔄 SCAN NOW"):
+        res = [fetch_data_thai(t) for t in manage_storage(curr_m)]
+        res = [r for r in res if r]
+        if res:
+            df = pd.DataFrame(res)
+            st.dataframe(apply_styles(df).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
+
+elif curr_p == 'Scan':
+    f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
+    hdr(f"{f} SCAN")
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
+    st.info("ระบบ SCAN กำลังรอรับคำสั่งใหม่")
