@@ -25,9 +25,10 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP ---
+# --- 2. UI SETUP & CSS ---
 st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
 
+# เก็บประวัติสัญญาณแบบถาวรใน Session
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg"])
 
@@ -44,7 +45,7 @@ st.markdown("""
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    /* จัดการให้ปุ่มและเนื้อหาอยู่กึ่งกลาง */
+    /* จัดการปุ่มและเนื้อหากึ่งกลาง */
     div[data-testid="stVerticalBlock"] > div, div.stButton {
         display: flex !important; justify-content: center !important; width: 100% !important;
     }
@@ -152,6 +153,7 @@ elif curr_p == 'Watch':
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
+        # Watchlist 8 คอลัมน์ (ตามภาพ edited-image_20.png)
         st.dataframe(apply_styles(df).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), 
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
@@ -163,10 +165,24 @@ elif curr_p == 'Scan':
     
     if new_active:
         new_df = pd.DataFrame(new_active)
-        combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='last')
+        hist_df = st.session_state.signal_history
+        final_list = []
+        
+        # ตรรกะล็อกเวลา: แยกทุกเหตุการณ์ สัญญาณเดิมล็อกเวลาเดิม สัญญาณใหม่เพิ่มแถวใหม่
+        for _, row in new_df.iterrows():
+            # เช็คว่ามีหุ้นตัวนี้และสัญญาณนี้ในประวัติอยู่แล้วหรือไม่
+            match = hist_df[(hist_df['Ticker'] == row['Ticker']) & (hist_df['Signal'] == row['Signal'])]
+            if not match.empty:
+                # ถ้าเป็นสัญญาณเดิม ให้ใช้เวลาดั้งเดิมที่บันทึกไว้ครั้งแรก
+                row['TimeUpdate'] = match.iloc[0]['TimeUpdate']
+                row['RawTime'] = match.iloc[0]['RawTime']
+            final_list.append(row)
+            
+        combined = pd.concat([pd.DataFrame(final_list), hist_df]).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
         st.session_state.signal_history = combined.sort_values(by="RawTime", ascending=False).head(30)
 
     if not st.session_state.signal_history.empty:
+        # Scan 7 คอลัมน์ (Ticker, Prev, Price, Chg, %Chg, Signal, TimeUpdate)
         st.dataframe(apply_styles(st.session_state.signal_history).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
 
