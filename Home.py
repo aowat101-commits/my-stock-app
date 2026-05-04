@@ -25,11 +25,11 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & CLEAN CSS ---
-st.set_page_config(page_title="PPE Guardian V16.8", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & STRICT CSS ---
+st.set_page_config(page_title="PPE Guardian V16.9", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg"])
+    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg", "Value (M)"])
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -39,26 +39,30 @@ st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
+    
+    /* 🎯 ล็อกทุกอย่างกึ่งกลางถาวร ไม่ให้เด้งชิดซ้าย */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
+    
     div[data-testid="stVerticalBlock"] > div, div.stButton {
         display: flex !important; justify-content: center !important; width: 100% !important;
     }
+
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
         font-weight: bold !important; color: #FFD700 !important; 
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
-        margin: 10px auto !important; display: block !important;
+        margin: 12px auto !important; display: block !important;
     }
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE ---
+# --- 3. PRECISION ENGINE ---
 def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
@@ -66,6 +70,7 @@ def fetch_data(ticker, mode):
         hist = t_obj.history(period="5d", interval="1d")
         if hist.empty: return None
         
+        # ราคาปิดวันก่อนหน้า (Previous Close) เพื่อให้ Chg/%Chg ตรงกราฟ
         prev_close = float(hist['Close'].iloc[-2])
         current_price = float(t_obj.fast_info['last_price'])
         current_vol = float(t_obj.fast_info['last_volume'])
@@ -94,14 +99,12 @@ def apply_styles(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
-        # สีอิงตามการเปลี่ยนแปลงราคา (เขียว/แดง/เหลือง)
+        # สีอิงตามราคาปัจจุบัน (เขียว/แดง/เหลือง)
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
         
-        # ปรับ Ticker และ TimeUpdate ให้อิงตามราคาสี m_c
         for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
             if col in data.columns: styles.at[data.index[i], col] = m_c
             
-        # ช่อง Signal แยกตามสัญญาณ BUY/SELL
         if "Signal" in data.columns:
             styles.at[data.index[i], "Signal"] = 'color: #00FF00' if row['Signal'] == "BUY" else ('color: #FF0000' if row['Signal'] == "SELL" else 'color: #FFD700')
         
@@ -116,28 +119,35 @@ def go(p, m=None):
     if m: st.query_params['market'] = m
     st.rerun()
 
-def hdr(t, s):
-    st.markdown(f'<div style="text-align: center;"><h1 style="color: #FFD700; margin:0;">{t}</h1><p style="color: #1E90FF;">{s}</p></div>', unsafe_allow_html=True)
+def hdr(t):
+    # คืนค่าบรรทัด PPE GUARDIAN V16.9 ต่อท้ายเวลาและวันที่
+    t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
+    st.markdown(f'''
+        <div style="text-align: center;">
+            <h1 style="color: #FFD700; margin-bottom: 5px;">{t}</h1>
+            <p style="color: #1E90FF; font-weight: bold; font-size: 16px;">
+                {t_now} | PPE GUARDIAN V16.9
+            </p>
+        </div>
+    ''', unsafe_allow_html=True)
 
-# --- 5. DISPATCHER ---
-t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
-
+# --- 5. PAGE DISPATCHER ---
 if curr_p == 'Home':
-    hdr("TRADING HOME", t_now)
+    hdr("TRADING HOME")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
 
 elif curr_p == 'SubMenu':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} MENU", t_now)
+    hdr(f"{f} MENU")
     if st.button("📋 WATCHLIST"): go('Watch', curr_m)
     if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
     if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
 elif curr_p == 'Watch':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} WATCHLIST", t_now)
+    hdr(f"{f} WATCHLIST")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     with st.expander("⚙️ Manage List", expanded=False):
         nt = st.text_input("Ticker:", placeholder="e.g. BANPU", key="in_w").upper()
@@ -154,7 +164,7 @@ elif curr_p == 'Watch':
 
 elif curr_p == 'Scan':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} SCAN", t_now)
+    hdr(f"{f} SCAN")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_results = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     new_results = [r for r in new_results if r and r['Signal'] != "-"]
