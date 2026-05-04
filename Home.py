@@ -31,46 +31,54 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
-# --- 2. UI SETUP & CSS VERTICAL LAYOUT (V11.9) ---
-st.set_page_config(page_title="PPE Guardian V11.9", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & GLOBAL CENTERING (V12.0) ---
+st.set_page_config(page_title="PPE Guardian V12.0", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
+    /* ปิดส่วนหัวและเมนูของ Streamlit */
     [data-testid="stSidebar"], .st-emotion-cache-10o48ve, header, .stAppHeader { display: none !important; }
-    section[data-testid="stSidebar"] { width: 0px !important; }
-    .stApp { background-color: #0f172a; }
-    h1, h2, h3, p, span, label { color: #FFD700 !important; text-align: center; }
-    .block-container { padding: 0.5rem 0.2rem !important; }
-    .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-top: 10px; margin-bottom: 5px; }
     
-    /* จัดการปุ่มหน้า Home ให้วางแนวตั้งกึ่งกลาง (Vertical Center) */
-    .stButton {
+    /* บังคับทุกอย่างในหน้าจอให้จัดกึ่งกลาง (The Fix) */
+    .stApp { background-color: #0f172a; }
+    .main .block-container {
         display: flex;
-        justify-content: center;
-        margin-bottom: 10px; /* ระยะห่างระหว่างปุ่มบน-ล่าง */
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 2rem;
+    }
+    
+    /* บังคับปุ่มและข้อความให้เด้งมากึ่งกลาง */
+    div[data-testid="stVerticalBlock"] {
+        align-items: center !important;
+        width: 100%;
     }
 
+    h1, h2, h3, p, span, label { color: #FFD700 !important; text-align: center; }
+    .classic-header { color: #1E90FF !important; font-size: 14px; font-weight: 600; text-align: center; margin-top: 15px; }
+
+    /* สไตล์ปุ่มแนวตั้ง V12.0 */
     .stButton > button { 
-        height: 52px !important; 
+        height: 55px !important; 
         border-radius: 12px !important; 
-        font-size: 17px !important; 
+        font-size: 18px !important; 
         font-weight: bold !important; 
         color: #FFD700 !important; 
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important;
-        width: 250px !important; /* กำหนดความกว้างปุ่มให้ยาวเท่ากันและดูดี */
-        transition: 0.3s;
+        width: 260px !important; /* กว้างเท่ากันทั้งสองปุ่ม */
+        margin: 10px auto !important; /* จัดกึ่งกลางเป๊ะ */
+        display: block !important;
     }
     
     .stButton > button:hover {
         background-color: #334155 !important;
         border-color: #ffffff !important;
-        transform: scale(1.03);
+        transform: scale(1.05);
     }
 
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; width: 100% !important; }
-    .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
-    .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -125,11 +133,6 @@ def fetch_verified_data(ticker, market_mode, is_scan=False):
         return res
     except: return None
 
-def apply_style(row):
-    return [f'color: {row["SigCol"]}' if col in ["Ticker", "Signal", "TimeUpdate"] else 
-            (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else 
-            (f'color: {row["ValCol"]}' if col == "Value (M)" else '')) for col in row.index]
-
 # --- 4. NAVIGATION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'market' not in st.session_state: st.session_state.market = None
@@ -141,22 +144,22 @@ date_str = now.strftime("%d/%m/%Y")
 # --- 5. PAGE LOGIC ---
 
 if st.session_state.page == 'Home':
-    st.write('<div style="text-align:center; padding-top:30px; padding-bottom:15px;"><span style="color:#FFD700; font-size:38px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
+    st.write('<div style="margin-bottom:10px;"><span style="color:#FFD700; font-size:40px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     
-    # วางปุ่มแบบแนวตั้ง (Vertical) ชิดกึ่งกลาง
+    # ปุ่มแนวตั้ง จัดกึ่งกลางจออัตโนมัติด้วย CSS V12.0
     if st.button("🇹🇭 ตลาดหุ้นไทย"):
         st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
         
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"):
         st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     
-    # ข้อมูล วันที่/เวลา อยู่ใต้ปุ่ม
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.9</div>', unsafe_allow_html=True)
+    # แถบข้อมูลกึ่งกลาง
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.0</div>', unsafe_allow_html=True)
     st.write('---')
-    cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
+    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", width=400)
 
 elif st.session_state.page == 'SubMenu':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.9</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.0</div>', unsafe_allow_html=True)
     if st.button("🏠 กลับหน้าหลัก"):
         st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
             
@@ -169,7 +172,7 @@ elif st.session_state.page == 'SubMenu':
         st.session_state.page = 'Scan'; st.rerun()
 
 elif st.session_state.page == 'Watch':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.9</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.0</div>', unsafe_allow_html=True)
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
 
@@ -185,16 +188,10 @@ elif st.session_state.page == 'Watch':
     results = [r for r in results if r]
     if results:
         df = pd.DataFrame(results)
-        st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
-        st.write("🗑️ **ลบหุ้น:**")
-        # แสดงปุ่มลบหุ้นในหน้า Watchlist
-        d_cols = st.columns(5)
-        for i, t in enumerate(cl):
-            if d_cols[i%5].button(f"✖ {t}", key=f"del_{t}"):
-                manage_storage(m, t, "delete"); st.cache_data.clear(); st.rerun()
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 elif st.session_state.page == 'Scan':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.9</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.0</div>', unsafe_allow_html=True)
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
 
@@ -204,6 +201,6 @@ elif st.session_state.page == 'Scan':
     for t in manage_storage(m): fetch_verified_data(t, m, is_scan=True)
     hist_df = st.session_state.th_logs if m == 'th' else st.session_state.us_logs
     if not hist_df.empty:
-        st.dataframe(hist_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
+        st.dataframe(hist_df, use_container_width=True, hide_index=True)
 
 time.sleep(600); st.rerun()
