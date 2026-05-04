@@ -26,7 +26,7 @@ def manage_storage(mode, ticker=None, action="load"):
     return current_data
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V16.1", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V16.2", layout="wide", initial_sidebar_state="collapsed")
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -36,21 +36,39 @@ st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
+    
+    /* บังคับกึ่งกลางหน้าจอหลัก */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    .stButton > button { 
-        height: 50px !important; border-radius: 12px !important; font-size: 17px !important; 
-        font-weight: bold !important; color: #FFD700 !important; background-color: #1e293b !important; 
-        border: 2px solid #FFD700 !important; width: 300px !important; margin: 8px auto !important;
+    
+    /* แก้ไขปุ่มให้กึ่งกลางเป๊ะในทุอุปกรณ์ */
+    div.stButton {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
     }
+    
+    .stButton > button { 
+        height: 50px !important; 
+        border-radius: 12px !important; 
+        font-size: 17px !important; 
+        font-weight: bold !important; 
+        color: #FFD700 !important; 
+        background-color: #1e293b !important; 
+        border: 2px solid #FFD700 !important; 
+        width: 300px !important; 
+        display: block !important;
+        margin: 10px auto !important;
+    }
+    
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. INDICATOR ENGINE (Updated Time Logic) ---
+# --- 3. INDICATOR ENGINE ---
 @st.cache_data(ttl=20)
 def fetch_data(ticker, mode):
     try:
@@ -58,32 +76,21 @@ def fetch_data(ticker, mode):
         df = yf.download(sym, period="1mo", interval="1h", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        
         e8 = ta.ema(df['Close'], 8); e20 = ta.ema(df['Close'], 20)
         h = ta.hma(df['Close'], 30); v5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
-        
         cp = float(df['Close'].iloc[-1]); hc = h.iloc[-1]; hp = h.iloc[-2]
         vol = df['Volume'].iloc[-1]; w1 = wt1.iloc[-1]; w2 = wt2.iloc[-2]
-        
         sig = "-"
         if cp > e8.iloc[-1] and hc > hp and vol > (v5.iloc[-1] * 1.2): sig = "BUY"
         elif w1 > w2 and w1 < -47 and cp > e8.iloc[-1]: sig = "DEEP BUY"
         elif cp < e20.iloc[-1] or hc < hp: sig = "SELL"
         elif cp < e8.iloc[-1] and hc < hp: sig = "P-SELL"
-        
         c_pp = float(df['Close'].iloc[-2]); p_p_c = float(df['Close'].iloc[-3])
-        
-        # 🕒 แก้ไข: ใช้เวลาปัจจุบันของวินาทีที่สแกน (Actual Detection Time)
         now_time = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S %d/%m")
-        
-        return {
-            "Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp,
-            "%Chg": ((cp - c_pp) / c_pp) * 100, "Value (M)": (cp * vol) / 1_000_000,
-            "TimeUpdate": now_time, # โชว์เวลาที่ตรวจเจอสัญญาณจริง
-            "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp
-        }
+        return {"Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp, "%Chg": ((cp - c_pp) / c_pp) * 100, 
+                "Value (M)": (cp * vol) / 1_000_000, "TimeUpdate": now_time, "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp}
     except: return None
 
 def apply_styles(data):
@@ -98,7 +105,7 @@ def apply_styles(data):
         for c in ["Price", "Chg", "%Chg", "Value (M)"]: styles.at[data.index[i], c] = m_c
     return styles
 
-# --- 4. NAVIGATION & HEADER ---
+# --- 4. NAVIGATION ---
 def go(p, m=None):
     st.query_params['page'] = p
     if m: st.query_params['market'] = m
@@ -107,11 +114,11 @@ def go(p, m=None):
 def hdr(t, s):
     st.markdown(f'<div style="text-align: center;"><h1 style="color: #FFD700; margin:0;">{t}</h1><p style="color: #1E90FF;">{s}</p></div>', unsafe_allow_html=True)
 
-# --- 5. PAGE DISPATCHER ---
+# --- 5. PAGE LOGIC ---
 t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
 
 if curr_p == 'Home':
-    hdr("TRADING HOME", f"{t_now} | V16.1")
+    hdr("TRADING HOME", f"{t_now} | V16.2")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
@@ -131,7 +138,9 @@ elif curr_p == 'Watch':
     with st.expander("⚙️ Manage List", expanded=False):
         nt = st.text_input("Ticker:", placeholder="e.g. PTT", key="in_w").upper()
         if st.button("➕ Add"): manage_storage(curr_m, nt, "add"); st.cache_data.clear(); st.rerun()
+        st.markdown('<div class="del-btn">', unsafe_allow_html=True)
         if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.cache_data.clear(); st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     res = [r for r in res if r]
     if res:
