@@ -25,8 +25,8 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V16.2", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & DEEP CSS ---
+st.set_page_config(page_title="PPE Guardian V16.3", layout="wide", initial_sidebar_state="collapsed")
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -34,34 +34,44 @@ curr_m = st.query_params.get('market', None)
 
 st.markdown("""
     <style>
+    /* ปิดส่วนหัวและเมนูที่ไม่จำเป็น */
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
-    /* บังคับกึ่งกลางหน้าจอหลัก */
+    /* 🎯 เจาะจงจัดกึ่งกลางลึกถึงระดับ Container */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
     
-    /* แก้ไขปุ่มให้กึ่งกลางเป๊ะในทุอุปกรณ์ */
-    div.stButton {
+    /* บังคับ Vertical Block ทุกอันให้กึ่งกลาง */
+    [data-testid="stVerticalBlock"], [data-testid="stVerticalBlockBorderWrapper"] {
+        display: flex !important; flex-direction: column !important;
+        align-items: center !important; justify-content: center !important;
+        width: 100% !important;
+    }
+
+    /* จัดการช่องว่างและตำแหน่งปุ่ม */
+    div.element-container, div.stButton {
         display: flex !important;
         justify-content: center !important;
         width: 100% !important;
     }
     
     .stButton > button { 
-        height: 50px !important; 
-        border-radius: 12px !important; 
-        font-size: 17px !important; 
+        height: 52px !important; 
+        border-radius: 14px !important; 
+        font-size: 18px !important; 
         font-weight: bold !important; 
         color: #FFD700 !important; 
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important; 
-        width: 300px !important; 
-        display: block !important;
-        margin: 10px auto !important;
+        width: 320px !important; 
+        margin: 12px auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
@@ -88,6 +98,7 @@ def fetch_data(ticker, mode):
         elif cp < e20.iloc[-1] or hc < hp: sig = "SELL"
         elif cp < e8.iloc[-1] and hc < hp: sig = "P-SELL"
         c_pp = float(df['Close'].iloc[-2]); p_p_c = float(df['Close'].iloc[-3])
+        # 🕒 แสดงเวลาที่ตรวจพบสัญญาณจริงวินาทีต่อวินาที
         now_time = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S %d/%m")
         return {"Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp, "%Chg": ((cp - c_pp) / c_pp) * 100, 
                 "Value (M)": (cp * vol) / 1_000_000, "TimeUpdate": now_time, "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp}
@@ -118,7 +129,7 @@ def hdr(t, s):
 t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
 
 if curr_p == 'Home':
-    hdr("TRADING HOME", f"{t_now} | V16.2")
+    hdr("TRADING HOME", f"{t_now} | V16.3")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
