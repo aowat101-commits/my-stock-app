@@ -31,7 +31,7 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 
 # --- 2. UI SETUP & ABSOLUTE CENTERING ---
-st.set_page_config(page_title="PPE Guardian V14.6", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V14.7", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -107,11 +107,9 @@ def fetch_verified_data(ticker, market_mode):
         }
     except: return None
 
-# 🔥 ฟังก์ชันสี V9.9 แบบเซฟตี้ 100%
+# 🔥 ฟังก์ชันสี V9.9 (เปลี่ยนเป็นสีเหลืองทอง #FFD700)
 def style_v99(data):
-    # สร้าง DataFrame เปล่าสำหรับเก็บ Style
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
-    
     for i in range(len(data)):
         row = data.iloc[i]
         chg = row['main_chg']
@@ -119,26 +117,25 @@ def style_v99(data):
         val = row['Value (M)']
         rsi = row['RSI']
         
-        # สีหลัก (Ticker, Price, Chg, %Chg, TimeUpdate)
+        # สีหลัก: Ticker, Price, Chg, %Chg, TimeUpdate (เขียว/แดง)
         main_color = 'color: #00FF00' if chg > 0 else 'color: #FF0000'
-        
         for col in ["Ticker", "Price", "Chg", "%Chg", "TimeUpdate"]:
             styles.at[data.index[i], col] = main_color
             
-        # คอลัมน์ 2: Prev
+        # คอลัมน์ 2: Prev (อิงสัญญาณวันก่อน)
         if prev_sig > 0: styles.at[data.index[i], "Prev"] = 'color: #00FF00'
         elif prev_sig < 0: styles.at[data.index[i], "Prev"] = 'color: #FF0000'
-        else: styles.at[data.index[i], "Prev"] = 'color: #B8860B'
+        else: styles.at[data.index[i], "Prev"] = 'color: #FFD700' # เปลี่ยนเป็นเหลืองทอง
         
-        # คอลัมน์ 6: Value (M)
+        # คอลัมน์ 6: Value (M) (เทา/ฟ้าเข้ม/ม่วง)
         if val > 100: styles.at[data.index[i], "Value (M)"] = 'color: #BF40BF'
         elif val >= 10: styles.at[data.index[i], "Value (M)"] = 'color: #00BFFF'
         else: styles.at[data.index[i], "Value (M)"] = 'color: #808080'
         
-        # คอลัมน์ 8: RSI
+        # คอลัมน์ 8: RSI (แดง < 30 / เขียว > 70 / เหลืองทองระหว่างกลาง)
         if rsi < 30: styles.at[data.index[i], "RSI"] = 'color: #FF0000'
         elif rsi > 70: styles.at[data.index[i], "RSI"] = 'color: #00FF00'
-        else: styles.at[data.index[i], "RSI"] = 'color: #B8860B'
+        else: styles.at[data.index[i], "RSI"] = 'color: #FFD700' # เปลี่ยนเป็นเหลืองทอง
             
     return styles
 
@@ -152,7 +149,7 @@ def centered_header(title, subtitle):
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.6")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.7")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
@@ -160,14 +157,14 @@ if st.session_state.page == 'Home':
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
-    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.6")
+    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.7")
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
-    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.6")
+    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.7")
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     
     with st.expander("⚙️ Manage List", expanded=True):
@@ -187,11 +184,8 @@ elif st.session_state.page == 'Watch':
 
     if results:
         df = pd.DataFrame(results)
-        # ใช้การจัดรูปแบบสีโดยตรงบน DataFrame ทั้งหมด แล้วจึงเลือกเฉพาะคอลัมน์ที่ต้องการโชว์
         styled_df = df.style.apply(style_v99, axis=None)\
                             .format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M", "RSI": "{:.2f}"})
-        
-        # แสดงผลเฉพาะคอลัมน์ที่ต้องการ (วิธีนี้ปลอดภัยที่สุด)
         st.dataframe(styled_df, use_container_width=True, hide_index=True, column_order=disp_cols)
     else:
         st.dataframe(pd.DataFrame(columns=disp_cols), use_container_width=True, hide_index=True)
