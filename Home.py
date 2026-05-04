@@ -32,7 +32,7 @@ if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V11.3", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V11.4", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -41,15 +41,27 @@ st.markdown("""
     .stApp { background-color: #0f172a; }
     h1, h2, h3, p, span, label { color: #FFD700 !important; text-align: center; }
     .block-container { padding: 0.5rem 0.2rem !important; }
-    .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-top: 10px; margin-bottom: 5px; }
+    .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-top: 5px; margin-bottom: 5px; }
+    
+    /* ควบคุมปุ่มให้มีขนาดคงที่และจัดกึ่งกลาง */
+    .stButton > button { 
+        height: 50px !important; 
+        border-radius: 10px !important; 
+        font-size: 15px !important; 
+        font-weight: bold !important; 
+        width: 100% !important; 
+        border: 1px solid #FFD700 !important;
+        display: block;
+        margin: 0 auto;
+    }
+    div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
+    
     .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
     .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
-    .stButton > button { height: 45px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: bold !important; width: 100%; border: 1px solid #FFD700 !important; }
-    div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. INDICATOR ENGINE ---
+# --- 3. INDICATOR ENGINE (สูตรของคุณมิลค์) ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, market_mode, is_scan=False):
     try:
@@ -118,11 +130,11 @@ date_str = now.strftime("%d/%m/%Y")
 
 # 🏠 หน้าหลัก: เลือกตลาด
 if st.session_state.page == 'Home':
-    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
+    st.write('<div style="text-align:center; padding-top:20px; padding-bottom:5px;"><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     
-    # 1. จัดตำแหน่งปุ่มให้ชิดกันตรงกลางจอ
+    # บีบปุ่มให้ชิดกันตรงกลางด้วยสัดส่วน [2, 1.5, 1.5, 2] เพื่อความสมดุลเป๊ะ
     st.write("")
-    _, mid_c1, mid_c2, _ = st.columns([1, 1.5, 1.5, 1])
+    _, mid_c1, mid_c2, _ = st.columns([2, 1.5, 1.5, 2])
     with mid_c1:
         if st.button("🇹🇭 ตลาดหุ้นไทย"):
             st.session_state.market = 'th'
@@ -134,44 +146,44 @@ if st.session_state.page == 'Home':
             st.session_state.page = 'SubMenu'
             st.rerun()
     
-    # 2. ย้าย PPE Guardian มาไว้ใต้ปุ่ม พร้อมเรียง เวลา วันที่ ชื่อแอป
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    # แถบข้อมูลย้ายมาใต้ปุ่ม เรียงตามลำดับ: เวลา วันที่ ชื่อแอป
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.4</div>', unsafe_allow_html=True)
     
     st.write('---')
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 # 📂 หน้าเมนูย่อย
 elif st.session_state.page == 'SubMenu':
-    # บรรทัดสถานะบนสุด
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.4</div>', unsafe_allow_html=True)
     
-    # ปุ่มกลับหน้าหลัก
-    if st.button("🏠 กลับหน้าหลัก (Home)"):
-        st.session_state.page = 'Home'
-        st.session_state.market = None
-        st.rerun()
-        
+    # ปุ่ม Home ตรงกลาง
+    _, home_c, _ = st.columns([2, 1, 2])
+    with home_c:
+        if st.button("🏠 กลับหน้าหลัก"):
+            st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
+            
     m = st.session_state.market
     st.write(f"### {'🇹🇭 THAI MENU' if m=='th' else '🇺🇸 US MENU'}")
     st.write('---')
-    c1, c2 = st.columns(2)
-    if c1.button("📋 WATCHLIST (รายการหุ้น)"):
-        st.session_state.page = 'Watch'
-        st.rerun()
-    if c2.button("🔍 MARKET SCAN (สัญญาณ)"):
-        st.session_state.page = 'Scan'
-        st.rerun()
+    # ปุ่มเมนูย่อยจัดวางให้สมดุล
+    _, sub_c1, sub_c2, _ = st.columns([1, 2, 2, 1])
+    with sub_c1:
+        if st.button("📋 WATCHLIST"):
+            st.session_state.page = 'Watch'; st.rerun()
+    with sub_c2:
+        if st.button("🔍 MARKET SCAN"):
+            st.session_state.page = 'Scan'; st.rerun()
 
 # 📋 หน้า Watchlist
 elif st.session_state.page == 'Watch':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.4</div>', unsafe_allow_html=True)
     
     nav_c1, nav_c2 = st.columns(2)
     with nav_c1:
         if st.button("🏠 Home"):
             st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     with nav_c2:
-        if st.button("⬅ กลับเมนูเลือกตลาด"):
+        if st.button("⬅ กลับเมนูตลาด"):
             st.session_state.page = 'SubMenu'; st.rerun()
 
     m = st.session_state.market
@@ -196,14 +208,14 @@ elif st.session_state.page == 'Watch':
 
 # 🔍 หน้า Scan
 elif st.session_state.page == 'Scan':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.4</div>', unsafe_allow_html=True)
     
     nav_c1, nav_c2 = st.columns(2)
     with nav_c1:
         if st.button("🏠 Home"):
             st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     with nav_c2:
-        if st.button("⬅ กลับเมนูเลือกตลาด"):
+        if st.button("⬅ กลับเมนูตลาด"):
             st.session_state.page = 'SubMenu'; st.rerun()
 
     m = st.session_state.market
@@ -215,4 +227,5 @@ elif st.session_state.page == 'Scan':
     if not hist_df.empty:
         st.dataframe(hist_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
 
+# Auto Refresh 10 นาที
 time.sleep(600); st.rerun()
