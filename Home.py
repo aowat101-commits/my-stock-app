@@ -7,31 +7,38 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY SYSTEM (บังคับเขียนไฟล์ให้ชัวร์) ---
+# --- 1. MEMORY SYSTEM ---
 def manage_list(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA', 'ADVANC', 'EA', 'NEX', 'JTS'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
-    
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
-    
     with open(file_path, "r") as f:
-        current_data = f.read().strip().split(",") if f.read().strip() else defaults
-        
+        data = f.read().strip()
+        current_data = data.split(",") if data else defaults
     if action == "add" and ticker and ticker not in current_data:
         current_data.append(ticker)
         with open(file_path, "w") as f: f.write(",".join(current_data))
-    elif action == "delete" and ticker:
+    elif action == "delete" and ticker and ticker in current_data:
         current_data.remove(ticker)
         with open(file_path, "w") as f: f.write(",".join(current_data))
-        
     return current_data
 
-# --- 2. UI SETUP (Fixed CSS - ตัดปุ่มส่วนเกิน) ---
+# --- 2. UI SETUP (เพิ่มการปิด Sidebar แบบถาวร) ---
+# บรรทัดนี้สำคัญมาก: initial_sidebar_state="collapsed" คือการสั่งปิดแถบข้างตั้งแต่เริ่ม
 st.set_page_config(page_title="PPE Guardian V9.9", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
+    /* ซ่อนแถบ Sidebar และปุ่มลูกศรเปิด Sidebar ทันที */
+    [data-testid="stSidebar"], .st-emotion-cache-10o48ve, .st-emotion-cache-6qob1r {
+        display: none !important;
+    }
+    section[data-testid="stSidebar"] {
+        width: 0px !important;
+    }
+    
+    /* CSS เดิมของคุณมิลค์ */
     h1, h2, h3, p, span, label { color: #FFD700 !important; }
     .block-container { padding-top: 0.5rem !important; padding-bottom: 0rem !important; }
     [data-testid="stStatusWidget"], header, .stAppHeader { display: none !important; }
@@ -64,12 +71,10 @@ def fetch_verified_data(ticker, mode):
         for i in range(len(df)-1, 0, -1):
             cp, h_curr, h_prev = float(df['Close'].iloc[i]), hull.iloc[i], hull.iloc[i-1]
             w1, w2, vol, v5, e8 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i]
-            
             if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label, s_col, icon = "BUY", "#00FF00", "🚀 "
             elif w1 > w2 and w1 < -47 and cp > e8: s_label, s_col, icon = "DEEP BUY", "#00FF00", "▲ "
             elif w1 < w2 and w1 > 53: s_label, s_col, icon = "P-SELL", "#FFA500", "🔶 "
             elif cp < ema20.iloc[i] or h_curr < h_prev: s_label, s_col, icon = "SELL", "#FF1100", "🚨 "
-            
             if s_label != "-":
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
                 found_time = raw_time.strftime("%H:%M %d/%m"); break
@@ -83,7 +88,7 @@ def fetch_verified_data(ticker, mode):
 def apply_style(row):
     return [f'color: {row["SigCol"]}' if col in ["Ticker", "Signal", "TimeUpdate"] else (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else '') for col in row.index]
 
-# --- 4. NAVIGATION & PAGE CONTROL ---
+# --- 4. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'manage_mode' not in st.session_state: st.session_state.manage_mode = False
 
@@ -100,7 +105,7 @@ p = st.session_state.page
 dt_now = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
 st.write(f'<div class="classic-header">PPE Guardian V9.9 | {dt_now}</div>', unsafe_allow_html=True)
 
-# --- 5. CONTENT (ตัดส่วนเกินออกทั้งหมด) ---
+# --- 5. CONTENT ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
@@ -108,7 +113,6 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
     curr_list = manage_list(m_key)
-    
     if 'W' in p:
         with st.expander("➕ Manage Watchlist", expanded=True):
             new_t = st.text_input("Ticker:").upper()
@@ -119,13 +123,11 @@ elif p in ['TW', 'UW', 'TS', 'US']:
 
     results = [fetch_verified_data(t, p) for t in curr_list]
     results = [r for r in results if r is not None]
-
     if results:
         df = pd.DataFrame(results)
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
         cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if 'W' in p else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
-        
         if 'W' in p and st.session_state.manage_mode:
             st.write("---")
             dc = st.columns(6)
