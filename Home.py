@@ -114,7 +114,7 @@ p = st.session_state.page
 dt_now = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
 st.write(f'<div class="classic-header">PPE Guardian V9.9 | {dt_now}</div>', unsafe_allow_html=True)
 
-# --- 5. CONTENT (Updated Flow for Instant Action) ---
+# --- 5. CONTENT ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
@@ -122,19 +122,23 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
     
-    # [ACTION AREA] จัดการข้อมูลก่อนแสดงผลเพื่อให้ Update ทันที
     if 'W' in p:
         with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
-            new_t = st.text_input(f"Add {m_key.upper()} Ticker:", key=f"input_{m_key}")
-            if new_t:
-                manage_list(m_key, new_t, "add")
-                st.rerun() # บังคับ Refresh เพื่อดึงรายการใหม่ทันที
-            if st.button("🛠️ Toggle Edit Mode"):
+            # ใช้ช่องกรอกพร้อมปุ่มกากบาทเพื่อความแม่นยำ
+            new_t = st.text_input(f"Ticker Name:", key=f"inp_{m_key}").upper()
+            c_add, c_edit = st.columns(2)
+            if c_add.button("✅ Add Ticker", type="primary"):
+                if new_t:
+                    manage_list(m_key, new_t, "add")
+                    st.cache_data.clear() # ล้าง Cache ทันทีเพื่อให้หุ้นใหม่เด้งขึ้นมา
+                    st.rerun()
+            if c_edit.button("🛠️ Edit Mode"):
                 st.session_state.edit_mode = not st.session_state.edit_mode
                 st.rerun()
     
-    # [DISPLAY AREA] ดึงข้อมูลปัจจุบันมาแสดง
+    # อ่านไฟล์ใหม่ "หลังจาก" มีการกด Add เพื่อให้ข้อมูลเป็นปัจจุบันที่สุด
     curr_list = manage_list(m_key)
+    
     if 'S' in p:
         if st.button("🔄 Manual Refresh"):
             st.cache_data.clear()
@@ -149,14 +153,14 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         if 'S' in p: cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
 
-        # ปุ่มลบรายตัว (Update ทันทีเมื่อกด)
         if 'W' in p and st.session_state.edit_mode:
             st.write("---")
-            st.write("🗑️ **Select to Remove:**")
+            st.write("🗑️ **Remove Ticker:**")
             del_cols = st.columns(4)
             for i, t in enumerate(curr_list):
                 if del_cols[i % 4].button(f"✖ {t}", key=f"del_{m_key}_{t}", type="primary"):
                     manage_list(m_key, t, "delete")
+                    st.cache_data.clear()
                     st.rerun()
 
 if 'S' in p: time.sleep(300); st.rerun()
