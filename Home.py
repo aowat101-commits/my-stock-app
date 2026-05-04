@@ -91,7 +91,8 @@ def fetch_verified_data(ticker, mode, is_scan=False):
             "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
             "Signal": display_label, "Value (M)": f"{val_raw:.2f}M",
             "TimeUpdate": last_time.strftime("%H:%M %d/%m"), "RawTime": last_time,
-            "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col
+            "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col,
+            "Market": "th" if mode in ['TW', 'TS'] else "us" # เพิ่มสถานะตลาด
         }
 
         alert_key = f"{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
@@ -156,13 +157,15 @@ elif p in ['TW', 'UW', 'TS', 'US']:
                     if del_cols[i % 4].button(f"✖ {t}", key=f"d_{t}"): manage_list(m_key, t, "delete"); st.rerun()
 
     else:
-        # ย้ายปุ่มมาไว้ฝั่งซ้ายและเอาข้อความหัวข้อออก
         c_btn, c_spacer = st.columns([1, 3])
         if c_btn.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
         
         for t in curr_list: fetch_verified_data(t, p, is_scan=True)
         if not st.session_state.signal_history.empty:
-            st.dataframe(st.session_state.signal_history.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
+            # เพิ่มตัวกรองแยกตลาด ไทย/US ตรงนี้ครับ
+            df_hist = st.session_state.signal_history
+            filtered_df = df_hist[df_hist['Market'] == m_key]
+            st.dataframe(filtered_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
 
 time.sleep(600)
 st.rerun()
