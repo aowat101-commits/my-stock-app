@@ -136,7 +136,7 @@ if st.session_state.page == 'Home':
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.markdown(f'<div class="classic-header">{time_str} 📅 {date_str} | V13.4</div>', unsafe_allow_html=True)
     st.write('---')
-    # 🔥 ล็อกรูปภาพกึ่งกลางด้วย HTML Direct Style เพื่อป้องกันระบบดีดกลับ
+    # ล็อกรูปภาพกึ่งกลางด้วย HTML Direct Style
     st.markdown(
         """
         <div style="display: flex; justify-content: center; width: 100%; margin: 15px 0;">
