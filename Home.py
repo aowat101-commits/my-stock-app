@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import pandas_ta as ta
-import numpy as np
 from datetime import datetime
 import pytz
 import time
@@ -12,7 +11,7 @@ import os
 def manage_storage(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     if not os.path.exists(file_path):
-        with open(file_path, "w") as f: f.write("PTT,DELTA" if mode == "th" else "IONQ,NVDA,TSLA")
+        with open(file_path, "w") as f: f.write("PTT,DELTA" if mode == "th" else "IONQ,NVDA")
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = [x.strip().upper() for x in data.split(",") if x.strip()]
@@ -26,11 +25,11 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & CSS ---
+st.set_page_config(page_title="PPE Guardian V16.13", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg"])
+    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg", "Value (M)"])
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -53,80 +52,70 @@ st.markdown("""
         border-radius: 14px !important; font-size: 18px !important; 
         font-weight: 500 !important; color: #FFD700 !important; 
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
-        margin: 10px auto !important;
-    }
-    /* Dark Table Style */
-    [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; padding: 5px; }
-    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
-        font-weight: 400 !important; background-color: #1e293b !important;
-        color: #cbd5e1 !important; border-bottom: 1px solid #334155 !important;
+        margin: 10px auto !important; display: block !important;
     }
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. THE GUARDIAN SWING ENGINE ---
-def fetch_data_combo(ticker, mode):
+# --- 3. PRECISION ENGINE ---
+def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
         t_obj = yf.Ticker(sym)
-        
-        # 1. ดึงประวัติ Daily สำหรับ Volume MA 5
-        hist_d = t_obj.history(period="10d", interval="1d")
+        hist_d = t_obj.history(period="5d", interval="1d")
         if hist_d.empty: return None
-        vma5 = hist_d['Volume'].iloc[-6:-1].mean()
-        curr_vol = hist_d['Volume'].iloc[-1]
-        prev_close = float(hist_d['Close'].iloc[-2])
         
-        # 2. ดึงประวัติ 1h สำหรับ Signals
+        prev_close = float(hist_d['Close'].iloc[-2])
+        current_price = float(t_obj.fast_info['last_price'])
+        daily_vol = float(hist_d['Volume'].iloc[-1])
+        
         df = t_obj.history(period="1mo", interval="1h")
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
-        # EMA & Hull Suite (30)
-        e8 = ta.ema(df['Close'], length=8)
-        e20 = ta.ema(df['Close'], length=20)
-        hma30 = ta.hma(df['Close'], length=30)
+        rsi = ta.rsi(df['Close'], length=14)
+        e8 = ta.ema(df['Close'], 8); h = ta.hma(df['Close'], 30)
         
-        # WaveTrend (WT_LB: 9, 12)
-        ap = (df['High'] + df['Low'] + df['Close']) / 3
-        esa = ta.ema(ap, length=9)
-        d = ta.ema(abs(ap - esa), length=9)
-        ci = (ap - esa) / (0.015 * d)
-        tci = ta.ema(ci, length=12)
-        wt1 = tci
-        wt2 = ta.sma(wt1, length=3)
-        
-        cp = float(t_obj.fast_info['last_price'])
-        chg = cp - prev_close
+        chg = current_price - prev_close
         pct_chg = (chg / prev_close) * 100
         
-        # Logic Check
         sig = "-"
-        # Buy Signal: WT Cross Green < -53 + Above EMA 8/20 + Hull Green + Vol 1.5x
-        if wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-2] <= wt2.iloc[-2] and wt1.iloc[-1] < -53:
-            if cp > e8.iloc[-1] and cp > e20.iloc[-1] and hma30.iloc[-1] > hma30.iloc[-2] and curr_vol > (vma5 * 1.5):
-                sig = "BUY: Strong Vol"
+        if current_price > e8.iloc[-1] and h.iloc[-1] > h.iloc[-2]: sig = "BUY"
+        elif current_price < ta.ema(df['Close'], 20).iloc[-1]: sig = "SELL"
         
-        # Exit Signal: WT Cross Red > 53 OR Below EMA 20 OR Hull Red
-        elif (wt1.iloc[-1] < wt2.iloc[-1] and wt1.iloc[-1] > 53) or cp < e20.iloc[-1] or hma30.iloc[-1] < hma30.iloc[-2]:
-            sig = "EXIT"
-
         now = datetime.now(pytz.timezone("Asia/Bangkok"))
-        return {"Ticker": ticker.upper(), "Price": cp, "Chg": chg, "%Chg": pct_chg, 
-                "Signal": sig, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
-                "RawTime": now, "m_chg": chg}
+        return {"Ticker": ticker.upper(), "Prev": prev_close, "Price": current_price, 
+                "Chg": chg, "%Chg": pct_chg, "Value (M)": (current_price * daily_vol) / 1_000_000, 
+                "RSI": rsi.iloc[-1] if not rsi.empty else 0, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
+                "RawTime": now, "Signal": sig, "m_chg": chg}
     except: return None
 
 def apply_styles(data):
-    styler = data.style.set_table_styles([{'selector': 'td, th', 'props': [('background-color', '#1e293b')]}])
+    # กำหนดสีพื้นหลังตารางแบบบังคับผ่าน Styler
+    table_props = [
+        ('background-color', '#1e293b'),
+        ('color', '#cbd5e1'),
+        ('font-weight', '400')
+    ]
+    
+    styler = data.style.set_table_styles([
+        {'selector': 'td', 'props': table_props},
+        {'selector': 'th', 'props': table_props},
+        {'selector': '', 'props': [('background-color', '#1e293b')]}
+    ])
+
     def row_style(row):
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
         styles = [f'background-color: #1e293b; {m_c}; font-weight: 400'] * len(row)
-        if "Signal" in data.columns:
-            sig_idx = data.columns.get_loc("Signal")
-            s_c = 'color: #00FF00' if "BUY" in str(row['Signal']) else ('color: #FF0000' if row['Signal'] == "EXIT" else 'color: #FFD700')
-            styles[sig_idx] = f'background-color: #1e293b; {s_c}; font-weight: 400'
+        
+        # ปรับสี Signal แยกต่างหาก
+        idx_sig = data.columns.get_loc("Signal") if "Signal" in data.columns else -1
+        if idx_sig != -1:
+            sig_c = 'color: #00FF00' if row['Signal'] == "BUY" else ('color: #FF0000' if row['Signal'] == "SELL" else 'color: #FFD700')
+            styles[idx_sig] = f'background-color: #1e293b; {sig_c}; font-weight: 400'
+        
         return styles
+
     return styler.apply(row_style, axis=1)
 
 # --- 4. NAVIGATION ---
@@ -137,8 +126,14 @@ def go(p, m=None):
 
 def hdr(t):
     t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
-    st.markdown(f'''<div style="text-align: center;"><h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
-    <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">{t_now} | PPE GUARDIAN V16.14</p></div>''', unsafe_allow_html=True)
+    st.markdown(f'''
+        <div style="text-align: center;">
+            <h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
+            <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">
+                {t_now} | PPE GUARDIAN V16.13
+            </p>
+        </div>
+    ''', unsafe_allow_html=True)
 
 # --- 5. PAGE LOGIC ---
 if curr_p == 'Home':
@@ -146,7 +141,7 @@ if curr_p == 'Home':
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
-    st.markdown('<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif curr_p == 'SubMenu':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
@@ -165,23 +160,26 @@ elif curr_p == 'Watch':
         st.markdown('<div class="del-btn">', unsafe_allow_html=True)
         if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-    res = [fetch_data_combo(t, curr_m) for t in manage_storage(curr_m)]
+    res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        st.dataframe(apply_styles(df).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","TimeUpdate"])
+        st.dataframe(apply_styles(df).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), 
+                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
 elif curr_p == 'Scan':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
     hdr(f"{f} SCAN")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
-    new_res = [fetch_data_combo(t, curr_m) for t in manage_storage(curr_m)]
-    new_res = [r for r in new_res if r and r['Signal'] != "-"]
-    if new_res:
-        new_df = pd.DataFrame(new_res)
+    new_results = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
+    new_results = [r for r in new_results if r and r['Signal'] != "-"]
+    if new_results:
+        new_df = pd.DataFrame(new_results)
         combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
-        st.session_state.signal_history = combined.sort_values(by="RawTime", ascending=False).head(30)
+        combined = combined.sort_values(by="RawTime", ascending=False).head(30)
+        st.session_state.signal_history = combined
     if not st.session_state.signal_history.empty:
-        st.dataframe(apply_styles(st.session_state.signal_history).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","Signal","TimeUpdate"])
+        st.dataframe(apply_styles(st.session_state.signal_history).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
+                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
 
 time.sleep(60); st.rerun()
