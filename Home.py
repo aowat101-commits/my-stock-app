@@ -36,8 +36,8 @@ st.markdown("""
     .block-container { padding: 0.5rem 0.2rem !important; }
     .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 5px; }
     
-    /* ปรับตัวอักษรในตารางให้เล็กลงเพื่อให้แสดง 7 คอลัมน์ในมือถือได้ */
-    .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; color: #FFD700 !important; padding: 2px !important; }
+    /* ปรับตัวอักษรในตารางให้เล็กลงเพื่อให้แสดง 7 คอลัมน์ได้ครบ */
+    .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
     .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
     
     .stButton > button { height: 35px !important; border-radius: 8px !important; font-size: 13px !important; }
@@ -45,7 +45,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE (ตัด Icon ออก) ---
+# --- 3. CORE ENGINE ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, mode):
     try:
@@ -75,12 +75,29 @@ def fetch_verified_data(ticker, mode):
 
         if s_label == "-": return None
         c_cp, c_pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
-        chg, t_val = c_cp - c_pp, (c_cp * float(df['Volume'].iloc[-1])) / 1_000_000
-        return {"Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{c_cp:.2f}", "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", "Signal": s_label, "Value (M)": f"{t_val:.2f}M", "TimeUpdate": found_time, "RawTime": raw_time, "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col}
+        chg, val_raw = c_cp - c_pp, (c_cp * float(df['Volume'].iloc[-1])) / 1_000_000
+        
+        # กำหนดสีของ Value (M) ตามเงื่อนไข เทา-น้ำเงิน-ม่วง
+        v_col = "#808080" # Default 0-10M (Gray)
+        if val_raw > 100: v_col = "#FF00FF" # > 100M (Magenta)
+        elif val_raw > 10: v_col = "#00BFFF" # 10-100M (DeepSkyBlue)
+
+        return {
+            "Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{c_cp:.2f}", 
+            "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
+            "Signal": s_label, "Value (M)": f"{val_raw:.2f}M", "ValRaw": val_raw,
+            "TimeUpdate": found_time, "RawTime": raw_time, 
+            "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col
+        }
     except: return None
 
 def apply_style(row):
-    return [f'color: {row["SigCol"]}' if col in ["Ticker", "Signal", "TimeUpdate"] else (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else '') for col in row.index]
+    return [
+        f'color: {row["SigCol"]}' if col in ["Ticker", "Signal", "TimeUpdate"] else 
+        (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else 
+        (f'color: {row["ValCol"]}' if col == "Value (M)" else '')) 
+        for col in row.index
+    ]
 
 # --- 4. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
@@ -117,9 +134,8 @@ elif p in ['TW', 'UW', 'TS', 'US']:
     if results:
         df = pd.DataFrame(results)
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
-        
-        # คืนค่า 7 คอลัมน์เดิมตามหน้า Scan และ Watchlist
-        cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if 'W' in p else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
+        cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"]
+        if 'S' in p: cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
 
 if 'S' in p: time.sleep(300); st.rerun()
