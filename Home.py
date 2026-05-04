@@ -7,7 +7,7 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY SYSTEM (โหลดสดจากไฟล์ทุกครั้ง) ---
+# --- 1. MEMORY SYSTEM (Direct Access Mode) ---
 def manage_list(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA', 'ADVANC'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
@@ -15,6 +15,7 @@ def manage_list(mode, ticker=None, action="load"):
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
     
+    # อ่านข้อมูลล่าสุด
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = [x for x in data.split(",") if x] if data else defaults
@@ -23,14 +24,19 @@ def manage_list(mode, ticker=None, action="load"):
         ticker = ticker.strip().upper()
         if ticker and ticker not in current_data:
             current_data.append(ticker)
-            with open(file_path, "w") as f: f.write(",".join(current_data))
+            with open(file_path, "w") as f: 
+                f.write(",".join(current_data))
+                f.flush() # บังคับเขียนลงไฟล์ทันที
+            return current_data
     elif action == "delete" and ticker:
         if ticker in current_data:
             current_data.remove(ticker)
-            with open(file_path, "w") as f: f.write(",".join(current_data))
+            with open(file_path, "w") as f: 
+                f.write(",".join(current_data))
+                f.flush()
+            return current_data
     return current_data
 
-# ระบบเก็บประวัติ (ย้ายมาไว้ข้างนอกเพื่อให้คงอยู่ตลอด Session)
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame()
 if 'last_alert_key' not in st.session_state:
@@ -139,52 +145,53 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
     
-    # 1. จัดการข้อมูลก่อน (Add/Delete)
+    # ดึงรายชื่อหุ้นล่าสุดมาเตรียมไว้
+    curr_list = manage_list(m_key)
+    
     if 'W' in p:
         with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
-            new_t = st.text_input(f"Add Ticker:", key=f"in_{m_key}").upper()
-            ca, ce = st.columns(2)
-            if ca.button("✅ Add"):
-                if new_t: 
-                    manage_list(m_key, new_t, "add")
+            # ใช้สัญลักษณ์ตลาดในคีย์เพื่อป้องกันการทับซ้อน
+            new_ticker = st.text_input(f"Ticker Name:", key=f"input_box_{m_key}").upper()
+            btn_c1, btn_c2 = st.columns(2)
+            if btn_c1.button("✅ Add Ticker", key=f"add_btn_{m_key}"):
+                if new_ticker:
+                    manage_list(m_key, new_ticker, "add")
                     st.cache_data.clear()
                     st.rerun()
-            if ce.button("🛠️ Toggle Edit"):
+            if btn_c2.button("🛠️ Edit Mode", key=f"edit_btn_{m_key}"):
                 st.session_state.edit_mode = not st.session_state.edit_mode
                 st.rerun()
 
-    # 2. อ่านข้อมูลเพื่อแสดงผล
-    curr_list = manage_list(m_key)
-    
-    if 'W' in p: # Watchlist Mode
+        # แสดงผลตาราง Watchlist
         results = [fetch_verified_data(t, p) for t in curr_list]
         results = [r for r in results if r is not None]
         if results:
-            df = pd.DataFrame(results)
-            st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
+            df_display = pd.DataFrame(results)
+            st.dataframe(df_display.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
+            
             if st.session_state.edit_mode:
                 st.write("---")
-                st.write("🗑️ **Select to Remove:**")
+                st.write("🗑️ **Remove Ticker:**")
                 del_cols = st.columns(4)
                 for i, t in enumerate(curr_list):
-                    if del_cols[i % 4].button(f"✖ {t}", key=f"d_{t}"): 
+                    if del_cols[i % 4].button(f"✖ {t}", key=f"del_{m_key}_{t}"):
                         manage_list(m_key, t, "delete")
                         st.cache_data.clear()
                         st.rerun()
-    else: # Scan Mode
-        c_btn, c_spacer = st.columns([1, 3])
-        if c_btn.button("🔄 Manual Refresh"): 
+    else:
+        # หน้า Market Scan
+        col_btn, col_empty = st.columns([1, 3])
+        if col_btn.button("🔄 Manual Refresh", key=f"refresh_{m_key}"):
             st.cache_data.clear()
             st.rerun()
         
-        # รันสแกนเพื่อเก็บเข้าประวัติ
         for t in curr_list: fetch_verified_data(t, p, is_scan=True)
-        
         if not st.session_state.signal_history.empty:
             df_hist = st.session_state.signal_history
-            # กรองแยกตลาด ไทย/US อย่างแม่นยำ
-            filtered_df = df_hist[df_hist['Market'] == m_key]
-            st.dataframe(filtered_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
+            # กรองแยกตลาดอย่างแม่นยำด้วยการเช็คตลาดที่บันทึกไว้
+            filtered_hist = df_hist[df_hist['Market'] == m_key]
+            st.dataframe(filtered_hist.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
 
+# Auto Refresh ทุก 10 นาที (600 วินาที)
 time.sleep(600)
 st.rerun()
