@@ -26,7 +26,7 @@ def manage_storage(mode, ticker=None, action="load"):
     return current_data
 
 # --- 2. UI SETUP & STRICT CLEAN CSS ---
-st.set_page_config(page_title="PPE Guardian V16.10", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V16.11", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg", "Value (M)"])
@@ -39,19 +39,14 @@ st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
-    
-    /* 🎯 ล็อกกึ่งกลางถาวรและปรับฟอนต์ตัวธรรมดา */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    
     div[data-testid="stVerticalBlock"] > div, div.stButton {
         display: flex !important; justify-content: center !important; width: 100% !important;
     }
-
-    /* ปรับฟอนต์ปุ่มและตารางไม่ให้เป็นตัวหนา */
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
@@ -59,12 +54,9 @@ st.markdown("""
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
         margin: 10px auto !important; display: block !important;
     }
-    
-    /* บังคับตัวหนังสือในตารางให้เป็นตัวธรรมดา (สวยงามเหมือนเวอร์ชันแรก) */
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
         font-weight: 400 !important;
     }
-    
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -74,12 +66,14 @@ def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
         t_obj = yf.Ticker(sym)
-        hist = t_obj.history(period="5d", interval="1d")
-        if hist.empty: return None
+        # ดึงประวัติแบบ Daily เพื่อเอา Volume สะสมที่ถูกต้อง
+        hist_d = t_obj.history(period="5d", interval="1d")
+        if hist_d.empty: return None
         
-        prev_close = float(hist['Close'].iloc[-2])
+        prev_close = float(hist_d['Close'].iloc[-2])
         current_price = float(t_obj.fast_info['last_price'])
-        current_vol = float(t_obj.fast_info['last_volume'])
+        # ใช้ Volume ของวันล่าสุดแทนการใช้ fast_info เพื่อแก้ปัญหา 0.00M
+        daily_vol = float(hist_d['Volume'].iloc[-1])
         
         df = t_obj.history(period="1mo", interval="1h")
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
@@ -96,7 +90,7 @@ def fetch_data(ticker, mode):
         
         now = datetime.now(pytz.timezone("Asia/Bangkok"))
         return {"Ticker": ticker.upper(), "Prev": prev_close, "Price": current_price, 
-                "Chg": chg, "%Chg": pct_chg, "Value (M)": (current_price * current_vol) / 1_000_000, 
+                "Chg": chg, "%Chg": pct_chg, "Value (M)": (current_price * daily_vol) / 1_000_000, 
                 "RSI": rsi.iloc[-1] if not rsi.empty else 0, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
                 "RawTime": now, "Signal": sig, "m_chg": chg}
     except: return None
@@ -105,15 +99,11 @@ def apply_styles(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
-        # สีอิงตามราคาปัจจุบัน
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
-        
         for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
             if col in data.columns: styles.at[data.index[i], col] = m_c
-            
         if "Signal" in data.columns:
             styles.at[data.index[i], "Signal"] = 'color: #00FF00' if row['Signal'] == "BUY" else ('color: #FF0000' if row['Signal'] == "SELL" else 'color: #FFD700')
-        
         if "Prev" in data.columns: styles.at[data.index[i], "Prev"] = 'color: #FFD700'
         if "RSI" in data.columns:
             styles.at[data.index[i], "RSI"] = 'color: #FF0000' if row['RSI'] < 30 else ('color: #00FF00' if row['RSI'] > 70 else 'color: #FFD700')
@@ -131,7 +121,7 @@ def hdr(t):
         <div style="text-align: center;">
             <h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
             <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">
-                {t_now} | PPE GUARDIAN V16.10
+                {t_now} | PPE GUARDIAN V16.11
             </p>
         </div>
     ''', unsafe_allow_html=True)
