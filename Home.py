@@ -25,7 +25,7 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & FORCED CSS ---
+# --- 2. UI SETUP & CSS ---
 st.set_page_config(page_title="PPE Guardian V16.13", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
@@ -52,20 +52,9 @@ st.markdown("""
         border-radius: 14px !important; font-size: 18px !important; 
         font-weight: 500 !important; color: #FFD700 !important; 
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
-        margin: 12px auto !important; display: block !important;
+        margin: 10px auto !important; display: block !important;
     }
-    
-    /* 🎯 บังคับสีพื้นหลังตารางเข้ม (Forced Dark Table) */
-    .stDataFrame, [data-testid="stDataFrame"], [data-testid="stDataFrame"] > div {
-        background-color: #1e293b !important;
-        border-radius: 12px !important;
-    }
-    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
-        font-weight: 400 !important;
-        background-color: #1e293b !important;
-        color: #cbd5e1 !important;
-        border-bottom: 1px solid #334155 !important;
-    }
+    .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -102,18 +91,32 @@ def fetch_data(ticker, mode):
     except: return None
 
 def apply_styles(data):
-    styles = pd.DataFrame('', index=data.index, columns=data.columns)
-    for i in range(len(data)):
-        row = data.iloc[i]
+    # กำหนดสีพื้นหลังตารางแบบบังคับผ่าน Styler
+    table_props = [
+        ('background-color', '#1e293b'),
+        ('color', '#cbd5e1'),
+        ('font-weight', '400')
+    ]
+    
+    styler = data.style.set_table_styles([
+        {'selector': 'td', 'props': table_props},
+        {'selector': 'th', 'props': table_props},
+        {'selector': '', 'props': [('background-color', '#1e293b')]}
+    ])
+
+    def row_style(row):
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
-        for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
-            if col in data.columns: styles.at[data.index[i], col] = m_c
-        if "Signal" in data.columns:
-            styles.at[data.index[i], "Signal"] = 'color: #00FF00' if row['Signal'] == "BUY" else ('color: #FF0000' if row['Signal'] == "SELL" else 'color: #FFD700')
-        if "Prev" in data.columns: styles.at[data.index[i], "Prev"] = 'color: #FFD700'
-        if "RSI" in data.columns:
-            styles.at[data.index[i], "RSI"] = 'color: #FF0000' if row['RSI'] < 30 else ('color: #00FF00' if row['RSI'] > 70 else 'color: #FFD700')
-    return styles
+        styles = [f'background-color: #1e293b; {m_c}; font-weight: 400'] * len(row)
+        
+        # ปรับสี Signal แยกต่างหาก
+        idx_sig = data.columns.get_loc("Signal") if "Signal" in data.columns else -1
+        if idx_sig != -1:
+            sig_c = 'color: #00FF00' if row['Signal'] == "BUY" else ('color: #FF0000' if row['Signal'] == "SELL" else 'color: #FFD700')
+            styles[idx_sig] = f'background-color: #1e293b; {sig_c}; font-weight: 400'
+        
+        return styles
+
+    return styler.apply(row_style, axis=1)
 
 # --- 4. NAVIGATION ---
 def go(p, m=None):
@@ -132,13 +135,12 @@ def hdr(t):
         </div>
     ''', unsafe_allow_html=True)
 
-# --- 5. PAGE DISPATCHER ---
+# --- 5. PAGE LOGIC ---
 if curr_p == 'Home':
     hdr("TRADING HOME")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
-    # คืนค่ารูปภาพหน้า Home
     st.markdown(f'<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif curr_p == 'SubMenu':
@@ -153,7 +155,7 @@ elif curr_p == 'Watch':
     hdr(f"{f} WATCHLIST")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     with st.expander("⚙️ Manage List", expanded=False):
-        nt = st.text_input("Ticker:", placeholder="e.g. BANPU", key="in_w").upper()
+        nt = st.text_input("Ticker:", key="in_w").upper()
         if st.button("➕ Add"): manage_storage(curr_m, nt, "add"); st.rerun()
         st.markdown('<div class="del-btn">', unsafe_allow_html=True)
         if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.rerun()
@@ -162,7 +164,7 @@ elif curr_p == 'Watch':
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), 
+        st.dataframe(apply_styles(df).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), 
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
 elif curr_p == 'Scan':
@@ -177,7 +179,7 @@ elif curr_p == 'Scan':
         combined = combined.sort_values(by="RawTime", ascending=False).head(30)
         st.session_state.signal_history = combined
     if not st.session_state.signal_history.empty:
-        st.dataframe(st.session_state.signal_history.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
+        st.dataframe(apply_styles(st.session_state.signal_history).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
 
 time.sleep(60); st.rerun()
