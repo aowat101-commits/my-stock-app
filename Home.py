@@ -7,21 +7,19 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY SYSTEM (Fixed Logic) ---
+# --- 1. MEMORY SYSTEM ---
 def manage_list(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA', 'ADVANC'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
-    
     if not os.path.exists(file_path):
         with open(file_path, "w") as f: f.write(",".join(defaults))
-    
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = [x for x in data.split(",") if x] if data else defaults
     
     if action == "add" and ticker:
         ticker = ticker.strip().upper()
-        if ticker not in current_data:
+        if ticker and ticker not in current_data:
             current_data.append(ticker)
             with open(file_path, "w") as f: f.write(",".join(current_data))
     elif action == "delete" and ticker:
@@ -116,26 +114,28 @@ p = st.session_state.page
 dt_now = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
 st.write(f'<div class="classic-header">PPE Guardian V9.9 | {dt_now}</div>', unsafe_allow_html=True)
 
-# --- 5. CONTENT ---
+# --- 5. CONTENT (Updated Flow for Instant Action) ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
-    curr_list = manage_list(m_key)
     
+    # [ACTION AREA] จัดการข้อมูลก่อนแสดงผลเพื่อให้ Update ทันที
     if 'W' in p:
         with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
-            # แยก Key ให้เด็ดขาดป้องกันหุ้นข้ามฝั่ง
-            new_t = st.text_input(f"Add {m_key.upper()} Ticker:", key=f"input_{m_key}").upper()
+            new_t = st.text_input(f"Add {m_key.upper()} Ticker:", key=f"input_{m_key}")
             if new_t:
                 manage_list(m_key, new_t, "add")
-                st.rerun()
+                st.rerun() # บังคับ Refresh เพื่อดึงรายการใหม่ทันที
             if st.button("🛠️ Toggle Edit Mode"):
                 st.session_state.edit_mode = not st.session_state.edit_mode
                 st.rerun()
-    else:
+    
+    # [DISPLAY AREA] ดึงข้อมูลปัจจุบันมาแสดง
+    curr_list = manage_list(m_key)
+    if 'S' in p:
         if st.button("🔄 Manual Refresh"):
             st.cache_data.clear()
             st.rerun()
@@ -149,6 +149,7 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         if 'S' in p: cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
 
+        # ปุ่มลบรายตัว (Update ทันทีเมื่อกด)
         if 'W' in p and st.session_state.edit_mode:
             st.write("---")
             st.write("🗑️ **Select to Remove:**")
