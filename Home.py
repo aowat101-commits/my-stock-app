@@ -25,7 +25,7 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP ---
+# --- 2. UI SETUP & DEEP CSS FIX ---
 st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
@@ -37,15 +37,36 @@ curr_m = st.query_params.get('market', None)
 
 st.markdown("""
     <style>
+    /* ล้างขอบข้างและซ่อนส่วนเกิน */
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
+    
+    /* บังคับกึ่งกลางแบบถาวร */
+    .stApp .main .block-container {
+        max-width: 100% !important;
+        padding: 2rem 0 !important;
+        margin: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    /* จัดปุ่มและรูปภาพ */
+    div.stButton, div[data-testid="stImage"] {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+    
     .stButton > button { 
-        height: 54px !important; width: 100% !important;
+        height: 54px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
         font-weight: 500 !important; color: #FFD700 !important; 
-        background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
+        background-color: #1e293b !important; border: 2px solid #FFD700 !important;
+        margin: 10px auto !important;
     }
-    [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; margin: 0 auto !important; }
+    
+    [data-testid="stDataFrame"] { margin: 0 auto !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -101,34 +122,23 @@ def go(p, m=None):
     if m: st.query_params['market'] = m
     st.rerun()
 
-def hdr(t):
-    t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
-    st.markdown(f'<div style="text-align: center;"><h1 style="color: #FFD700; margin-bottom: 5px;">{t}</h1>'
-                f'<p style="color: #1E90FF; font-size: 16px;">{t_now} | V16.14</p></div>', unsafe_allow_html=True)
-
 # --- 4. PAGE LOGIC ---
 if curr_p == 'Home':
-    hdr("TRADING HOME")
-    c1, c2, c3 = st.columns([1, 1.2, 1])
-    with c2:
-        if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
-        if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
+    st.markdown('<h1 style="text-align: center; color: #FFD700;">TRADING HOME</h1>', unsafe_allow_html=True)
+    if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
+    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.markdown('<center><hr style="border: 1px solid #1e293b; width: 320px;"></center>', unsafe_allow_html=True)
-    st.markdown('<center><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></center>', unsafe_allow_html=True)
+    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", width=380)
 
 elif curr_p == 'SubMenu':
-    hdr(f"{'🇹🇭' if curr_m == 'th' else '🇺🇸'} MENU")
-    c1, c2, c3 = st.columns([1, 1.2, 1])
-    with c2:
-        if st.button("📋 WATCHLIST"): go('Watch', curr_m)
-        if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
-        if st.button("🏠 กลับหน้าหลัก"): go('Home')
+    st.markdown(f'<h1 style="text-align: center; color: #FFD700;">{"🇹🇭" if curr_m == "th" else "🇺🇸"} MENU</h1>', unsafe_allow_html=True)
+    if st.button("📋 WATCHLIST"): go('Watch', curr_m)
+    if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
+    if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
 elif curr_p == 'Watch':
-    hdr("WATCHLIST")
-    c1, c2, c3 = st.columns([1, 1.2, 1])
-    with c2:
-        if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
+    st.markdown('<h1 style="text-align: center; color: #FFD700;">WATCHLIST</h1>', unsafe_allow_html=True)
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     if res:
         df = pd.DataFrame([r for r in res if r])
@@ -136,10 +146,8 @@ elif curr_p == 'Watch':
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
 elif curr_p == 'Scan':
-    hdr("SCAN")
-    c1, c2, c3 = st.columns([1, 1.2, 1])
-    with c2:
-        if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
+    st.markdown('<h1 style="text-align: center; color: #FFD700;">SCAN</h1>', unsafe_allow_html=True)
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     new_active = [r for r in new_res if r and r['Signal'] in ["P-BUY", "BUY", "P-SELL", "SELL"]]
     
