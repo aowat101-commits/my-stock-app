@@ -25,7 +25,7 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & CSS (FORCED CENTER) ---
+# --- 2. UI SETUP & CSS (DEEP CENTER FIX) ---
 st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
@@ -40,16 +40,26 @@ st.markdown("""
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
-    /* จัดการ Container หลักให้กึ่งกลาง */
+    /* จัดการ Container หลักให้กึ่งกลางทุกระดับ */
     .stApp .main .block-container {
-        display: flex !important; flex-direction: column !important;
-        align-items: center !important; justify-content: flex-start !important;
-        width: 100% !important; margin: 0 auto !important;
+        max-width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
+    }
+    
+    /* บังคับให้เนื้อหาภายใน VerticalBlock อยู่กึ่งกลาง */
+    div[data-testid="stVerticalBlock"] {
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
     }
 
-    /* จัดปุ่มกึ่งกลาง */
+    /* จัดปุ่มกึ่งกลางและแต่งความสวยงาม */
     div.stButton {
-        display: flex !important; justify-content: center !important; width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
     }
     .stButton > button { 
         height: 52px !important; width: 320px !important;
@@ -60,8 +70,10 @@ st.markdown("""
     }
     
     /* จัดรูปภาพกึ่งกลาง */
-    div[data-testid="stImage"] {
-        display: flex !important; justify-content: center !important; width: 100% !important;
+    div[data-testid="stImage"] > img {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        display: block !important;
     }
     
     /* ตาราง */
@@ -130,7 +142,7 @@ if curr_p == 'Home':
     hdr("TRADING HOME")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
-    st.write('---')
+    st.markdown('<div style="display: flex; justify-content: center; width: 100%;"><hr style="border: 1px solid #1e293b; width: 320px;"></div>', unsafe_allow_html=True)
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", width=380)
 
 elif curr_p == 'SubMenu':
