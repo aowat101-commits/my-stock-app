@@ -26,10 +26,10 @@ def manage_storage(mode, ticker=None, action="load"):
     return current_data
 
 # --- 2. UI SETUP & CLEAN CSS ---
-st.set_page_config(page_title="PPE Guardian V16.7", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V16.8", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "p_sig", "m_chg", "Value (M)"])
+    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg"])
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -58,13 +58,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. PRECISE DATA ENGINE ---
+# --- 3. CORE ENGINE ---
 def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
         t_obj = yf.Ticker(sym)
-        
-        # ดึงราคาปิดวันก่อนหน้า (Previous Close) เพื่อความแม่นยำของ Chg/%Chg
         hist = t_obj.history(period="5d", interval="1d")
         if hist.empty: return None
         
@@ -72,7 +70,6 @@ def fetch_data(ticker, mode):
         current_price = float(t_obj.fast_info['last_price'])
         current_vol = float(t_obj.fast_info['last_volume'])
         
-        # ดึงข้อมูล Intraday สำหรับ Indicator
         df = t_obj.history(period="1mo", interval="1h")
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
@@ -90,18 +87,24 @@ def fetch_data(ticker, mode):
         return {"Ticker": ticker.upper(), "Prev": prev_close, "Price": current_price, 
                 "Chg": chg, "%Chg": pct_chg, "Value (M)": (current_price * current_vol) / 1_000_000, 
                 "RSI": rsi.iloc[-1] if not rsi.empty else 0, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
-                "RawTime": now, "Signal": sig, "p_sig": chg, "m_chg": chg}
+                "RawTime": now, "Signal": sig, "m_chg": chg}
     except: return None
 
 def apply_styles(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
-        s_c = 'color: #00FF00' if row['Signal'] in ["BUY", "DEEP BUY"] else 'color: #FF0000'
-        for c in ["Ticker", "Signal", "TimeUpdate"]: styles.at[data.index[i], c] = s_c
+        # สีอิงตามการเปลี่ยนแปลงราคา (เขียว/แดง/เหลือง)
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
-        for c in ["Price", "Chg", "%Chg", "Value (M)"]: 
-            if c in data.columns: styles.at[data.index[i], c] = m_c
+        
+        # ปรับ Ticker และ TimeUpdate ให้อิงตามราคาสี m_c
+        for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
+            if col in data.columns: styles.at[data.index[i], col] = m_c
+            
+        # ช่อง Signal แยกตามสัญญาณ BUY/SELL
+        if "Signal" in data.columns:
+            styles.at[data.index[i], "Signal"] = 'color: #00FF00' if row['Signal'] == "BUY" else ('color: #FF0000' if row['Signal'] == "SELL" else 'color: #FFD700')
+        
         if "Prev" in data.columns: styles.at[data.index[i], "Prev"] = 'color: #FFD700'
         if "RSI" in data.columns:
             styles.at[data.index[i], "RSI"] = 'color: #FF0000' if row['RSI'] < 30 else ('color: #00FF00' if row['RSI'] > 70 else 'color: #FFD700')
@@ -123,7 +126,7 @@ if curr_p == 'Home':
     hdr("TRADING HOME", t_now)
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
-    st.write('---') # ไม่มีรูปภาพหน้า Home เพื่อความสะอาด
+    st.write('---')
 
 elif curr_p == 'SubMenu':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
