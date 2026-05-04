@@ -32,7 +32,7 @@ if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V11.1", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V11.2", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -44,8 +44,7 @@ st.markdown("""
     .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 5px; }
     .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
     .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
-    /* ปรับแต่งปุ่มให้ใหญ่และเด่น */
-    .stButton > button { height: 60px !important; border-radius: 12px !important; font-size: 18px !important; font-weight: bold !important; width: 100%; border: 2px solid #FFD700 !important; }
+    .stButton > button { height: 45px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: bold !important; width: 100%; border: 1px solid #FFD700 !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -108,11 +107,29 @@ def apply_style(row):
 
 # --- 4. NAVIGATION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 'market' not in st.session_state: st.session_state.market = None # ยังไม่เลือกตลาด
+if 'market' not in st.session_state: st.session_state.market = None
 
-st.write(f'<div class="classic-header">PPE Guardian V11.1 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
+st.write(f'<div class="classic-header">PPE Guardian V11.2 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
 
-# --- 5. PAGE LOGIC ---
+# --- 5. TOP NAVIGATION BAR (ย้อนกลับได้เสมอ) ---
+if st.session_state.page != 'Home':
+    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.5, 1])
+    with nav_c1:
+        if st.button("🏠 กลับหน้าหลัก (Home)"):
+            st.session_state.page = 'Home'
+            st.session_state.market = None
+            st.rerun()
+    with nav_c2:
+        # แสดงสถานะตลาดปัจจุบัน
+        current_m = "🇹🇭 THAI" if st.session_state.market == 'th' else "🇺🇸 US"
+        st.write(f"**MODE: {current_m}**")
+    with nav_c3:
+        if st.session_state.page in ['Watch', 'Scan']:
+            if st.button("⬅ เปลี่ยนเมนูตลาด"):
+                st.session_state.page = 'SubMenu'
+                st.rerun()
+
+# --- 6. PAGE LOGIC ---
 
 # 🏠 หน้าหลัก: เลือกตลาด
 if st.session_state.page == 'Home':
@@ -131,10 +148,10 @@ if st.session_state.page == 'Home':
     st.write('---')
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
-# 📂 หน้าเมนูย่อย: เลือก Watchlist หรือ Scan
+# 📂 หน้าเมนูย่อย
 elif st.session_state.page == 'SubMenu':
     m = st.session_state.market
-    st.write(f"### {'🇹🇭 ตลาดหุ้นไทย' if m=='th' else '🇺🇸 ตลาดหุ้นอเมริกา'}")
+    st.write(f"### {'🇹🇭 THAI MENU' if m=='th' else '🇺🇸 US MENU'}")
     st.write('---')
     c1, c2 = st.columns(2)
     if c1.button("📋 WATCHLIST (รายการหุ้น)"):
@@ -142,11 +159,6 @@ elif st.session_state.page == 'SubMenu':
         st.rerun()
     if c2.button("🔍 MARKET SCAN (สัญญาณ)"):
         st.session_state.page = 'Scan'
-        st.rerun()
-    st.write('---')
-    if st.button("🏠 กลับหน้าหลัก"):
-        st.session_state.page = 'Home'
-        st.session_state.market = None
         st.rerun()
 
 # 📋 หน้า Watchlist
@@ -170,10 +182,6 @@ elif st.session_state.page == 'Watch':
         for i, t in enumerate(cl):
             if d_cols[i%5].button(f"✖ {t}", key=f"del_{t}"):
                 manage_storage(m, t, "delete"); st.cache_data.clear(); st.rerun()
-    
-    if st.button("⬅ กลับเมนูเลือกตลาด"):
-        st.session_state.page = 'SubMenu'
-        st.rerun()
 
 # 🔍 หน้า Scan
 elif st.session_state.page == 'Scan':
@@ -185,9 +193,5 @@ elif st.session_state.page == 'Scan':
     hist_df = st.session_state.th_logs if m == 'th' else st.session_state.us_logs
     if not hist_df.empty:
         st.dataframe(hist_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
-    
-    if st.button("⬅ กลับเมนูเลือกตลาด"):
-        st.session_state.page = 'SubMenu'
-        st.rerun()
 
 time.sleep(600); st.rerun()
