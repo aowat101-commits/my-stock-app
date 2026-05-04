@@ -25,7 +25,7 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP ---
+# --- 2. UI SETUP & CSS (FORCED CENTER FIX) ---
 st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
@@ -37,26 +37,60 @@ curr_m = st.query_params.get('market', None)
 
 st.markdown("""
     <style>
+    /* ซ่อน Header และ Sidebar */
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
+    
+    /* พื้นหลัง */
     .stApp { background-color: #0f172a; }
+    
+    /* บังคับให้เนื้อหาหลักทั้งหมดอยู่กึ่งกลาง */
     .stApp .main .block-container {
-        display: flex !important; flex-direction: column !important;
-        align-items: center !important; width: 100% !important; margin: 0 auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+        text-align: center !important;
     }
-    div.stButton { display: flex !important; justify-content: center !important; width: 100% !important; }
+
+    /* จัดกลุ่มปุ่มและรูปภาพให้กึ่งกลางเสมอ */
+    [data-testid="stVerticalBlock"] > div {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+
+    /* ตกแต่งและจัดปุ่มกึ่งกลาง */
     .stButton > button { 
-        height: 52px !important; width: 320px !important;
-        border-radius: 14px !important; font-size: 18px !important; 
-        font-weight: 500 !important; color: #FFD700 !important; 
-        background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
+        height: 52px !important; 
+        width: 320px !important;
+        border-radius: 14px !important; 
+        font-size: 18px !important; 
+        font-weight: 500 !important; 
+        color: #FFD700 !important; 
+        background-color: #1e293b !important; 
+        border: 2px solid #FFD700 !important; 
         margin: 10px auto !important;
     }
-    div[data-testid="stImage"] { display: flex !important; justify-content: center !important; width: 100% !important; }
-    [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; margin: 0 auto !important; }
+
+    /* บังคับรูปภาพอยู่กึ่งกลางแน่นอน */
+    [data-testid="stImage"] img {
+        margin: 0 auto !important;
+        display: block !important;
+        border-radius: 12px;
+    }
+    
+    /* ตารางจัดวางกึ่งกลางกว้างเต็มที่ */
+    [data-testid="stDataFrame"] {
+        background-color: #1e293b !important;
+        border-radius: 12px !important;
+        margin: 0 auto !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. REAL-TIME ENGINE ---
+# --- 3. ENGINE ---
 def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
@@ -87,7 +121,6 @@ def fetch_data(ticker, mode):
             sig = "P-SELL"
             if current_price < e20.iloc[-1] or h.iloc[-1] < h.iloc[-2]: sig = "SELL"
         
-        # ใช้เวลาปัจจุบันของเครื่องเพื่อล็อกวินาทีที่ "ตรวจพบ" จริง
         now = datetime.now(pytz.timezone("Asia/Bangkok"))
         return {"Ticker": ticker.upper(), "Prev": prev_close, "Price": current_price, "Chg": chg, "%Chg": (chg/prev_close)*100, 
                 "Value (M)": (current_price * curr_vol)/1_000_000, "RSI": rsi.iloc[-1] if not rsi.empty else 0, 
@@ -111,20 +144,20 @@ def go(p, m=None):
 
 # --- 4. PAGE LOGIC ---
 if curr_p == 'Home':
-    st.markdown('<h1 style="text-align: center; color: #FFD700;">TRADING HOME</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="color: #FFD700; text-align: center;">TRADING HOME</h1>', unsafe_allow_html=True)
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", width=380)
 
 elif curr_p == 'SubMenu':
-    st.markdown(f'<h1 style="text-align: center; color: #FFD700;">{"🇹🇭" if curr_m == "th" else "🇺🇸"} MENU</h1>', unsafe_allow_html=True)
+    st.markdown(f'<h1 style="color: #FFD700; text-align: center;">{"🇹🇭" if curr_m == "th" else "🇺🇸"} MENU</h1>', unsafe_allow_html=True)
     if st.button("📋 WATCHLIST"): go('Watch', curr_m)
     if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
     if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
 elif curr_p == 'Watch':
-    st.markdown('<h1 style="text-align: center; color: #FFD700;">WATCHLIST</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="color: #FFD700; text-align: center;">WATCHLIST</h1>', unsafe_allow_html=True)
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     if res:
@@ -133,14 +166,13 @@ elif curr_p == 'Watch':
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
 elif curr_p == 'Scan':
-    st.markdown('<h1 style="text-align: center; color: #FFD700;">SCAN</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="color: #FFD700; text-align: center;">SCAN</h1>', unsafe_allow_html=True)
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     new_active = [r for r in new_res if r and r['Signal'] in ["P-BUY", "BUY", "P-SELL", "SELL"]]
     
     if new_active:
         new_df = pd.DataFrame(new_active)
-        # ตรรกะล็อกวินาทีที่พบจริง: ถ้าหุ้น+สัญญาณเดิมมีในประวัติแล้ว ห้ามเปลี่ยนเวลา
         for idx, row in new_df.iterrows():
             match = st.session_state.signal_history[(st.session_state.signal_history['Ticker'] == row['Ticker']) & (st.session_state.signal_history['Signal'] == row['Signal'])]
             if not match.empty:
