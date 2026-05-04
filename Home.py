@@ -31,8 +31,8 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
-# --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V11.6", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & CSS HACKS (V11.7) ---
+st.set_page_config(page_title="PPE Guardian V11.7", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -43,29 +43,27 @@ st.markdown("""
     .block-container { padding: 0.5rem 0.2rem !important; }
     .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-top: 5px; margin-bottom: 5px; }
     
-    /* สไตล์ปุ่มกดหน้า Home (V11.6: จัดกึ่งกลางและชิดกัน) */
+    /* จัดการปุ่มหน้า Home ให้มาชิดกันกึ่งกลางแบบ Flexbox */
+    .st-emotion-cache-oc6fba { 
+        display: flex !important;
+        justify-content: center !important;
+        gap: 12px !important; /* ระยะห่างระหว่างปุ่ม 12px */
+    }
+
     .stButton > button { 
-        height: 50px !important; 
+        height: 48px !important; 
         border-radius: 12px !important; 
         font-size: 16px !important; 
         font-weight: bold !important; 
         color: #FFD700 !important; 
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important;
-        width: 220px !important; /* กำหนดความกว้างปุ่มให้เท่ากันเป๊ะ */
-        transition: 0.3s;
+        width: 200px !important; /* กำหนดความกว้างปุ่มให้เท่ากันเพื่อความสมดุล */
     }
     
     .stButton > button:hover {
         background-color: #334155 !important;
         border-color: #ffffff !important;
-        transform: scale(1.02);
-    }
-
-    /* CSS สำหรับจัดกลุ่มปุ่มให้ชิดกึ่งกลาง */
-    div[data-testid="stHorizontalBlock"] {
-        justify-content: center !important;
-        gap: 20px !important;
     }
 
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; width: 100% !important; }
@@ -143,41 +141,42 @@ date_str = now.strftime("%d/%m/%Y")
 if st.session_state.page == 'Home':
     st.write('<div style="text-align:center; padding-top:20px; padding-bottom:10px;"><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     
-    # การจัดวางปุ่มแบบชิดกึ่งกลางด้วย CSS Flex
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        if st.button("🇹🇭 ตลาดหุ้นไทย"):
-            st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
-    with c2:
-        if st.button("🇺🇸 ตลาดหุ้นอเมริกา"):
-            st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
+    # ใช้กล่อง Container เดียวกันเพื่อให้ปุ่มเบียดชิดกึ่งกลางจริงๆ
+    with st.container():
+        # การจัดวางให้ชิดกันโดยใช้ column เล็กๆ เป็นแค่โครงสร้างหลอก แต่คุมด้วย CSS Flex ด้านบน
+        h_col1, h_col2 = st.columns(2)
+        with h_col1:
+            if st.button("🇹🇭 ตลาดหุ้นไทย"):
+                st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
+        with h_col2:
+            if st.button("🇺🇸 ตลาดหุ้นอเมริกา"):
+                st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.6</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.7</div>', unsafe_allow_html=True)
     st.write('---')
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif st.session_state.page == 'SubMenu':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.6</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.7</div>', unsafe_allow_html=True)
     
-    # ปุ่ม Home ตรงกลาง
-    _, home_c, _ = st.columns([2, 1, 2])
-    with home_c:
-        if st.button("🏠 กลับหน้าหลัก"):
-            st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
+    # ปุ่มกลับหน้าหลักกึ่งกลาง
+    if st.button("🏠 กลับหน้าหลัก"):
+        st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
             
     m = st.session_state.market
     st.write(f"### {'🇹🇭 THAI MENU' if m=='th' else '🇺🇸 US MENU'}")
     st.write('---')
-    c1, c2 = st.columns([1, 1])
-    with c1:
+    # จัดวางเมนูย่อยให้เบียดกึ่งกลางเช่นกัน
+    s_col1, s_col2 = st.columns(2)
+    with s_col1:
         if st.button("📋 WATCHLIST"):
             st.session_state.page = 'Watch'; st.rerun()
-    with c2:
+    with s_col2:
         if st.button("🔍 MARKET SCAN"):
             st.session_state.page = 'Scan'; st.rerun()
 
 elif st.session_state.page == 'Watch':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.6</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.7</div>', unsafe_allow_html=True)
     nav_c1, nav_c2 = st.columns(2)
     with nav_c1:
         if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
@@ -204,7 +203,7 @@ elif st.session_state.page == 'Watch':
                 manage_storage(m, t, "delete"); st.cache_data.clear(); st.rerun()
 
 elif st.session_state.page == 'Scan':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.6</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.7</div>', unsafe_allow_html=True)
     nav_c1, nav_c2 = st.columns(2)
     with nav_c1:
         if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
