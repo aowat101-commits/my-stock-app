@@ -29,22 +29,23 @@ st.set_page_config(page_title="PPE Guardian V9.9", layout="wide", initial_sideba
 
 st.markdown("""
     <style>
-    /* ปิด Sidebar และส่วนเกิน */
     [data-testid="stSidebar"], .st-emotion-cache-10o48ve, header, .stAppHeader { display: none !important; }
     section[data-testid="stSidebar"] { width: 0px !important; }
     .stApp { background-color: #0f172a; }
-    
-    /* ปรับแต่งตัวอักษรและตาราง */
     h1, h2, h3, p, span, label { color: #FFD700 !important; }
-    .block-container { padding: 0.5rem 0.5rem !important; }
+    .block-container { padding: 0.5rem 0.2rem !important; }
     .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 5px; }
-    .stDataFrame td { font-size: 12px !important; color: #FFD700 !important; }
+    
+    /* ปรับตัวอักษรในตารางให้เล็กลงเพื่อให้แสดง 7 คอลัมน์ในมือถือได้ */
+    .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; color: #FFD700 !important; padding: 2px !important; }
+    .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
+    
     .stButton > button { height: 35px !important; border-radius: 8px !important; font-size: 13px !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE (ตัด Icon ออกจาก Signal) ---
+# --- 3. CORE ENGINE (ตัด Icon ออก) ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, mode):
     try:
@@ -86,11 +87,11 @@ if 'page' not in st.session_state: st.session_state.page = 'Home'
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
-    st.button("🇹🇭 WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW"}), type="primary" if st.session_state.page == 'TW' else "secondary")
-    st.button("🇹🇭 SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if st.session_state.page == 'TS' else "secondary")
+    st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW"}), type="primary" if st.session_state.page == 'TW' else "secondary")
+    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if st.session_state.page == 'TS' else "secondary")
 with c2:
-    st.button("🇺🇸 WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if st.session_state.page == 'UW' else "secondary")
-    st.button("🇺🇸 SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
+    st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if st.session_state.page == 'UW' else "secondary")
+    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if st.session_state.page == 'US' else "secondary")
 
 p = st.session_state.page
 dt_now = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%H:%M:%S | %d/%m/%Y')
@@ -98,18 +99,18 @@ st.write(f'<div class="classic-header">PPE Guardian V9.9 | {dt_now}</div>', unsa
 
 # --- 5. CONTENT ---
 if p == 'Home':
-    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:26px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:30px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
-    cl, cm, cr = st.columns([0.2, 1.5, 0.2]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
+    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
+    cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
     curr_list = manage_list(m_key)
     if 'W' in p:
-        with st.expander("➕ Add Ticker", expanded=True):
-            new_t = st.text_input("Symbol:").upper()
+        with st.expander("➕ Manage Watchlist", expanded=True):
+            new_t = st.text_input("Ticker:").upper()
             if new_t: manage_list(m_key, new_t, "add"); st.rerun()
     else:
-        if st.button("🔄 Refresh"): st.cache_data.clear(); st.rerun()
+        if st.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
 
     results = [fetch_verified_data(t, p) for t in curr_list]
     results = [r for r in results if r is not None]
@@ -117,15 +118,8 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         df = pd.DataFrame(results)
         if 'S' in p: df = df.sort_values(by="RawTime", ascending=False).head(30)
         
-        # ปรับความกว้าง Column ให้พอดีมือถือ (บีบช่องที่ไม่สำคัญ)
-        col_config = {
-            "Ticker": st.column_config.TextColumn("Ticker", width="small"),
-            "Price": st.column_config.TextColumn("Px", width="small"),
-            "Signal": st.column_config.TextColumn("Sig", width="small"),
-            "TimeUpdate": st.column_config.TextColumn("Time", width="small")
-        }
-        
-        cols = ["Ticker", "Price", "%Chg", "Signal", "TimeUpdate"] if 'S' in p else ["Ticker", "Price", "%Chg", "Value (M)"]
-        st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols, column_config=col_config)
+        # คืนค่า 7 คอลัมน์เดิมตามหน้า Scan และ Watchlist
+        cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if 'W' in p else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
+        st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
 
 if 'S' in p: time.sleep(300); st.rerun()
