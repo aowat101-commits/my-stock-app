@@ -44,6 +44,10 @@ st.markdown("""
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
+    /* จัดการให้ปุ่มและเนื้อหาอยู่กึ่งกลาง */
+    div[data-testid="stVerticalBlock"] > div, div.stButton {
+        display: flex !important; justify-content: center !important; width: 100% !important;
+    }
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
@@ -131,6 +135,8 @@ if curr_p == 'Home':
     hdr("TRADING HOME")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
+    st.write('---')
+    st.markdown(f'<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif curr_p == 'SubMenu':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
@@ -153,14 +159,11 @@ elif curr_p == 'Scan':
     hdr("TH SCAN")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
-    # กรองเฉพาะตัวที่มีสัญญาณ 4 ตัวหลักเท่านั้น
     new_active = [r for r in new_res if r and r['Signal'] in ["P-BUY", "BUY", "P-SELL", "SELL"]]
     
     if new_active:
         new_df = pd.DataFrame(new_active)
-        # นำสัญญาณใหม่มาต่อกับประวัติเดิม โดยใช้ Ticker + Signal เป็นตัวตัดสิน (ถ้าสัญญาณเดิมของหุ้นเดิมมาซ้ำ ให้รักษาเวลาเก่าไว้)
         combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='last')
-        # เรียงลำดับจากใหม่ไปเก่า (ใหม่ล่าสุดอยู่บน) และเก็บ 30 รายการ
         st.session_state.signal_history = combined.sort_values(by="RawTime", ascending=False).head(30)
 
     if not st.session_state.signal_history.empty:
