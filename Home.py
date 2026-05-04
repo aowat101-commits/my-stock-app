@@ -32,7 +32,7 @@ if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V11.2", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V11.3", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -41,7 +41,7 @@ st.markdown("""
     .stApp { background-color: #0f172a; }
     h1, h2, h3, p, span, label { color: #FFD700 !important; text-align: center; }
     .block-container { padding: 0.5rem 0.2rem !important; }
-    .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 5px; }
+    .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-top: 10px; margin-bottom: 5px; }
     .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
     .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
     .stButton > button { height: 45px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: bold !important; width: 100%; border: 1px solid #FFD700 !important; }
@@ -109,47 +109,48 @@ def apply_style(row):
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'market' not in st.session_state: st.session_state.market = None
 
-st.write(f'<div class="classic-header">PPE Guardian V11.2 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
+# ดึงวันเวลาปัจจุบัน
+now = datetime.now(pytz.timezone("Asia/Bangkok"))
+time_str = now.strftime("%H:%M:%S")
+date_str = now.strftime("%d/%m/%Y")
 
-# --- 5. TOP NAVIGATION BAR (ย้อนกลับได้เสมอ) ---
-if st.session_state.page != 'Home':
-    nav_c1, nav_c2, nav_c3 = st.columns([1, 1.5, 1])
-    with nav_c1:
-        if st.button("🏠 กลับหน้าหลัก (Home)"):
-            st.session_state.page = 'Home'
-            st.session_state.market = None
-            st.rerun()
-    with nav_c2:
-        # แสดงสถานะตลาดปัจจุบัน
-        current_m = "🇹🇭 THAI" if st.session_state.market == 'th' else "🇺🇸 US"
-        st.write(f"**MODE: {current_m}**")
-    with nav_c3:
-        if st.session_state.page in ['Watch', 'Scan']:
-            if st.button("⬅ เปลี่ยนเมนูตลาด"):
-                st.session_state.page = 'SubMenu'
-                st.rerun()
-
-# --- 6. PAGE LOGIC ---
+# --- 5. PAGE LOGIC ---
 
 # 🏠 หน้าหลัก: เลือกตลาด
 if st.session_state.page == 'Home':
-    st.write('### 🏠 TRADING HOME')
-    st.write('---')
-    st.write('**กรุณาเลือกตลาดหุ้นที่ต้องการเข้าใช้งาน:**')
-    c1, c2 = st.columns(2)
-    if c1.button("🇹🇭 ตลาดหุ้นไทย (SET)"):
-        st.session_state.market = 'th'
-        st.session_state.page = 'SubMenu'
-        st.rerun()
-    if c2.button("🇺🇸 ตลาดหุ้นอเมริกา (US)"):
-        st.session_state.market = 'us'
-        st.session_state.page = 'SubMenu'
-        st.rerun()
+    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
+    
+    # 1. จัดตำแหน่งปุ่มให้ชิดกันตรงกลางจอ
+    st.write("")
+    _, mid_c1, mid_c2, _ = st.columns([1, 1.5, 1.5, 1])
+    with mid_c1:
+        if st.button("🇹🇭 ตลาดหุ้นไทย"):
+            st.session_state.market = 'th'
+            st.session_state.page = 'SubMenu'
+            st.rerun()
+    with mid_c2:
+        if st.button("🇺🇸 ตลาดหุ้นอเมริกา"):
+            st.session_state.market = 'us'
+            st.session_state.page = 'SubMenu'
+            st.rerun()
+    
+    # 2. ย้าย PPE Guardian มาไว้ใต้ปุ่ม พร้อมเรียง เวลา วันที่ ชื่อแอป
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    
     st.write('---')
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 # 📂 หน้าเมนูย่อย
 elif st.session_state.page == 'SubMenu':
+    # บรรทัดสถานะบนสุด
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    
+    # ปุ่มกลับหน้าหลัก
+    if st.button("🏠 กลับหน้าหลัก (Home)"):
+        st.session_state.page = 'Home'
+        st.session_state.market = None
+        st.rerun()
+        
     m = st.session_state.market
     st.write(f"### {'🇹🇭 THAI MENU' if m=='th' else '🇺🇸 US MENU'}")
     st.write('---')
@@ -163,6 +164,16 @@ elif st.session_state.page == 'SubMenu':
 
 # 📋 หน้า Watchlist
 elif st.session_state.page == 'Watch':
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    
+    nav_c1, nav_c2 = st.columns(2)
+    with nav_c1:
+        if st.button("🏠 Home"):
+            st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
+    with nav_c2:
+        if st.button("⬅ กลับเมนูเลือกตลาด"):
+            st.session_state.page = 'SubMenu'; st.rerun()
+
     m = st.session_state.market
     st.write(f"### 📋 WATCHLIST ({'TH' if m=='th' else 'US'})")
     
@@ -185,6 +196,16 @@ elif st.session_state.page == 'Watch':
 
 # 🔍 หน้า Scan
 elif st.session_state.page == 'Scan':
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V11.3</div>', unsafe_allow_html=True)
+    
+    nav_c1, nav_c2 = st.columns(2)
+    with nav_c1:
+        if st.button("🏠 Home"):
+            st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
+    with nav_c2:
+        if st.button("⬅ กลับเมนูเลือกตลาด"):
+            st.session_state.page = 'SubMenu'; st.rerun()
+
     m = st.session_state.market
     st.write(f"### 🔍 SIGNAL SCAN ({'TH' if m=='th' else 'US'})")
     if st.button("🔄 รีเฟรชสัญญาณ"): st.cache_data.clear(); st.rerun()
