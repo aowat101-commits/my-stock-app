@@ -27,7 +27,6 @@ def manage_list(mode, ticker=None, action="load"):
             with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# ระบบเก็บประวัติสัญญาณ (Session State)
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame()
 if 'last_alert_key' not in st.session_state:
@@ -49,13 +48,9 @@ st.markdown("""
     .stButton > button { height: 35px !important; border-radius: 8px !important; font-size: 13px !important; width: 100%; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; }
     </style>
-    <audio id="alertAudio" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
-    <script>
-    function playAlert() { document.getElementById('alertAudio').play(); }
-    </script>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE (Indicators & Logic) ---
+# --- 3. CORE ENGINE ---
 def fetch_verified_data(ticker, mode, is_scan=False):
     try:
         symbol = f"{ticker.upper()}.BK" if ".BK" not in ticker.upper() and mode in ['TW', 'TS'] else ticker.upper()
@@ -63,24 +58,19 @@ def fetch_verified_data(ticker, mode, is_scan=False):
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        # Indicators เดิมครบถ้วน
         ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
 
         current_idx = len(df) - 1
-        cp = float(df['Close'].iloc[current_idx])
-        h_curr, h_prev = hull.iloc[current_idx], hull.iloc[current_idx-1]
-        w1, w2 = wt1.iloc[current_idx], wt2.iloc[current_idx]
-        vol, v5, e8 = df['Volume'].iloc[current_idx], vma5.iloc[current_idx], ema8.iloc[current_idx]
+        cp, h_curr, h_prev = float(df['Close'].iloc[current_idx]), hull.iloc[current_idx], hull.iloc[current_idx-1]
+        w1, w2, vol, v5, e8 = wt1.iloc[current_idx], wt2.iloc[current_idx], df['Volume'].iloc[current_idx], vma5.iloc[current_idx], ema8.iloc[current_idx]
         
-        # Check Close Time เพื่อดูว่าปิดแท่งหรือยัง
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         is_candle_closed = (datetime.now(pytz.timezone('Asia/Bangkok')) - last_time) > timedelta(minutes=55)
 
         s_label, s_col = "-", "#FFD700"
-        # Logic การสแกนเดิม
         if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label, s_col = "BUY", "#00FF00"
         elif w1 > w2 and w1 < -47 and cp > e8: s_label, s_col = "DEEP BUY", "#00FF00"
         elif w1 < w2 and w1 > 53: s_label, s_col = "P-SELL", "#FFA500"
@@ -88,15 +78,12 @@ def fetch_verified_data(ticker, mode, is_scan=False):
 
         if s_label == "-": return None
         
-        # ปรับเป็น DEEP BUY หากยังไม่ปิดแท่ง (V10.0 Middle-Candle Alert)
         display_label = s_label
-        if not is_candle_closed and s_label == "BUY":
-            display_label = "DEEP BUY"
+        if not is_candle_closed and s_label == "BUY": display_label = "DEEP BUY"
 
         c_pp = float(df['Close'].iloc[-2])
         chg = cp - c_pp
         val_raw = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
-        
         v_col = "#808080" if val_raw <= 10 else ("#00BFFF" if val_raw <= 100 else "#FF00FF")
 
         res = {
@@ -107,12 +94,10 @@ def fetch_verified_data(ticker, mode, is_scan=False):
             "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col
         }
 
-        # ระบบป้องกันสัญญาณซ้ำใน 1 ชั่วโมง
+        # บันทึกประวัติ (ไม่โชว์ Alert ข้อความ)
         alert_key = f"{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
         if is_scan and alert_key not in st.session_state.last_alert_key:
             st.session_state.last_alert_key.add(alert_key)
-            st.toast(f"🔔 NEW SIGNAL: {ticker} -> {display_label}")
-            st.components.v1.html("<script>playAlert();</script>", height=0)
             new_row = pd.DataFrame([res])
             st.session_state.signal_history = pd.concat([new_row, st.session_state.signal_history], ignore_index=True)
 
@@ -126,57 +111,59 @@ def apply_style(row):
 
 # --- 4. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
+if 'edit_mode' not in st.session_state: st.session_state.edit_mode = False
 p = st.session_state.page
 
-st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if p == 'Home' else "secondary")
+st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home", "edit_mode": False}), type="primary" if p == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
-    st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW"}), type="primary" if p == 'TW' else "secondary")
-    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if p == 'TS' else "secondary")
+    st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW", "edit_mode": False}), type="primary" if p == 'TW' else "secondary")
+    st.button("🇹🇭 THAI MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS", "edit_mode": False}), type="primary" if p == 'TS' else "secondary")
 with c2:
-    st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if p == 'UW' else "secondary")
-    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if p == 'US' else "secondary")
+    st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW", "edit_mode": False}), type="primary" if p == 'UW' else "secondary")
+    st.button("🇺🇸 US MARKET SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US", "edit_mode": False}), type="primary" if p == 'US' else "secondary")
 
 st.write(f'<div class="classic-header">PPE Guardian V10.0 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
 
-# --- 5. MAIN CONTENT ---
+# --- 5. CONTENT ---
 if p == 'Home':
     st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
+    curr_list = manage_list(m_key)
     
-    if 'W' in p: # Watchlist Mode
+    if 'W' in p:
         with st.expander(f"➕ Manage {m_key.upper()} List", expanded=True):
-            new_t = st.text_input(f"Ticker:", key=f"in_{m_key}").upper()
-            if st.button("✅ Add Ticker"):
+            new_t = st.text_input(f"Add Ticker:", key=f"in_{m_key}").upper()
+            ca, ce = st.columns(2)
+            if ca.button("✅ Add"):
                 if new_t: manage_list(m_key, new_t, "add"); st.rerun()
+            if ce.button("🛠️ Toggle Edit"):
+                st.session_state.edit_mode = not st.session_state.edit_mode
+                st.rerun()
         
-        curr_list = manage_list(m_key)
         results = [fetch_verified_data(t, p) for t in curr_list]
         results = [r for r in results if r is not None]
         if results:
             df = pd.DataFrame(results)
             st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
-            st.write("---")
-            st.write("🗑️ **Remove:**")
-            del_cols = st.columns(5)
-            for i, t in enumerate(curr_list):
-                if del_cols[i % 5].button(f"✖ {t}", key=f"d_{t}"): manage_list(m_key, t, "delete"); st.rerun()
+            if st.session_state.edit_mode:
+                st.write("---")
+                st.write("🗑️ **Select to Remove:**")
+                del_cols = st.columns(4)
+                for i, t in enumerate(curr_list):
+                    if del_cols[i % 4].button(f"✖ {t}", key=f"d_{t}"): manage_list(m_key, t, "delete"); st.rerun()
 
-    else: # Scan Mode
-        st.write(f"🔍 **{m_key.upper()} Real-time History (Newest on Top)**")
-        curr_list = manage_list(m_key)
-        # ดำเนินการสแกนเพื่ออัปเดต History
-        for t in curr_list: fetch_verified_data(t, p, is_scan=True)
+    else:
+        c_head, c_btn = st.columns([3, 1])
+        c_head.write(f"🔍 **{m_key.upper()} Signal History**")
+        if c_btn.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
         
+        for t in curr_list: fetch_verified_data(t, p, is_scan=True)
         if not st.session_state.signal_history.empty:
-            df_hist = st.session_state.signal_history
-            # กรองแสดงผลเฉพาะตลาดที่เลือก
-            is_th_market = df_hist['Ticker'].str.contains('') # ในที่นี้จะแสดงทั้งหมด หรือแยกตามต้องการ
-            st.dataframe(df_hist.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
+            st.dataframe(st.session_state.signal_history.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
 
-# Refresh ทุก 10 นาที (600 วินาที)
 time.sleep(600)
 st.rerun()
