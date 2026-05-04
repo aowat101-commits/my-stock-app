@@ -7,7 +7,7 @@ import pytz
 import time
 import os
 
-# --- 1. CORE STORAGE SYSTEM ---
+# --- 1. CORE STORAGE ---
 def manage_storage(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     if not os.path.exists(file_path):
@@ -25,10 +25,9 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & CSS ---
-st.set_page_config(page_title="PPE Guardian V15.9", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP ---
+st.set_page_config(page_title="PPE Guardian V16.0", layout="wide", initial_sidebar_state="collapsed")
 
-# ป้องกันหน้าเด้ง
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
 curr_m = st.query_params.get('market', None)
@@ -37,20 +36,12 @@ st.markdown("""
     <style>
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
-    
-    /* บังคับกึ่งกลางทุกส่วน */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    
-    div[data-testid="stVerticalBlock"] { 
-        display: flex !important; flex-direction: column !important;
-        align-items: center !important; width: 100% !important; 
-    }
-
-    /* สไตล์ปุ่มและบังคับกึ่งกลาง */
+    div[data-testid="stVerticalBlock"] { align-items: center !important; width: 100% !important; }
     .stButton { display: flex !important; justify-content: center !important; width: 100% !important; }
     .stButton > button { 
         height: 50px !important; border-radius: 12px !important; font-size: 17px !important; 
@@ -69,28 +60,21 @@ def fetch_data(ticker, mode):
         df = yf.download(sym, period="1mo", interval="1h", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        
         e8 = ta.ema(df['Close'], 8); e20 = ta.ema(df['Close'], 20)
         h = ta.hma(df['Close'], 30); v5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
-        
         cp = float(df['Close'].iloc[-1]); hc = h.iloc[-1]; hp = h.iloc[-2]
         vol = df['Volume'].iloc[-1]; w1 = wt1.iloc[-1]; w2 = wt2.iloc[-2]
-        
         sig = "-"
         if cp > e8.iloc[-1] and hc > hp and vol > (v5.iloc[-1] * 1.2): sig = "BUY"
         elif w1 > w2 and w1 < -47 and cp > e8.iloc[-1]: sig = "DEEP BUY"
         elif cp < e20.iloc[-1] or hc < hp: sig = "SELL"
         elif cp < e8.iloc[-1] and hc < hp: sig = "P-SELL"
-        
         c_pp = float(df['Close'].iloc[-2]); p_p_c = float(df['Close'].iloc[-3])
-        return {
-            "Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp,
-            "%Chg": ((cp - c_pp) / c_pp) * 100, "Value (M)": (cp * vol) / 1_000_000,
-            "TimeUpdate": df.index[-1].astimezone(pytz.timezone('Asia/Bangkok')).strftime("%H:%M %d/%m"),
-            "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp
-        }
+        return {"Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp, "%Chg": ((cp - c_pp) / c_pp) * 100, 
+                "Value (M)": (cp * vol) / 1_000_000, "TimeUpdate": df.index[-1].astimezone(pytz.timezone('Asia/Bangkok')).strftime("%H:%M %d/%m"), 
+                "Signal": sig, "p_sig": c_pp - p_p_c, "m_chg": cp - c_pp}
     except: return None
 
 def apply_styles(data):
@@ -105,7 +89,7 @@ def apply_styles(data):
         for c in ["Price", "Chg", "%Chg", "Value (M)"]: styles.at[data.index[i], c] = m_c
     return styles
 
-# --- 4. NAV TOOLS ---
+# --- 4. NAVIGATION ---
 def go(p, m=None):
     st.query_params['page'] = p
     if m: st.query_params['market'] = m
@@ -114,11 +98,11 @@ def go(p, m=None):
 def hdr(t, s):
     st.markdown(f'<div style="text-align: center;"><h1 style="color: #FFD700; margin:0;">{t}</h1><p style="color: #1E90FF;">{s}</p></div>', unsafe_allow_html=True)
 
-# --- 5. LOGIC ---
+# --- 5. PAGE DISPATCHER (แยกหน้าจอเด็ดขาด) ---
 t_now = datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S 📅 %d/%m/%Y")
 
 if curr_p == 'Home':
-    hdr("TRADING HOME", f"{t_now} | V15.9")
+    hdr("TRADING HOME", f"{t_now} | V16.0")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
@@ -131,29 +115,35 @@ elif curr_p == 'SubMenu':
     if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
     if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
-elif curr_p in ['Watch', 'Scan']:
+elif curr_p == 'Watch':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} {'WATCHLIST' if curr_p == 'Watch' else 'SCAN'}", t_now)
+    hdr(f"{f} WATCHLIST", t_now)
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
-    
-    if curr_p == 'Watch':
-        with st.expander("⚙️ Manage List", expanded=False):
-            nt = st.text_input("Ticker:", placeholder="e.g. PTT", key="in").upper()
-            if st.button("➕ Add"): manage_storage(curr_m, nt, "add"); st.cache_data.clear(); st.rerun()
-            st.markdown('<div class="del-btn">', unsafe_allow_html=True)
-            if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.cache_data.clear(); st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
+    with st.expander("⚙️ Manage List", expanded=False):
+        nt = st.text_input("Ticker:", placeholder="e.g. PTT", key="in_w").upper()
+        if st.button("➕ Add"): manage_storage(curr_m, nt, "add"); st.cache_data.clear(); st.rerun()
+        st.markdown('<div class="del-btn">', unsafe_allow_html=True)
+        if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.cache_data.clear(); st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     res = [r for r in res if r]
-    
     if res:
         df = pd.DataFrame(res)
-        if curr_p == 'Scan': df = df[df['Signal'] != "-"]
+        st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M"}), 
+                     use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","TimeUpdate"])
+
+elif curr_p == 'Scan':
+    f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
+    hdr(f"{f} SCAN", t_now)
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
+    res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
+    res = [r for r in res if r]
+    if res:
+        df = pd.DataFrame(res)
+        df = df[df['Signal'] != "-"]
         if not df.empty:
-            st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M"}), 
-                         use_container_width=True, hide_index=True, 
-                         column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","TimeUpdate"] if curr_p=='Watch' else ["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
+            st.dataframe(df.style.apply(apply_styles, axis=None).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
+                         use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
         else: st.info("No active signals. Pull down to refresh.")
 
 time.sleep(600); st.rerun()
