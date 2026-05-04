@@ -25,7 +25,7 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & CSS (คงเดิมจาก V16.13) ---
+# --- 2. UI SETUP ---
 st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
@@ -44,9 +44,6 @@ st.markdown("""
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    div[data-testid="stVerticalBlock"] > div, div.stButton {
-        display: flex !important; justify-content: center !important; width: 100% !important;
-    }
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
@@ -54,7 +51,6 @@ st.markdown("""
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
         margin: 10px auto !important; display: block !important;
     }
-    .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; }
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
         font-weight: 400 !important; background-color: #1e293b !important;
@@ -63,7 +59,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. THE GUARDIAN SWING ENGINE (แก้ไขเฉพาะเงื่อนไข) ---
+# --- 3. THE GUARDIAN SWING ENGINE ---
 def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
@@ -79,7 +75,6 @@ def fetch_data(ticker, mode):
         df = t_obj.history(period="1mo", interval="1h")
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
-        # Indicators
         e8 = ta.ema(df['Close'], 8); e20 = ta.ema(df['Close'], 20)
         h = ta.hma(df['Close'], 30); rsi = ta.rsi(df['Close'], 14)
         ap = (df['High'] + df['Low'] + df['Close']) / 3
@@ -90,7 +85,6 @@ def fetch_data(ticker, mode):
         chg = current_price - prev_close
         pct_chg = (chg / prev_close) * 100
         
-        # --- 4 SIGNAL NAMES (P-BUY, BUY, P-SELL, SELL) ---
         sig = "-"
         if wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -45 and current_price > e8.iloc[-1]:
             sig = "P-BUY"
@@ -115,7 +109,8 @@ def apply_styles(data):
         styles = [f'background-color: #1e293b; {m_c}; font-weight: 400'] * len(row)
         if "Signal" in data.columns:
             idx_sig = data.columns.get_loc("Signal")
-            sig_c = 'color: #00FF00' if "BUY" in row['Signal'] else ('color: #FF0000' if "SELL" in row['Signal'] else 'color: #FFD700')
+            sig_val = str(row['Signal'])
+            sig_c = 'color: #00FF00' if "BUY" in sig_val else ('color: #FF0000' if "SELL" in sig_val else 'color: #FFD700')
             styles[idx_sig] = f'background-color: #1e293b; {sig_c}; font-weight: 400'
         return styles
     return styler.apply(row_style, axis=1)
@@ -151,7 +146,6 @@ elif curr_p == 'Watch':
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        # ล็อก 8 คอลัมน์เดิม: Ticker, Prev, Price, Chg, %Chg, Value(M), RSI, TimeUpdate
         st.dataframe(apply_styles(df).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), 
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
@@ -159,13 +153,17 @@ elif curr_p == 'Scan':
     hdr("TH SCAN")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
-    new_res = [r for r in new_res if r and r['Signal'] != "-"]
-    if new_res:
-        new_df = pd.DataFrame(new_res)
-        combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
+    # กรองเฉพาะตัวที่มีสัญญาณ 4 ตัวหลักเท่านั้น
+    new_active = [r for r in new_res if r and r['Signal'] in ["P-BUY", "BUY", "P-SELL", "SELL"]]
+    
+    if new_active:
+        new_df = pd.DataFrame(new_active)
+        # นำสัญญาณใหม่มาต่อกับประวัติเดิม โดยใช้ Ticker + Signal เป็นตัวตัดสิน (ถ้าสัญญาณเดิมของหุ้นเดิมมาซ้ำ ให้รักษาเวลาเก่าไว้)
+        combined = pd.concat([new_df, st.session_state.signal_history]).drop_duplicates(subset=['Ticker', 'Signal'], keep='last')
+        # เรียงลำดับจากใหม่ไปเก่า (ใหม่ล่าสุดอยู่บน) และเก็บ 30 รายการ
         st.session_state.signal_history = combined.sort_values(by="RawTime", ascending=False).head(30)
+
     if not st.session_state.signal_history.empty:
-        # ล็อก 7 คอลัมน์: Ticker, Prev, Price, Chg, %Chg, Signal, TimeUpdate
         st.dataframe(apply_styles(st.session_state.signal_history).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), 
                      use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Signal","TimeUpdate"])
 
