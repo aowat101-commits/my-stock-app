@@ -76,14 +76,11 @@ def fetch_data_thai(ticker):
         
         df = t_obj.history(period="1mo", interval="1h")
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        e8 = ta.ema(df['Close'], length=8)
-        e20 = ta.ema(df['Close'], length=20)
+        e8 = ta.ema(df['Close'], length=8); e20 = ta.ema(df['Close'], length=20)
         hma30 = ta.hma(df['Close'], length=30)
         ap = (df['High'] + df['Low'] + df['Close']) / 3
-        esa = ta.ema(ap, length=9)
-        d = ta.ema(abs(ap - esa), length=9)
-        ci = (ap - esa) / (0.015 * d)
-        tci = ta.ema(ci, length=12)
+        esa = ta.ema(ap, length=9); d = ta.ema(abs(ap - esa), length=9)
+        ci = (ap - esa) / (0.015 * d); tci = ta.ema(ci, length=12)
         wt1 = tci; wt2 = ta.sma(wt1, length=3)
         
         cp = float(t_obj.fast_info['last_price'])
@@ -110,13 +107,11 @@ def apply_styles(data):
     if data.empty: return data.style
     styler = data.style.set_table_styles([{'selector': 'td, th', 'props': [('background-color', '#1e293b')]}])
     def row_style(row):
-        # แก้ไขจุด KeyError: ตรวจเช็คก่อนว่ามีคอลัมน์ m_chg ไหม
         val = row.get('m_chg', 0)
         m_c = 'color: #00FF00' if val > 0 else ('color: #FF0000' if val < 0 else 'color: #FFD700')
         styles = [f'background-color: #1e293b; {m_c}; font-weight: 400'] * len(row)
         if "Signal" in row.index:
-            sig_val = str(row['Signal'])
-            sig_idx = list(row.index).index("Signal")
+            sig_val = str(row['Signal']); sig_idx = list(row.index).index("Signal")
             s_c = 'color: #00FF00' if "BUY" in sig_val else ('color: #FF0000' if sig_val in ["EXIT", "P-SALE"] else 'color: #FFD700')
             styles[sig_idx] = f'background-color: #1e293b; {s_c}; font-weight: 400'
         return styles
@@ -162,7 +157,8 @@ elif curr_p == 'Watch':
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        st.dataframe(apply_styles(df).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","TimeUpdate"])
+        # คืนค่าคอลัมน์ให้ครบ 6 คอลัมน์ (Ticker, Price, Chg, %Chg, Signal, TimeUpdate)
+        st.dataframe(apply_styles(df).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","Signal","TimeUpdate"])
 
 elif curr_p == 'Scan':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
@@ -172,12 +168,11 @@ elif curr_p == 'Scan':
     new_res = [r for r in new_res if r and r['Signal'] != "-"]
     if new_res:
         new_df = pd.DataFrame(new_res)
-        # แก้ไขการรวมข้อมูลเพื่อไม่ให้สูญเสียคอลัมน์
         combined = pd.concat([new_df, st.session_state.signal_history], ignore_index=True).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
         st.session_state.signal_history = combined.sort_values(by="RawTime", ascending=False).head(30)
     
     if not st.session_state.signal_history.empty:
-        # บังคับเรียกใช้ m_chg ในการแสดงผล
+        # คืนค่าคอลัมน์ให้ครบตามเดิม
         st.dataframe(apply_styles(st.session_state.signal_history).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","Signal","TimeUpdate"])
 
 time.sleep(600); st.rerun()
