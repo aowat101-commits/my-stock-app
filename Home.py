@@ -30,8 +30,8 @@ def manage_storage(mode, ticker=None, action="load"):
 if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 
-# --- 2. UI SETUP & ABSOLUTE CENTERING (V14.0) ---
-st.set_page_config(page_title="PPE Guardian V14.0", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & ABSOLUTE CENTERING ---
+st.set_page_config(page_title="PPE Guardian V14.1", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -76,31 +76,38 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. INDICATOR ENGINE ---
+# --- 3. INDICATOR ENGINE (With RSI) ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, market_mode):
     try:
         symbol = f"{ticker.upper()}.BK" if market_mode == "th" and ".BK" not in ticker.upper() else ticker.upper()
-        df = yf.download(symbol, period="7d", interval="1h", progress=False)
+        # ดึงข้อมูลย้อนหลังมากขึ้นเพื่อคำนวณ RSI 14 วัน
+        df = yf.download(symbol, period="1mo", interval="1h", progress=False)
         if df.empty: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
-        hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
-        esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
-        ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
-        cp = float(df['Close'].iloc[-1]); h_curr = hull.iloc[-1]; h_prev = hull.iloc[-2]
-        w1 = wt1.iloc[-1]; w2 = wt2.iloc[-2]; vol = df['Volume'].iloc[-1]; v5 = vma5.iloc[-1]; e8 = ema8.iloc[-1]
-        last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
-        is_closed = (datetime.now(pytz.timezone('Asia/Bangkok')) - last_time) > timedelta(minutes=55)
-        s_label = "-"
-        if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label = "BUY"
-        elif w1 > w2 and w1 < -47 and cp > e8: s_label = "DEEP BUY"
-        elif w1 < w2 and w1 > 53: s_label = "P-SELL"
-        elif cp < ema20.iloc[-1] or h_curr < h_prev: s_label = "SELL"
         
-        c_pp = float(df['Close'].iloc[-2]); chg = cp - c_pp
-        val_raw = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
-        return {"Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{cp:.2f}", "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", "Signal": s_label, "Value (M)": f"{val_raw:.2f}M", "TimeUpdate": last_time.strftime("%H:%M %d/%m")}
+        # คำนวณ RSI
+        rsi_series = ta.rsi(df['Close'], length=14)
+        current_rsi = rsi_series.iloc[-1] if not rsi_series.empty else 0
+        
+        cp = float(df['Close'].iloc[-1])
+        c_pp = float(df['Close'].iloc[-2])
+        chg = cp - c_pp
+        vol = df['Volume'].iloc[-1]
+        val_raw = (cp * vol) / 1_000_000
+        last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
+        
+        # คืนค่าตามลำดับคอลัมน์ที่คุณมิลค์ต้องการ
+        return {
+            "Ticker": ticker.upper(),
+            "Prev": f"{c_pp:.2f}",
+            "Price": f"{cp:.2f}",
+            "Chg": f"{chg:+.2f}",
+            "%Chg": f"{(chg/c_pp)*100:.2f}%",
+            "Value (M)": f"{val_raw:.2f}M",
+            "TimeUpdate": last_time.strftime("%H:%M %d/%m"),
+            "RSI": f"{current_rsi:.2f}"
+        }
     except: return None
 
 # --- 4. NAVIGATION & TIME ---
@@ -114,7 +121,7 @@ def centered_header(title, subtitle):
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.0")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V14.1")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
@@ -122,14 +129,14 @@ if st.session_state.page == 'Home':
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
-    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.0")
+    centered_header(m_label, f"{time_str} 📅 {date_str} | V14.1")
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
-    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.0")
+    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V14.1")
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     
     with st.expander("⚙️ Manage List", expanded=True):
@@ -141,22 +148,21 @@ elif st.session_state.page == 'Watch':
             manage_storage(st.session_state.market, new_t, "delete"); st.cache_data.clear(); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🔥 ส่วนที่แก้ไข: แสดงหัวตารางค้างไว้แม้ไม่มีข้อมูล
     cl = manage_storage(st.session_state.market)
     results = [fetch_verified_data(t, st.session_state.market) for t in cl]
     results = [r for r in results if r]
     
-    # ถ้าไม่มีข้อมูล ให้สร้าง DataFrame เปล่าที่มีหัวข้อรอไว้
-    df_display = pd.DataFrame(results) if results else pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "Value (M)", "TimeUpdate"])
+    # แสดงหัวตารางรอไว้แม้ไม่มีข้อมูล (เรียงคอลัมน์ตามสั่ง: ตัด Signal, ขยับ Value, จบด้วย RSI)
+    cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate", "RSI"]
+    df_display = pd.DataFrame(results) if results else pd.DataFrame(columns=cols)
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 elif st.session_state.page == 'Scan':
-    centered_header(f"🔍 SIGNAL SCAN", f"{time_str} 📅 {date_str} | V14.0")
+    centered_header(f"🔍 SIGNAL SCAN", f"{time_str} 📅 {date_str} | V14.1")
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     m = st.session_state.market
     if st.button("🔄 รีเฟรชสัญญาณ"): st.cache_data.clear(); st.rerun()
-    # (โค้ดดึงข้อมูล Scan คงเดิม)
     hist_df = st.session_state.th_logs if m == 'th' else st.session_state.us_logs
     st.dataframe(hist_df, use_container_width=True, hide_index=True)
 
