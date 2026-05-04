@@ -27,12 +27,16 @@ def manage_storage(mode, ticker=None, action="load"):
             with open(file_path, "w") as f: f.write(",".join(current_data)); f.flush()
     return current_data
 
-# --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V15.6", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & PERSISTENT NAVIGATION ---
+st.set_page_config(page_title="PPE Guardian V15.7", layout="wide", initial_sidebar_state="collapsed")
 
-# ป้องกันหน้าเด้งโดยการเช็ค session_state ให้เข้มข้นขึ้น
-if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 'market' not in st.session_state: st.session_state.market = None
+# ระบบล็อกหน้าจอถาวร (ป้องกันการเด้งกลับหน้า Home บนมือถือ)
+if 'page' not in st.query_params:
+    st.query_params['page'] = 'Home'
+
+# ดึงค่าจาก URL มาใช้เป็นสถานะหลัก
+current_page = st.query_params.get('page', 'Home')
+current_market = st.query_params.get('market', None)
 
 st.markdown("""
     <style>
@@ -88,7 +92,7 @@ def fetch_verified_data(ticker, market_mode):
         }
     except: return None
 
-def apply_v15_6_styling(data):
+def apply_styling(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
@@ -102,7 +106,12 @@ def apply_v15_6_styling(data):
             if col in data.columns: styles.at[data.index[i], col] = m_c
     return styles
 
-# --- 4. NAVIGATION ---
+# --- 4. NAVIGATION TOOLS ---
+def set_nav(page, market=None):
+    st.query_params['page'] = page
+    if market: st.query_params['market'] = market
+    st.rerun()
+
 now = datetime.now(pytz.timezone("Asia/Bangkok"))
 time_str = now.strftime("%H:%M:%S"); date_str = now.strftime("%d/%m/%Y")
 
@@ -110,61 +119,53 @@ def centered_header(title, subtitle):
     st.markdown(f"""<div style="text-align: center; width: 100%;"><h1 style="color: #FFD700; font-size: 32px; font-weight: 900; margin-bottom: 0px;">{title}</h1><p style="color: #1E90FF; font-size: 13px; margin-top: 0px; margin-bottom: 10px;">{subtitle}</p></div>""", unsafe_allow_html=True)
 
 # --- 5. PAGE LOGIC ---
-if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V15.6")
-    if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
-    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
+if current_page == 'Home':
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V15.7")
+    if st.button("🇹🇭 ตลาดหุ้นไทย"): set_nav('SubMenu', 'th')
+    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): set_nav('SubMenu', 'us')
     st.write('---')
     st.markdown(f'<div style="display: flex; justify-content: center; width: 100%; margin: 10px 0;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
-elif st.session_state.page == 'SubMenu':
-    flag = "🇹🇭" if st.session_state.market == 'th' else "🇺🇸"
+elif current_page == 'SubMenu':
+    flag = "🇹🇭" if current_market == 'th' else "🇺🇸"
     centered_header(f"{flag} MENU", f"{time_str} 📅 {date_str}")
-    if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
-    if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
-    if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
+    if st.button("📋 WATCHLIST"): set_nav('Watch', current_market)
+    if st.button("🔍 MARKET SCAN"): set_nav('Scan', current_market)
+    if st.button("🏠 กลับหน้าหลัก"): set_nav('Home')
 
-elif st.session_state.page in ['Watch', 'Scan']:
-    flag = "🇹🇭" if st.session_state.market == 'th' else "🇺🇸"
-    title_label = "WATCHLIST" if st.session_state.page == 'Watch' else "SCAN"
+elif current_page in ['Watch', 'Scan']:
+    flag = "🇹🇭" if current_market == 'th' else "🇺🇸"
+    title_label = "WATCHLIST" if current_page == 'Watch' else "SCAN"
     centered_header(f"{flag} {title_label}", f"{time_str} 📅 {date_str}")
     
-    if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
+    if st.button("⬅ กลับเมนูตลาด"): set_nav('SubMenu', current_market)
     
-    # หน้า WATCH ให้มี Manage List สำหรับจัดการหุ้น
-    if st.session_state.page == 'Watch':
+    if current_page == 'Watch':
         with st.expander("⚙️ Manage List", expanded=False):
-            new_t = st.text_input("Ticker:", placeholder="e.g. PTT", key="add_input").upper()
-            if st.button("➕ Add"): manage_storage(st.session_state.market, new_t, "add"); st.cache_data.clear(); st.rerun()
+            new_t = st.text_input("Ticker:", placeholder="e.g. PTT", key="add_box").upper()
+            if st.button("➕ Add"): manage_storage(current_market, new_t, "add"); st.cache_data.clear(); st.rerun()
             st.markdown('<div class="del-btn">', unsafe_allow_html=True)
-            if st.button("🗑️ Delete"): manage_storage(st.session_state.market, new_t, "delete"); st.cache_data.clear(); st.rerun()
+            if st.button("🗑️ Delete"): manage_storage(current_market, new_t, "delete"); st.cache_data.clear(); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-
-    # หน้า SCAN ตัด Manage List ออก และมีแค่ปุ่ม Manual Scan
-    elif st.session_state.page == 'Scan':
+    elif current_page == 'Scan':
         st.markdown('<div class="scan-btn">', unsafe_allow_html=True)
         if st.button("🔍 กดเพื่อสแกนใหม่ (Manual Scan)"): st.cache_data.clear(); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    cl = manage_storage(st.session_state.market)
-    results = [fetch_verified_data(t, st.session_state.market) for t in cl]
+    cl = manage_storage(current_market)
+    results = [fetch_verified_data(t, current_market) for t in cl]
     results = [r for r in results if r]
     
-    if st.session_state.page == 'Watch':
-        watch_disp = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"]
-        if results:
-            df = pd.DataFrame(results)
-            styled = df.style.apply(apply_v15_6_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M"})
-            st.dataframe(styled, use_container_width=True, hide_index=True, column_order=watch_disp)
+    disp_cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"] if current_page == 'Watch' else ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
     
-    elif st.session_state.page == 'Scan':
-        scan_cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
-        if results:
-            df_scan = pd.DataFrame([r for r in results if r['Signal'] != "-"] )
-            if not df_scan.empty:
-                styled_s = df_scan.style.apply(apply_v15_6_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%"})
-                st.dataframe(styled_s, use_container_width=True, hide_index=True, column_order=scan_cols)
-            else: st.info("No active signals in your list.")
+    if results:
+        df = pd.DataFrame(results)
+        if current_page == 'Scan': df = df[df['Signal'] != "-"]
+        
+        if not df.empty:
+            styled = df.style.apply(apply_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M"})
+            st.dataframe(styled, use_container_width=True, hide_index=True, column_order=disp_cols)
+        else: st.info("No active signals.")
 
 # Auto rerun
 time.sleep(600); st.rerun()
