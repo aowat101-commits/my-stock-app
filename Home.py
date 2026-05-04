@@ -25,8 +25,8 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & STRICT CLEAN CSS ---
-st.set_page_config(page_title="PPE Guardian V16.11", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & ADVANCED CSS ---
+st.set_page_config(page_title="PPE Guardian V16.12", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg", "Value (M)"])
@@ -54,8 +54,18 @@ st.markdown("""
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
         margin: 10px auto !important; display: block !important;
     }
+    
+    /* 🎯 ปรับแต่งสีตารางเป็นโทนน้ำเงินเทาเข้ม (สบายตา) */
+    [data-testid="stDataFrame"] {
+        background-color: #1e293b !important;
+        border-radius: 12px !important;
+        padding: 10px !important;
+    }
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
         font-weight: 400 !important;
+        background-color: #1e293b !important;
+        color: #cbd5e1 !important; /* สีตัวหนังสือหัวข้อตาราง */
+        border-bottom: 1px solid #334155 !important;
     }
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
@@ -66,13 +76,11 @@ def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
         t_obj = yf.Ticker(sym)
-        # ดึงประวัติแบบ Daily เพื่อเอา Volume สะสมที่ถูกต้อง
         hist_d = t_obj.history(period="5d", interval="1d")
         if hist_d.empty: return None
         
         prev_close = float(hist_d['Close'].iloc[-2])
         current_price = float(t_obj.fast_info['last_price'])
-        # ใช้ Volume ของวันล่าสุดแทนการใช้ fast_info เพื่อแก้ปัญหา 0.00M
         daily_vol = float(hist_d['Volume'].iloc[-1])
         
         df = t_obj.history(period="1mo", interval="1h")
@@ -99,6 +107,7 @@ def apply_styles(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
+        # สีตัวเลขข้อมูลตามทิศทางราคา
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
         for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
             if col in data.columns: styles.at[data.index[i], col] = m_c
@@ -121,7 +130,7 @@ def hdr(t):
         <div style="text-align: center;">
             <h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
             <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">
-                {t_now} | PPE GUARDIAN V16.11
+                {t_now} | PPE GUARDIAN V16.12
             </p>
         </div>
     ''', unsafe_allow_html=True)
