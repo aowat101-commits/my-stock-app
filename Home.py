@@ -29,7 +29,7 @@ def manage_storage(mode, ticker=None, action="load"):
 st.set_page_config(page_title="PPE Guardian V16.14", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
-    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg"])
+    st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "RSI", "Signal", "TimeUpdate", "RawTime", "m_chg"])
 
 if 'page' not in st.query_params: st.query_params['page'] = 'Home'
 curr_p = st.query_params.get('page', 'Home')
@@ -44,9 +44,6 @@ st.markdown("""
         align-items: center !important; justify-content: flex-start !important;
         width: 100% !important; margin: 0 auto !important;
     }
-    div[data-testid="stVerticalBlock"] > div, div.stButton {
-        display: flex !important; justify-content: center !important; width: 100% !important;
-    }
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
@@ -59,11 +56,10 @@ st.markdown("""
         font-weight: 400 !important; background-color: #1e293b !important;
         color: #cbd5e1 !important; border-bottom: 1px solid #334155 !important;
     }
-    .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. ENGINE ---
+# --- 3. ENGINE (The Guardian Swing) ---
 def fetch_data_thai(ticker):
     try:
         sym = f"{ticker.upper()}.BK"
@@ -77,15 +73,15 @@ def fetch_data_thai(ticker):
         df = t_obj.history(period="1mo", interval="1h")
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         e8 = ta.ema(df['Close'], length=8); e20 = ta.ema(df['Close'], length=20)
-        hma30 = ta.hma(df['Close'], length=30)
+        hma30 = ta.hma(df['Close'], length=30); rsi = ta.rsi(df['Close'], length=14)
         ap = (df['High'] + df['Low'] + df['Close']) / 3
         esa = ta.ema(ap, length=9); d = ta.ema(abs(ap - esa), length=9)
         ci = (ap - esa) / (0.015 * d); tci = ta.ema(ci, length=12)
         wt1 = tci; wt2 = ta.sma(wt1, length=3)
         
         cp = float(t_obj.fast_info['last_price'])
-        chg = cp - prev_close
-        pct_chg = (chg / prev_close) * 100
+        val_m = (t_obj.fast_info['last_volume'] * cp) / 1_000_000
+        chg = cp - prev_close; pct_chg = (chg / prev_close) * 100
         
         sig = "-"
         if wt1.iloc[-1] > wt2.iloc[-1] and wt1.iloc[-1] < -45 and cp > e8.iloc[-1]:
@@ -98,9 +94,9 @@ def fetch_data_thai(ticker):
                 sig = "EXIT"
 
         now = datetime.now(pytz.timezone("Asia/Bangkok"))
-        return {"Ticker": ticker.upper(), "Price": cp, "Chg": chg, "%Chg": pct_chg, 
-                "Signal": sig, "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), 
-                "RawTime": now, "m_chg": chg}
+        return {"Ticker": ticker.upper(), "Prev": prev_close, "Price": cp, "Chg": chg, "%Chg": pct_chg, 
+                "Value (M)": val_m, "RSI": rsi.iloc[-1], "Signal": sig, 
+                "TimeUpdate": now.strftime("%H:%M:%S %d/%m"), "RawTime": now, "m_chg": chg}
     except: return None
 
 def apply_styles(data):
@@ -133,8 +129,6 @@ if curr_p == 'Home':
     hdr("TRADING HOME")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
-    st.write('---')
-    st.markdown('<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif curr_p == 'SubMenu':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
@@ -144,25 +138,17 @@ elif curr_p == 'SubMenu':
     if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
 elif curr_p == 'Watch':
-    f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} WATCHLIST")
+    hdr("TH WATCHLIST")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
-    with st.expander("⚙️ Manage List", expanded=False):
-        nt = st.text_input("Ticker:", key="in_w").upper()
-        if st.button("➕ Add"): manage_storage(curr_m, nt, "add"); st.rerun()
-        st.markdown('<div class="del-btn">', unsafe_allow_html=True)
-        if st.button("🗑️ Delete"): manage_storage(curr_m, nt, "delete"); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     res = [fetch_data_thai(t) for t in manage_storage(curr_m)]
     res = [r for r in res if r]
     if res:
         df = pd.DataFrame(res)
-        # คืนค่าคอลัมน์ให้ครบ 6 คอลัมน์ (Ticker, Price, Chg, %Chg, Signal, TimeUpdate)
-        st.dataframe(apply_styles(df).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","Signal","TimeUpdate"])
+        # ล็อก 8 คอลัมน์ตามภาพ edited-image_20.png
+        st.dataframe(apply_styles(df).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","TimeUpdate"])
 
 elif curr_p == 'Scan':
-    f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
-    hdr(f"{f} SCAN")
+    hdr("TH SCAN")
     if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data_thai(t) for t in manage_storage(curr_m)]
     new_res = [r for r in new_res if r and r['Signal'] != "-"]
@@ -170,9 +156,8 @@ elif curr_p == 'Scan':
         new_df = pd.DataFrame(new_res)
         combined = pd.concat([new_df, st.session_state.signal_history], ignore_index=True).drop_duplicates(subset=['Ticker', 'Signal'], keep='first')
         st.session_state.signal_history = combined.sort_values(by="RawTime", ascending=False).head(30)
-    
     if not st.session_state.signal_history.empty:
-        # คืนค่าคอลัมน์ให้ครบตามเดิม
-        st.dataframe(apply_styles(st.session_state.signal_history).format({"Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%"}), use_container_width=True, hide_index=True, column_order=["Ticker","Price","Chg","%Chg","Signal","TimeUpdate"])
+        # หน้า Scan เพิ่ม Signal เป็น 9 คอลัมน์
+        st.dataframe(apply_styles(st.session_state.signal_history).format({"Prev":"{:.2f}","Price":"{:.2f}","Chg":"{:+.2f}","%Chg":"{:+.2f}%","Value (M)":"{:.2f}M","RSI":"{:.2f}"}), use_container_width=True, hide_index=True, column_order=["Ticker","Prev","Price","Chg","%Chg","Value (M)","RSI","Signal","TimeUpdate"])
 
 time.sleep(600); st.rerun()
