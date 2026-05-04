@@ -7,7 +7,7 @@ import pytz
 import time
 import os
 
-# --- 1. CORE SYSTEM (แยกไฟล์ฐานข้อมูลเด็ดขาด) ---
+# --- 1. CORE STORAGE SYSTEM ---
 def manage_storage(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA'] if mode == "th" else ['IONQ', 'NVDA']
@@ -27,33 +27,30 @@ def manage_storage(mode, ticker=None, action="load"):
             with open(file_path, "w") as f: f.write(",".join(current_data)); f.flush()
     return current_data
 
-# แยกถังเก็บข้อมูล History
 if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
 # --- 2. UI SETUP ---
-st.set_page_config(page_title="PPE Guardian V11.0", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V11.1", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     [data-testid="stSidebar"], .st-emotion-cache-10o48ve, header, .stAppHeader { display: none !important; }
     section[data-testid="stSidebar"] { width: 0px !important; }
     .stApp { background-color: #0f172a; }
-    h1, h2, h3, p, span, label { color: #FFD700 !important; }
+    h1, h2, h3, p, span, label { color: #FFD700 !important; text-align: center; }
     .block-container { padding: 0.5rem 0.2rem !important; }
     .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 5px; }
     .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
     .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
-    .stButton > button { height: 35px !important; border-radius: 8px !important; font-size: 13px !important; width: 100%; }
-    div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; }
-    /* ปรับแต่ง Radio Button หน้า Home */
-    div[data-testid="stRadio"] > label { font-size: 20px !important; font-weight: bold !important; text-align: center; }
-    div[data-testid="stMarkdownContainer"] > p { text-align: center; }
+    /* ปรับแต่งปุ่มให้ใหญ่และเด่น */
+    .stButton > button { height: 60px !important; border-radius: 12px !important; font-size: 18px !important; font-weight: bold !important; width: 100%; border: 2px solid #FFD700 !important; }
+    div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. INDICATOR ENGINE (สูตรเดิม) ---
+# --- 3. INDICATOR ENGINE ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, market_mode, is_scan=False):
     try:
@@ -61,7 +58,7 @@ def fetch_verified_data(ticker, market_mode, is_scan=False):
         df = yf.download(symbol, period="7d", interval="1h", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-
+        
         ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
@@ -96,8 +93,8 @@ def fetch_verified_data(ticker, market_mode, is_scan=False):
 
         if is_scan:
             key = f"{market_mode}_{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
-            if key not in st.session_state.alert_keys:
-                st.session_state.alert_keys.add(key)
+            if key not in st.session_state.keys_seen:
+                st.session_state.keys_seen.add(key)
                 new_row = pd.DataFrame([res])
                 if market_mode == "th": st.session_state.th_logs = pd.concat([new_row, st.session_state.th_logs], ignore_index=True)
                 else: st.session_state.us_logs = pd.concat([new_row, st.session_state.us_logs], ignore_index=True)
@@ -109,65 +106,88 @@ def apply_style(row):
             (f'color: {row["PriceCol"]}' if col in ["Price", "Chg", "%Chg"] else 
             (f'color: {row["ValCol"]}' if col == "Value (M)" else '')) for col in row.index]
 
-# --- 4. STATE & NAVIGATION ---
+# --- 4. NAVIGATION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 'market' not in st.session_state: st.session_state.market = 'th'
-p = st.session_state.page
-m = st.session_state.market
+if 'market' not in st.session_state: st.session_state.market = None # ยังไม่เลือกตลาด
 
-# เมนูหลัก (โชว์เฉพาะปุ่มตลาดที่เลือก)
-st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if p == 'Home' else "secondary")
+st.write(f'<div class="classic-header">PPE Guardian V11.1 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
 
-if p != 'Home':
+# --- 5. PAGE LOGIC ---
+
+# 🏠 หน้าหลัก: เลือกตลาด
+if st.session_state.page == 'Home':
+    st.write('### 🏠 TRADING HOME')
+    st.write('---')
+    st.write('**กรุณาเลือกตลาดหุ้นที่ต้องการเข้าใช้งาน:**')
     c1, c2 = st.columns(2)
-    if m == 'th':
-        with c1: st.button("🇹🇭 THAI WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TW"}), type="primary" if p == 'TW' else "secondary")
-        with c2: st.button("🇹🇭 THAI SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "TS"}), type="primary" if p == 'TS' else "secondary")
-    else:
-        with c1: st.button("🇺🇸 US WATCHLIST", use_container_width=True, on_click=lambda: st.session_state.update({"page": "UW"}), type="primary" if p == 'UW' else "secondary")
-        with c2: st.button("🇺🇸 US SCAN", use_container_width=True, on_click=lambda: st.session_state.update({"page": "US"}), type="primary" if p == 'US' else "secondary")
-
-st.write(f'<div class="classic-header">PPE Guardian V11.0 | {datetime.now(pytz.timezone("Asia/Bangkok")).strftime("%H:%M:%S")}</div>', unsafe_allow_html=True)
-
-# --- 5. PAGE CONTENT ---
-if p == 'Home':
-    st.write('<div style="text-align:center; padding:10px;"><span style="color:#FFD700; font-size:30px; font-weight:900;">WELCOME</span><br><span style="color:#FFD700; font-size:35px; font-weight:900;">TRADING HOME</span></div>', unsafe_allow_html=True)
-    
-    # เพิ่มบรรทัดเลือกตลาดใต้ตัวหนังสือ
-    st.write("---")
-    market_choice = st.radio("📡 กรุณาเลือกตลาดที่จะเทรด:", ["ตลาดหุ้นไทย (SET)", "ตลาดหุ้นอเมริกา (US)"], horizontal=True, label_visibility="collapsed")
-    st.session_state.market = 'th' if "ไทย" in market_choice else 'us'
-    st.write("---")
-    
+    if c1.button("🇹🇭 ตลาดหุ้นไทย (SET)"):
+        st.session_state.market = 'th'
+        st.session_state.page = 'SubMenu'
+        st.rerun()
+    if c2.button("🇺🇸 ตลาดหุ้นอเมริกา (US)"):
+        st.session_state.market = 'us'
+        st.session_state.page = 'SubMenu'
+        st.rerun()
+    st.write('---')
     cl, cm, cr = st.columns([1, 1.5, 1]); cm.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", use_container_width=True)
 
-elif p in ['TW', 'UW']: # หน้า Watchlist
-    m_mode = 'th' if p == 'TW' else 'us'
-    with st.expander(f"➕ Manage {m_mode.upper()} List", expanded=True):
-        new_t = st.text_input(f"เพิ่มหุ้น {m_mode.upper()}:", key=f"add_{m_mode}").upper()
-        if st.button("✅ ยืนยันเพิ่มหุ้น"):
-            manage_storage(m_mode, new_t, "add"); st.cache_data.clear(); st.rerun()
+# 📂 หน้าเมนูย่อย: เลือก Watchlist หรือ Scan
+elif st.session_state.page == 'SubMenu':
+    m = st.session_state.market
+    st.write(f"### {'🇹🇭 ตลาดหุ้นไทย' if m=='th' else '🇺🇸 ตลาดหุ้นอเมริกา'}")
+    st.write('---')
+    c1, c2 = st.columns(2)
+    if c1.button("📋 WATCHLIST (รายการหุ้น)"):
+        st.session_state.page = 'Watch'
+        st.rerun()
+    if c2.button("🔍 MARKET SCAN (สัญญาณ)"):
+        st.session_state.page = 'Scan'
+        st.rerun()
+    st.write('---')
+    if st.button("🏠 กลับหน้าหลัก"):
+        st.session_state.page = 'Home'
+        st.session_state.market = None
+        st.rerun()
+
+# 📋 หน้า Watchlist
+elif st.session_state.page == 'Watch':
+    m = st.session_state.market
+    st.write(f"### 📋 WATCHLIST ({'TH' if m=='th' else 'US'})")
     
-    cl = manage_storage(m_mode)
-    results = [fetch_verified_data(t, m_mode) for t in cl]
+    with st.expander("➕ เพิ่มหุ้น", expanded=True):
+        new_t = st.text_input("ระบุชื่อหุ้น:").upper()
+        if st.button("✅ ยืนยันเพิ่ม"):
+            manage_storage(m, new_t, "add"); st.cache_data.clear(); st.rerun()
+    
+    cl = manage_storage(m)
+    results = [fetch_verified_data(t, m) for t in cl]
     results = [r for r in results if r]
     if results:
         df = pd.DataFrame(results)
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"])
-        st.write("🗑️ **ลบหุ้นออกจากรายการ:**")
+        st.write("🗑️ **ลบหุ้น:**")
         d_cols = st.columns(5)
         for i, t in enumerate(cl):
-            if d_cols[i%5].button(f"✖ {t}", key=f"del_{m_mode}_{t}"):
-                manage_storage(m_mode, t, "delete"); st.cache_data.clear(); st.rerun()
-
-elif p in ['TS', 'US']: # หน้า Scan
-    m_mode = 'th' if p == 'TS' else 'us'
-    c_btn, c_spacer = st.columns([1, 3])
-    if c_btn.button("🔄 สแกนใหม่แบบ Manual"): st.cache_data.clear(); st.rerun()
+            if d_cols[i%5].button(f"✖ {t}", key=f"del_{t}"):
+                manage_storage(m, t, "delete"); st.cache_data.clear(); st.rerun()
     
-    for t in manage_storage(m_mode): fetch_verified_data(t, m_mode, is_scan=True)
-    hist_df = st.session_state.th_logs if m_mode == 'th' else st.session_state.us_logs
+    if st.button("⬅ กลับเมนูเลือกตลาด"):
+        st.session_state.page = 'SubMenu'
+        st.rerun()
+
+# 🔍 หน้า Scan
+elif st.session_state.page == 'Scan':
+    m = st.session_state.market
+    st.write(f"### 🔍 SIGNAL SCAN ({'TH' if m=='th' else 'US'})")
+    if st.button("🔄 รีเฟรชสัญญาณ"): st.cache_data.clear(); st.rerun()
+    
+    for t in manage_storage(m): fetch_verified_data(t, m, is_scan=True)
+    hist_df = st.session_state.th_logs if m == 'th' else st.session_state.us_logs
     if not hist_df.empty:
         st.dataframe(hist_df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"])
+    
+    if st.button("⬅ กลับเมนูเลือกตลาด"):
+        st.session_state.page = 'SubMenu'
+        st.rerun()
 
 time.sleep(600); st.rerun()
