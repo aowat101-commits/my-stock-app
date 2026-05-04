@@ -31,51 +31,55 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
-# --- 2. UI SETUP & ABSOLUTE CENTERING (V13.8) ---
-st.set_page_config(page_title="PPE Guardian V13.8", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & ABSOLUTE CENTERING (V13.9) ---
+st.set_page_config(page_title="PPE Guardian V13.9", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
+    /* ปิดส่วนหัวและแถบข้าง Streamlit */
     [data-testid="stSidebar"], .st-emotion-cache-10o48ve, header, .stAppHeader { display: none !important; }
     .stApp { background-color: #0f172a; }
     
-    /* ล็อกกึ่งกลางระดับ Container ใหญ่ที่สุด */
-    .main .block-container {
-        padding-top: 1rem !important;
+    /* 🔥 ไม้ตาย: บังคับกึ่งกลางทุกอย่างในแอประดับ Global (Force Center) 🔥 */
+    .stApp .main .block-container {
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
+        justify-content: flex-start !important;
         text-align: center !important;
         width: 100% !important;
-    }
-
-    /* บังคับทุกบรรทัดย่อยให้กึ่งกลาง (ป้องกันดีดซ้าย) */
-    div[data-testid="stVerticalBlock"] > div {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: 100% !important;
+        max-width: 100% !important;
         margin: 0 auto !important;
     }
 
+    /* บังคับปุ่มและเนื้อหาทุกชนิดให้มาอยู่กึ่งกลาง */
+    div[data-testid="stVerticalBlock"], div[data-testid="stVerticalBlockBorderWrapper"] {
+        align-items: center !important;
+        width: 100% !important;
+    }
+
     /* สไตล์ปุ่มกด */
+    .stButton {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
     .stButton > button { 
-        height: 48px !important; 
-        border-radius: 10px !important; 
-        font-size: 16px !important; 
+        height: 50px !important; 
+        border-radius: 12px !important; 
+        font-size: 17px !important; 
         font-weight: bold !important; 
         color: #FFD700 !important; 
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important;
-        width: 280px !important;
-        margin: 6px auto !important;
+        width: 300px !important;
+        margin: 8px auto !important;
     }
 
     .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     
-    /* ประหยัดพื้นที่ Expander */
-    .stExpander { width: 100% !important; margin-top: -10px !important; }
+    /* ตกแต่งส่วนอื่นๆ */
+    .stExpander { width: 100% !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -114,7 +118,6 @@ now = datetime.now(pytz.timezone("Asia/Bangkok"))
 time_str = now.strftime("%H:%M:%S"); date_str = now.strftime("%d/%m/%Y")
 
 # --- 5. PAGE LOGIC ---
-# 🔥 ฟังก์ชันสร้างหัวกระดาษกึ่งกลาง (ป้องกันดีดซ้ายถาวร)
 def centered_header(title, subtitle):
     st.markdown(f"""
         <div style="text-align: center; width: 100%;">
@@ -124,7 +127,7 @@ def centered_header(title, subtitle):
         """, unsafe_allow_html=True)
 
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V13.8")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V13.9")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
@@ -132,20 +135,17 @@ if st.session_state.page == 'Home':
 
 elif st.session_state.page == 'SubMenu':
     m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
-    centered_header(m_label, f"{time_str} 📅 {date_str} | V13.8")
+    centered_header(m_label, f"{time_str} 📅 {date_str} | V13.9")
     if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
     if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
     if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
 elif st.session_state.page == 'Watch':
     m_code = "TH" if st.session_state.market == 'th' else "US"
-    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V13.8")
+    centered_header(f"📋 WATCHLIST ({m_code})", f"{time_str} 📅 {date_str} | V13.9")
     
-    # ปรับสมดุลปุ่มย้อนกลับให้ไม่ชิดหัวข้อเกินไป
     back_lbl = "⬅ กลับเมนูไทย" if st.session_state.market == 'th' else "⬅ กลับเมนู US"
-    st.markdown('<div style="margin: 10px 0;">', unsafe_allow_html=True)
     if st.button(back_lbl): st.session_state.page = 'SubMenu'; st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
     
     with st.expander("⚙️ Manage List", expanded=True):
         new_t = st.text_input("Ticker:", label_visibility="collapsed", placeholder="e.g. PTT").upper()
@@ -160,7 +160,7 @@ elif st.session_state.page == 'Watch':
     if results: st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
 
 elif st.session_state.page == 'Scan':
-    centered_header(f"🔍 SIGNAL SCAN", f"{time_str} 📅 {date_str} | V13.8")
+    centered_header(f"🔍 SIGNAL SCAN", f"{time_str} 📅 {date_str} | V13.9")
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     m = st.session_state.market
