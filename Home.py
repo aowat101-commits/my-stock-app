@@ -31,58 +31,43 @@ if 'th_logs' not in st.session_state: st.session_state.th_logs = pd.DataFrame()
 if 'us_logs' not in st.session_state: st.session_state.us_logs = pd.DataFrame()
 if 'keys_seen' not in st.session_state: st.session_state.keys_seen = set()
 
-# --- 2. UI SETUP & ABSOLUTE CENTERING (V12.1) ---
-st.set_page_config(page_title="PPE Guardian V12.1", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & ABSOLUTE CENTERING (V12.2) ---
+st.set_page_config(page_title="PPE Guardian V12.2", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    /* ปิดส่วนหัวและเมนูของ Streamlit */
     [data-testid="stSidebar"], .st-emotion-cache-10o48ve, header, .stAppHeader { display: none !important; }
-    
-    /* บังคับพื้นหลังและโครงสร้างหลักให้จัดกึ่งกลาง */
     .stApp { background-color: #0f172a; }
     
-    /* บังคับให้เนื้อหาทุกอย่างในกล่องหลักอยู่กึ่งกลาง */
+    /* บังคับกึ่งกลางทุกองค์ประกอบ */
     .main .block-container {
-        max-width: 1000px;
-        margin-left: auto;
-        margin-right: auto;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: flex-start;
         text-align: center;
     }
 
-    /* บังคับให้ทุก Block ย่อยจัดกึ่งกลาง */
     div[data-testid="stVerticalBlock"] {
         align-items: center !important;
-        justify-content: center !important;
         width: 100% !important;
     }
 
-    /* ตกแต่งหัวข้อ TRADING HOME ให้กึ่งกลางเป๊ะ */
-    .trading-title {
+    /* หัวข้อเมนูสีส้มทอง */
+    .menu-title {
         color: #FFD700 !important;
-        font-size: 40px !important;
+        font-size: 35px !important;
         font-weight: 900 !important;
-        text-align: center !important;
-        width: 100% !important;
-        display: block !important;
-        margin-top: 20px;
-        margin-bottom: 20px;
+        margin-bottom: 5px;
     }
 
     .classic-header { 
         color: #1E90FF !important; 
         font-size: 14px; 
         font-weight: 600; 
-        text-align: center !important; 
-        width: 100%;
-        margin-top: 15px; 
+        margin-bottom: 20px;
     }
 
-    /* สไตล์ปุ่มแนวตั้ง V12.1 */
+    /* สไตล์ปุ่มกดกึ่งกลางแนวตั้ง */
     .stButton > button { 
         height: 55px !important; 
         border-radius: 12px !important; 
@@ -91,8 +76,8 @@ st.markdown("""
         color: #FFD700 !important; 
         background-color: #1e293b !important; 
         border: 2px solid #FFD700 !important;
-        width: 280px !important; /* ปรับขนาดให้กดง่ายขึ้น */
-        margin: 10px auto !important;
+        width: 280px !important;
+        margin: 8px auto !important;
         display: block !important;
     }
     
@@ -100,8 +85,6 @@ st.markdown("""
         background-color: #334155 !important;
         border-color: #ffffff !important;
     }
-
-    div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; border: none !important; width: 100% !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -113,106 +96,69 @@ def fetch_verified_data(ticker, market_mode, is_scan=False):
         df = yf.download(symbol, period="7d", interval="1h", progress=False)
         if df.empty or len(df) < 20: return None
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        
         ema8 = ta.ema(df['Close'], 8); ema20 = ta.ema(df['Close'], 20)
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
-
         cp = float(df['Close'].iloc[-1]); h_curr = hull.iloc[-1]; h_prev = hull.iloc[-2]
         w1 = wt1.iloc[-1]; w2 = wt2.iloc[-2]; vol = df['Volume'].iloc[-1]; v5 = vma5.iloc[-1]; e8 = ema8.iloc[-1]
-        
         last_time = df.index[-1].astimezone(pytz.timezone('Asia/Bangkok'))
         is_closed = (datetime.now(pytz.timezone('Asia/Bangkok')) - last_time) > timedelta(minutes=55)
-
         s_label, s_col = "-", "#FFD700"
         if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label, s_col = "BUY", "#00FF00"
         elif w1 > w2 and w1 < -47 and cp > e8: s_label, s_col = "DEEP BUY", "#00FF00"
         elif w1 < w2 and w1 > 53: s_label, s_col = "P-SELL", "#FFA500"
         elif cp < ema20.iloc[-1] or h_curr < h_prev: s_label, s_col = "SELL", "#FF1100"
-
         if s_label == "-": return None
         display_label = "DEEP BUY" if not is_closed and s_label == "BUY" else s_label
-
         c_pp = float(df['Close'].iloc[-2]); chg = cp - c_pp
         val_raw = (cp * float(df['Volume'].iloc[-1])) / 1_000_000
-        v_col = "#808080" if val_raw <= 10 else ("#00BFFF" if val_raw <= 100 else "#FF00FF")
-
-        res = {
-            "Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{cp:.2f}", 
-            "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", 
-            "Signal": display_label, "Value (M)": f"{val_raw:.2f}M",
-            "TimeUpdate": last_time.strftime("%H:%M %d/%m"), 
-            "PriceCol": "#00FF00" if chg > 0 else "#FF1100", "SigCol": s_col, "ValCol": v_col
-        }
-
-        if is_scan:
-            key = f"{market_mode}_{ticker}_{display_label}_{last_time.strftime('%Y%m%d%H')}"
-            if key not in st.session_state.keys_seen:
-                st.session_state.keys_seen.add(key)
-                new_row = pd.DataFrame([res])
-                if market_mode == "th": st.session_state.th_logs = pd.concat([new_row, st.session_state.th_logs], ignore_index=True)
-                else: st.session_state.us_logs = pd.concat([new_row, st.session_state.us_logs], ignore_index=True)
+        res = {"Ticker": ticker.upper(), "Prev": f"{c_pp:.2f}", "Price": f"{cp:.2f}", "Chg": f"{chg:+.2f}", "%Chg": f"{(chg/c_pp)*100:.2f}%", "Signal": display_label, "Value (M)": f"{val_raw:.2f}M", "TimeUpdate": last_time.strftime("%H:%M %d/%m")}
         return res
     except: return None
 
 # --- 4. NAVIGATION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 if 'market' not in st.session_state: st.session_state.market = None
-
 now = datetime.now(pytz.timezone("Asia/Bangkok"))
-time_str = now.strftime("%H:%M:%S")
-date_str = now.strftime("%d/%m/%Y")
+time_str = now.strftime("%H:%M:%S"); date_str = now.strftime("%d/%m/%Y")
 
 # --- 5. PAGE LOGIC ---
-
 if st.session_state.page == 'Home':
-    # บังคับหัวข้อให้อยู่กึ่งกลางด้วย CSS Class พิเศษ
-    st.markdown('<div class="trading-title">TRADING HOME</div>', unsafe_allow_html=True)
-    
-    if st.button("🇹🇭 ตลาดหุ้นไทย"):
-        st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
-        
-    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"):
-        st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
-    
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.1</div>', unsafe_allow_html=True)
+    st.markdown('<div class="menu-title" style="font-size:40px;">TRADING HOME</div>', unsafe_allow_html=True)
+    if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
+    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.2</div>', unsafe_allow_html=True)
     st.write('---')
     st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", width=400)
 
 elif st.session_state.page == 'SubMenu':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.1</div>', unsafe_allow_html=True)
-    if st.button("🏠 กลับหน้าหลัก"):
-        st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
-            
-    m = st.session_state.market
-    st.write(f"### {'🇹🇭 THAI MENU' if m=='th' else '🇺🇸 US MENU'}")
-    st.write('---')
-    if st.button("📋 WATCHLIST"):
-        st.session_state.page = 'Watch'; st.rerun()
-    if st.button("🔍 MARKET SCAN"):
-        st.session_state.page = 'Scan'; st.rerun()
+    # แถวที่ 1: ชื่อเมนูสีส้มทอง
+    m_label = "🇹🇭 THAI MENU" if st.session_state.market == 'th' else "🇺🇸 US MENU"
+    st.markdown(f'<div class="menu-title">{m_label}</div>', unsafe_allow_html=True)
+    
+    # แถวที่ 2: เวลา วันที่ เวอร์ชั่น
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.2</div>', unsafe_allow_html=True)
+    
+    # แถวที่ 3-5: ปุ่มเรียงแนวตั้ง
+    if st.button("📋 WATCHLIST"): st.session_state.page = 'Watch'; st.rerun()
+    if st.button("🔍 MARKET SCAN"): st.session_state.page = 'Scan'; st.rerun()
+    if st.button("🏠 กลับหน้าหลัก"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
 
-# (ส่วน Watchlist และ Scan คงเดิมตาม V12.0)
 elif st.session_state.page == 'Watch':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.1</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.2</div>', unsafe_allow_html=True)
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     m = st.session_state.market
     st.write(f"### 📋 WATCHLIST ({'TH' if m=='th' else 'US'})")
     with st.expander("➕ เพิ่มหุ้น", expanded=True):
         new_t = st.text_input("ระบุชื่อหุ้น:").upper()
-        if st.button("✅ ยืนยันเพิ่ม"):
-            manage_storage(m, new_t, "add"); st.cache_data.clear(); st.rerun()
-    cl = manage_storage(m)
-    results = [fetch_verified_data(t, m) for t in cl]
-    results = [r for r in results if r]
-    if results:
-        df = pd.DataFrame(results)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        if st.button("✅ ยืนยันเพิ่ม"): manage_storage(m, new_t, "add"); st.cache_data.clear(); st.rerun()
+    cl = manage_storage(m); results = [fetch_verified_data(t, m) for t in cl]; results = [r for r in results if r]
+    if results: st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
 
 elif st.session_state.page == 'Scan':
-    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.1</div>', unsafe_allow_html=True)
+    st.write(f'<div class="classic-header">{time_str} 📅 {date_str} | PPE Guardian V12.2</div>', unsafe_allow_html=True)
     if st.button("🏠 Home"): st.session_state.page = 'Home'; st.session_state.market = None; st.rerun()
     if st.button("⬅ กลับเมนูตลาด"): st.session_state.page = 'SubMenu'; st.rerun()
     m = st.session_state.market
@@ -220,7 +166,6 @@ elif st.session_state.page == 'Scan':
     if st.button("🔄 รีเฟรชสัญญาณ"): st.cache_data.clear(); st.rerun()
     for t in manage_storage(m): fetch_verified_data(t, m, is_scan=True)
     hist_df = st.session_state.th_logs if m == 'th' else st.session_state.us_logs
-    if not hist_df.empty:
-        st.dataframe(hist_df, use_container_width=True, hide_index=True)
+    if not hist_df.empty: st.dataframe(hist_df, use_container_width=True, hide_index=True)
 
 time.sleep(600); st.rerun()
