@@ -28,7 +28,7 @@ def manage_storage(mode, ticker=None, action="load"):
     return current_data
 
 # --- 2. UI SETUP & ABSOLUTE CENTERING ---
-st.set_page_config(page_title="PPE Guardian V15.2", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="PPE Guardian V15.3", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -63,11 +63,10 @@ def fetch_verified_data(ticker, market_mode):
         hull = ta.hma(df['Close'], 30); vma5 = ta.sma(df['Volume'], 5)
         esa = ta.ema(df['Close'], 9); d = ta.ema(abs(df['Close'] - esa), 9)
         ci = (df['Close'] - esa) / (0.015 * d); wt1 = ta.ema(ci, 12); wt2 = ta.sma(wt1, 4)
-        rsi_series = ta.rsi(df['Close'], length=14)
         
         cp = float(df['Close'].iloc[-1]); h_curr = hull.iloc[-1]; h_prev = hull.iloc[-2]
         w1 = wt1.iloc[-1]; w2 = wt2.iloc[-2]; vol = df['Volume'].iloc[-1]; v5 = vma5.iloc[-1]
-        e8 = ema8.iloc[-1]; e20 = ema20.iloc[-1]; curr_rsi = float(rsi_series.iloc[-1])
+        e8 = ema8.iloc[-1]; e20 = ema20.iloc[-1]
         
         s_label = "-"
         if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label = "BUY"
@@ -81,26 +80,27 @@ def fetch_verified_data(ticker, market_mode):
             "Ticker": ticker.upper(), "Prev": c_pp, "Price": cp, "Chg": cp - c_pp,
             "%Chg": ((cp - c_pp) / c_pp) * 100, "Value (M)": (cp * vol) / 1_000_000,
             "TimeUpdate": df.index[-1].astimezone(pytz.timezone('Asia/Bangkok')).strftime("%H:%M %d/%m"),
-            "RSI": curr_rsi, "Signal": s_label, "prev_signal": c_pp - p_p_close, "main_chg": cp - c_pp
+            "Signal": s_label, "prev_signal": c_pp - p_p_close, "main_chg": cp - c_pp
         }
     except: return None
 
-def apply_v15_styling(data):
+def apply_v15_3_styling(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
-        main_c = 'color: #00FF00' if row['main_chg'] > 0 else 'color: #FF0000'
-        for col in ["Ticker", "Price", "Chg", "%Chg", "TimeUpdate"]:
-            if col in data.columns: styles.at[data.index[i], col] = main_c
+        # 1. Logic for Ticker, Signal, TimeUpdate (Col 1, 6, 7) - Color by Signal
+        sig_c = 'color: #00FF00' if row['Signal'] in ["BUY", "DEEP BUY"] else 'color: #FF0000'
+        for col in ["Ticker", "Signal", "TimeUpdate"]:
+            if col in data.columns: styles.at[data.index[i], col] = sig_c
+            
+        # 2. Logic for Prev (Col 2) - Color by Prev-Prev comparison
+        p_c = 'color: #00FF00' if row['prev_signal'] > 0 else ('color: #FF0000' if row['prev_signal'] < 0 else 'color: #FFD700')
+        if "Prev" in data.columns: styles.at[data.index[i], "Prev"] = p_c
         
-        if "Prev" in data.columns:
-            styles.at[data.index[i], "Prev"] = 'color: #00FF00' if row['prev_signal'] > 0 else ('color: #FF0000' if row['prev_signal'] < 0 else 'color: #FFD700')
-        
-        # 🎨 ล็อกสี Signal ตามประเภทสัญญาณ
-        if "Signal" in data.columns:
-            sig = row['Signal']
-            if sig in ["BUY", "DEEP BUY"]: styles.at[data.index[i], "Signal"] = 'color: #00FF00'
-            elif sig in ["SELL", "P-SELL"]: styles.at[data.index[i], "Signal"] = 'color: #FF0000'
+        # 3. Logic for Price, Chg, %Chg (Col 3, 4, 5) - Color by Market (0 = Gold)
+        m_c = 'color: #00FF00' if row['main_chg'] > 0 else ('color: #FF0000' if row['main_chg'] < 0 else 'color: #FFD700')
+        for col in ["Price", "Chg", "%Chg"]:
+            if col in data.columns: styles.at[data.index[i], col] = m_c
             
     return styles
 
@@ -114,7 +114,7 @@ def centered_header(title, subtitle):
 
 # --- 5. PAGE LOGIC ---
 if st.session_state.page == 'Home':
-    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V15.2")
+    centered_header("TRADING HOME", f"{time_str} 📅 {date_str} | V15.3")
     if st.button("🇹🇭 ตลาดหุ้นไทย"): st.session_state.market = 'th'; st.session_state.page = 'SubMenu'; st.rerun()
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): st.session_state.market = 'us'; st.session_state.page = 'SubMenu'; st.rerun()
     st.write('---')
@@ -147,10 +147,10 @@ elif st.session_state.page in ['Watch', 'Scan']:
             if st.button("🗑️ Delete"): manage_storage(st.session_state.market, new_t, "delete"); st.cache_data.clear(); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         
-        watch_disp = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate", "RSI"]
+        watch_disp = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"]
         if results:
             df = pd.DataFrame(results)
-            styled = df.style.apply(apply_v15_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M", "RSI": "{:.2f}"})
+            styled = df.style.apply(apply_v15_3_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%", "Value (M)": "{:.2f}M"})
             st.dataframe(styled, use_container_width=True, hide_index=True, column_order=watch_disp)
     
     elif st.session_state.page == 'Scan':
@@ -158,7 +158,7 @@ elif st.session_state.page in ['Watch', 'Scan']:
         if results:
             df_scan = pd.DataFrame([r for r in results if r['Signal'] != "-"] )
             if not df_scan.empty:
-                styled_s = df_scan.style.apply(apply_v15_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%"})
+                styled_s = df_scan.style.apply(apply_v15_3_styling, axis=None).format({"Prev": "{:.2f}", "Price": "{:.2f}", "Chg": "{:+.2f}", "%Chg": "{:+.2f}%"})
                 st.dataframe(styled_s, use_container_width=True, hide_index=True, column_order=scan_cols)
             else: st.info("No active signals in your list.")
 
