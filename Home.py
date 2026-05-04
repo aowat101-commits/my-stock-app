@@ -7,7 +7,7 @@ import pytz
 import time
 import os
 
-# --- 1. MEMORY SYSTEM (จัดการไฟล์และการลบรายตัว) ---
+# --- 1. MEMORY SYSTEM ---
 def manage_list(mode, ticker=None, action="load"):
     file_path = f"{mode}_list.txt"
     defaults = ['PTT', 'DELTA', 'ADVANC', 'EA', 'NEX', 'JTS'] if mode == "th" else ['IONQ', 'NVDA', 'IREN']
@@ -16,7 +16,6 @@ def manage_list(mode, ticker=None, action="load"):
     with open(file_path, "r") as f:
         data = f.read().strip()
         current_data = data.split(",") if data else defaults
-    
     if action == "add" and ticker and ticker not in current_data:
         current_data.append(ticker)
         with open(file_path, "w") as f: f.write(",".join(current_data))
@@ -36,14 +35,17 @@ st.markdown("""
     h1, h2, h3, p, span, label { color: #FFD700 !important; }
     .block-container { padding: 0.5rem 0.2rem !important; }
     .classic-header { color: #1E90FF !important; font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 5px; }
+    
+    /* ปรับตัวอักษรในตารางให้เล็กลงเพื่อให้แสดง 7 คอลัมน์ได้ครบ */
     .stDataFrame [data-testid="stTable"] td { font-size: 11px !important; padding: 2px !important; }
     .stDataFrame [data-testid="stTable"] th { font-size: 11px !important; color: #FFD700 !important; }
-    .stButton > button { height: 35px !important; border-radius: 8px !important; font-size: 13px !important; width: 100%; }
+    
+    .stButton > button { height: 35px !important; border-radius: 8px !important; font-size: 13px !important; }
     div.stButton > button[kind="primary"] { background-color: #FF0000 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. CORE ENGINE (EMA 8 + Wave Trend + No Icon) ---
+# --- 3. CORE ENGINE ---
 @st.cache_data(ttl=60)
 def fetch_verified_data(ticker, mode):
     try:
@@ -61,10 +63,12 @@ def fetch_verified_data(ticker, mode):
         for i in range(len(df)-1, 0, -1):
             cp, h_curr, h_prev = float(df['Close'].iloc[i]), hull.iloc[i], hull.iloc[i-1]
             w1, w2, vol, v5, e8 = wt1.iloc[i], wt2.iloc[i], df['Volume'].iloc[i], vma5.iloc[i], ema8.iloc[i]
+            
             if cp > e8 and h_curr > h_prev and vol > (v5 * 1.2): s_label, s_col = "BUY", "#00FF00"
             elif w1 > w2 and w1 < -47 and cp > e8: s_label, s_col = "DEEP BUY", "#00FF00"
             elif w1 < w2 and w1 > 53: s_label, s_col = "P-SELL", "#FFA500"
             elif cp < ema20.iloc[i] or h_curr < h_prev: s_label, s_col = "SELL", "#FF1100"
+            
             if s_label != "-":
                 raw_time = df.index[i].astimezone(pytz.timezone('Asia/Bangkok'))
                 found_time = raw_time.strftime("%H:%M %d/%m"); break
@@ -73,8 +77,9 @@ def fetch_verified_data(ticker, mode):
         c_cp, c_pp = float(df['Close'].iloc[-1]), float(df['Close'].iloc[-2])
         chg, val_raw = c_cp - c_pp, (c_cp * float(df['Volume'].iloc[-1])) / 1_000_000
         
-        v_col = "#808080" # 0-10M (Gray)
-        if val_raw > 100: v_col = "#FF00FF" # >100M (Magenta)
+        # กำหนดสีของ Value (M) ตามเงื่อนไข เทา-น้ำเงิน-ม่วง
+        v_col = "#808080" # Default 0-10M (Gray)
+        if val_raw > 100: v_col = "#FF00FF" # > 100M (Magenta)
         elif val_raw > 10: v_col = "#00BFFF" # 10-100M (DeepSkyBlue)
 
         return {
@@ -96,8 +101,6 @@ def apply_style(row):
 
 # --- 4. NAVIGATION ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
-if 'edit_mode' not in st.session_state: st.session_state.edit_mode = False
-
 st.button("🏠 HOME", use_container_width=True, on_click=lambda: st.session_state.update({"page": "Home"}), type="primary" if st.session_state.page == 'Home' else "secondary")
 c1, c2 = st.columns(2)
 with c1:
@@ -119,12 +122,10 @@ if p == 'Home':
 elif p in ['TW', 'UW', 'TS', 'US']:
     m_key = "th" if p in ['TW', 'TS'] else "us"
     curr_list = manage_list(m_key)
-    
     if 'W' in p:
         with st.expander("➕ Manage Watchlist", expanded=True):
             new_t = st.text_input("Ticker:").upper()
             if new_t: manage_list(m_key, new_t, "add"); st.rerun()
-            if st.button("🛠️ Edit Mode"): st.session_state.edit_mode = not st.session_state.edit_mode; st.rerun()
     else:
         if st.button("🔄 Manual Refresh"): st.cache_data.clear(); st.rerun()
 
@@ -136,15 +137,5 @@ elif p in ['TW', 'UW', 'TS', 'US']:
         cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Value (M)", "TimeUpdate"]
         if 'S' in p: cols = ["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate"]
         st.dataframe(df.style.apply(apply_style, axis=1), use_container_width=True, hide_index=True, column_order=cols)
-
-        # ส่วนปุ่มลบหุ้นรายตัว (แสดงผลเมื่อเปิด Edit Mode)
-        if 'W' in p and st.session_state.edit_mode:
-            st.write("---")
-            st.write("🗑️ **Select Ticker to Remove:**")
-            del_cols = st.columns(4)
-            for i, t in enumerate(curr_list):
-                if del_cols[i % 4].button(f"✖ {t}", key=f"del_{t}", type="primary"):
-                    manage_list(m_key, t, "delete")
-                    st.rerun()
 
 if 'S' in p: time.sleep(300); st.rerun()
