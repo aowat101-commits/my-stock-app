@@ -37,24 +37,20 @@ curr_m = st.query_params.get('market', None)
 
 st.markdown("""
     <style>
-    /* ซ่อน Header และ Sidebar */
     [data-testid="stSidebar"], header, .stAppHeader { display: none !important; }
-    
-    /* บังคับพื้นหลังและจัดกึ่งกลางทั้งหน้าจอ */
     .stApp { background-color: #0f172a; }
+    
+    /* จัดการ Container หลักให้กึ่งกลาง */
     .stApp .main .block-container {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: flex-start !important;
-        width: 100% !important; max-width: 100% !important; margin: 0 auto !important;
+        width: 100% !important; margin: 0 auto !important;
     }
-    
-    /* บังคับให้ทุก Element ภายในอยู่กึ่งกลาง */
-    div[data-testid="stVerticalBlock"] {
-        display: flex !important; flex-direction: column !important;
-        align-items: center !important; width: 100% !important;
+
+    /* จัดปุ่มกึ่งกลาง */
+    div.stButton {
+        display: flex !important; justify-content: center !important; width: 100% !important;
     }
-    
-    /* แต่งปุ่มและบังคับกึ่งกลาง */
     .stButton > button { 
         height: 52px !important; width: 320px !important;
         border-radius: 14px !important; font-size: 18px !important; 
@@ -63,12 +59,17 @@ st.markdown("""
         margin: 10px auto !important;
     }
     
+    /* จัดรูปภาพกึ่งกลาง */
+    div[data-testid="stImage"] {
+        display: flex !important; justify-content: center !important; width: 100% !important;
+    }
+    
     /* ตาราง */
-    [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; margin: 0 auto !important; }
+    [data-testid="stDataFrame"] { background-color: #1e293b !important; border-radius: 12px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. THE GUARDIAN SWING ENGINE ---
+# --- 3. ENGINE ---
 def fetch_data(ticker, mode):
     try:
         sym = f"{ticker.upper()}.BK" if mode == "th" else ticker.upper()
@@ -114,7 +115,6 @@ def apply_styles(data):
         return styles
     return data.style.apply(row_style, axis=1)
 
-# --- 4. NAVIGATION ---
 def go(p, m=None):
     st.query_params['page'] = p
     if m: st.query_params['market'] = m
@@ -128,20 +128,20 @@ def hdr(t):
 # --- 5. PAGE LOGIC ---
 if curr_p == 'Home':
     hdr("TRADING HOME")
-    st.button("🇹🇭 ตลาดหุ้นไทย", on_click=go, args=('SubMenu', 'th'))
-    st.button("🇺🇸 ตลาดหุ้นอเมริกา", on_click=go, args=('SubMenu', 'us'))
-    st.markdown('<hr style="border: 1px solid #1e293b; width: 320px;">', unsafe_allow_html=True)
-    st.markdown('<center><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></center>', unsafe_allow_html=True)
+    if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
+    if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
+    st.write('---')
+    st.image("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000", width=380)
 
 elif curr_p == 'SubMenu':
     hdr(f"{'🇹🇭' if curr_m == 'th' else '🇺🇸'} MENU")
-    st.button("📋 WATCHLIST", on_click=go, args=('Watch', curr_m))
-    st.button("🔍 MARKET SCAN", on_click=go, args=('Scan', curr_m))
-    st.button("🏠 กลับหน้าหลัก", on_click=go, args=('Home',))
+    if st.button("📋 WATCHLIST"): go('Watch', curr_m)
+    if st.button("🔍 MARKET SCAN"): go('Scan', curr_m)
+    if st.button("🏠 กลับหน้าหลัก"): go('Home')
 
 elif curr_p == 'Watch':
     hdr("WATCHLIST")
-    st.button("⬅ กลับเมนูตลาด", on_click=go, args=('SubMenu', curr_m))
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     if res:
         df = pd.DataFrame([r for r in res if r])
@@ -149,7 +149,7 @@ elif curr_p == 'Watch':
 
 elif curr_p == 'Scan':
     hdr("SCAN")
-    st.button("⬅ กลับเมนูตลาด", on_click=go, args=('SubMenu', curr_m))
+    if st.button("⬅ กลับเมนูตลาด"): go('SubMenu', curr_m)
     new_res = [fetch_data(t, curr_m) for t in manage_storage(curr_m)]
     new_active = [r for r in new_res if r and r['Signal'] in ["P-BUY", "BUY", "P-SELL", "SELL"]]
     if new_active:
