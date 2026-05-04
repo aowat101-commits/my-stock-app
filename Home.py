@@ -25,8 +25,8 @@ def manage_storage(mode, ticker=None, action="load"):
         with open(file_path, "w") as f: f.write(",".join(current_data))
     return current_data
 
-# --- 2. UI SETUP & ADVANCED CSS ---
-st.set_page_config(page_title="PPE Guardian V16.12", layout="wide", initial_sidebar_state="collapsed")
+# --- 2. UI SETUP & FORCED CSS ---
+st.set_page_config(page_title="PPE Guardian V16.13", layout="wide", initial_sidebar_state="collapsed")
 
 if 'signal_history' not in st.session_state:
     st.session_state.signal_history = pd.DataFrame(columns=["Ticker", "Prev", "Price", "Chg", "%Chg", "Signal", "TimeUpdate", "RawTime", "m_chg", "Value (M)"])
@@ -52,22 +52,20 @@ st.markdown("""
         border-radius: 14px !important; font-size: 18px !important; 
         font-weight: 500 !important; color: #FFD700 !important; 
         background-color: #1e293b !important; border: 2px solid #FFD700 !important; 
-        margin: 10px auto !important; display: block !important;
+        margin: 12px auto !important; display: block !important;
     }
     
-    /* 🎯 ปรับแต่งสีตารางเป็นโทนน้ำเงินเทาเข้ม (สบายตา) */
-    [data-testid="stDataFrame"] {
+    /* 🎯 บังคับสีพื้นหลังตารางเข้ม (Forced Dark Table) */
+    .stDataFrame, [data-testid="stDataFrame"], [data-testid="stDataFrame"] > div {
         background-color: #1e293b !important;
         border-radius: 12px !important;
-        padding: 10px !important;
     }
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
         font-weight: 400 !important;
         background-color: #1e293b !important;
-        color: #cbd5e1 !important; /* สีตัวหนังสือหัวข้อตาราง */
+        color: #cbd5e1 !important;
         border-bottom: 1px solid #334155 !important;
     }
-    .del-btn button { color: #FF4B4B !important; border-color: #FF4B4B !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -107,7 +105,6 @@ def apply_styles(data):
     styles = pd.DataFrame('', index=data.index, columns=data.columns)
     for i in range(len(data)):
         row = data.iloc[i]
-        # สีตัวเลขข้อมูลตามทิศทางราคา
         m_c = 'color: #00FF00' if row['m_chg'] > 0 else ('color: #FF0000' if row['m_chg'] < 0 else 'color: #FFD700')
         for col in ["Ticker", "TimeUpdate", "Price", "Chg", "%Chg", "Value (M)"]:
             if col in data.columns: styles.at[data.index[i], col] = m_c
@@ -130,7 +127,7 @@ def hdr(t):
         <div style="text-align: center;">
             <h1 style="color: #FFD700; margin-bottom: 5px; font-weight: 500;">{t}</h1>
             <p style="color: #1E90FF; font-weight: 400; font-size: 16px;">
-                {t_now} | PPE GUARDIAN V16.12
+                {t_now} | PPE GUARDIAN V16.13
             </p>
         </div>
     ''', unsafe_allow_html=True)
@@ -141,6 +138,8 @@ if curr_p == 'Home':
     if st.button("🇹🇭 ตลาดหุ้นไทย"): go('SubMenu', 'th')
     if st.button("🇺🇸 ตลาดหุ้นอเมริกา"): go('SubMenu', 'us')
     st.write('---')
+    # คืนค่ารูปภาพหน้า Home
+    st.markdown(f'<div style="display: flex; justify-content: center;"><img src="https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=1000" width="380" style="border-radius: 12px;"></div>', unsafe_allow_html=True)
 
 elif curr_p == 'SubMenu':
     f = "🇹🇭" if curr_m == 'th' else "🇺🇸"
